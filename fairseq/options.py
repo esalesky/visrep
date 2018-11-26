@@ -128,6 +128,10 @@ def get_parser(desc, default_task='translation'):
     parser.add_argument('--seed', default=1, type=int, metavar='N',
                         help='pseudo random number generator seed')
     parser.add_argument('--fp16', action='store_true', help='use FP16')
+    parser.add_argument('--fp16-init-scale', default=2**7, type=int,
+                        help='default FP16 loss scale')
+    parser.add_argument('--fp16-scale-window', type=int,
+                        help='number of updates before increasing loss scale')
 
     # Task definitions can be found under fairseq/tasks/
     parser.add_argument(
@@ -183,6 +187,15 @@ def add_distributed_training_args(parser):
                        help='port number (not required if using --distributed-init-method)')
     group.add_argument('--device-id', default=0, type=int,
                        help='which GPU to use (usually configured automatically)')
+    group.add_argument('--ddp-backend', default='c10d', type=str,
+                       choices=['c10d', 'no_c10d'],
+                       help='DistributedDataParallel backend')
+    group.add_argument('--bucket-cap-mb', default=150, type=int, metavar='MB',
+                       help='bucket size for reduction')
+    group.add_argument('--fix-batches-to-gpus', action='store_true',
+                       help='Don\'t shuffle batches between GPUs, this reduces overall '
+                            'randomness and may affect precision but avoids the cost of'
+                            're-reading the data')
     return group
 
 
@@ -261,6 +274,8 @@ def add_common_eval_args(group):
     group.add_argument('--cpu', action='store_true', help='generate on CPU')
     group.add_argument('--quiet', action='store_true',
                        help='only print final scores')
+    group.add_argument('--model-overrides', default="{}", type=str, metavar='DICT',
+                       help='a dictionary used to override model args at generation that were used during model training')
 
 
 def add_eval_lm_args(parser):
@@ -317,8 +332,6 @@ def add_generation_args(parser):
                        help='strength of diversity penalty for Diverse Beam Search')
     group.add_argument('--print-alignment', action='store_true',
                        help='if set, uses attention feedback to compute and print alignment to source tokens')
-    group.add_argument('--model-overrides', default="{}", type=str, metavar='DICT',
-                       help='a dictionary used to override model args at generation that were used during model training')
     return group
 
 

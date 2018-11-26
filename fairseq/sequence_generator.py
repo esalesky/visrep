@@ -78,13 +78,18 @@ class SequenceGenerator(object):
             if 'net_input' not in s:
                 continue
             input = s['net_input']
-            srclen = input['src_tokens'].size(1)
+            # model.forward normally channels prev_output_tokens into the decoder
+            # separately, but SequenceGenerator directly calls model.encoder
+            encoder_input = {
+                k: v for k, v in input.items()
+                if k != 'prev_output_tokens'
+            }
+            srclen = encoder_input['src_tokens'].size(1)
             if timer is not None:
                 timer.start()
             with torch.no_grad():
                 hypos = self.generate(
-                    input['src_tokens'],
-                    input['src_lengths'],
+                    encoder_input,
                     beam_size=beam_size,
                     maxlen=int(maxlen_a*srclen + maxlen_b),
                     prefix_tokens=s['target'][:, :prefix_size] if prefix_size > 0 else None,
@@ -97,12 +102,23 @@ class SequenceGenerator(object):
                 ref = utils.strip_pad(s['target'].data[i, :], self.pad) if s['target'] is not None else None
                 yield id, src, ref, hypos[i]
 
-    def generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
-        """Generate a batch of translations."""
-        with torch.no_grad():
-            return self._generate(src_tokens, src_lengths, beam_size, maxlen, prefix_tokens)
+    def generate(self, encoder_input, beam_size=None, maxlen=None, prefix_tokens=None):
+        """Generate a batch of translations.
 
-    def _generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
+        Args:
+            encoder_input: dictionary containing the inputs to
+                model.encoder.forward
+            beam_size: int overriding the beam size. defaults to
+                self.beam_size
+            max_len: maximum length of the generated sequence
+            prefix_tokens: force decoder to begin with these tokens
+        """
+        with torch.no_grad():
+            return self._generate(encoder_input, beam_size, maxlen, prefix_tokens)
+
+    def _generate(self, encoder_input, beam_size=None, maxlen=None, prefix_tokens=None):
+        """See generate"""
+        src_tokens = encoder_input['src_tokens']
         bsz, srclen = src_tokens.size()
         maxlen = min(maxlen, self.maxlen) if maxlen is not None else self.maxlen
 
@@ -121,10 +137,10 @@ class SequenceGenerator(object):
                 incremental_states[model] = None
 
             # compute the encoder output for each beam
-            encoder_out = model.encoder(
-                src_tokens.repeat(1, beam_size).view(-1, srclen),
-                src_lengths.expand(beam_size, src_lengths.numel()).t().contiguous().view(-1),
-            )
+            encoder_out = model.encoder(**encoder_input)
+            new_order = torch.arange(bsz).view(-1, 1).repeat(1, beam_size).view(-1)
+            new_order = new_order.to(src_tokens.device)
+            encoder_out = model.encoder.reorder_encoder_out(encoder_out, new_order)
             encoder_outs.append(encoder_out)
 
         # initialize buffers
@@ -464,21 +480,17 @@ class SequenceGenerator(object):
         if len(self.models) == 1:
             return self._decode_one(tokens, self.models[0], encoder_outs[0], incremental_states, log_probs=True)
 
-        avg_probs = None
+        log_probs = []
         avg_attn = None
         for model, encoder_out in zip(self.models, encoder_outs):
-            probs, attn = self._decode_one(tokens, model, encoder_out, incremental_states, log_probs=False)
-            if avg_probs is None:
-                avg_probs = probs
-            else:
-                avg_probs.add_(probs)
+            probs, attn = self._decode_one(tokens, model, encoder_out, incremental_states, log_probs=True)
+            log_probs.append(probs)
             if attn is not None:
                 if avg_attn is None:
                     avg_attn = attn
                 else:
                     avg_attn.add_(attn)
-        avg_probs.div_(len(self.models))
-        avg_probs.log_()
+        avg_probs = torch.logsumexp(torch.stack(log_probs, dim=0), dim=0) - math.log(len(self.models))
         if avg_attn is not None:
             avg_attn.div_(len(self.models))
         return avg_probs, avg_attn
@@ -491,7 +503,11 @@ class SequenceGenerator(object):
                 decoder_out = list(model.decoder(tokens, encoder_out))
             decoder_out[0] = decoder_out[0][:, -1, :]
             attn = decoder_out[1]
+            if type(attn) is dict:
+                attn = attn['attn']
             if attn is not None:
+                if type(attn) is dict:
+                    attn = attn['attn']
                 attn = attn[:, -1, :]
         probs = model.get_normalized_probs(decoder_out, log_probs=log_probs)
         return probs, attn

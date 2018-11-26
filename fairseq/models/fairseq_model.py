@@ -65,6 +65,9 @@ class BaseFairseqModel(nn.Module):
 
     def upgrade_state_dict(self, state_dict):
         """Upgrade old state dicts to work with newer code."""
+        self.upgrade_state_dict_named(state_dict, '')
+
+    def upgrade_state_dict_named(self, state_dict, name):
         assert state_dict is not None
 
         def do_upgrade(m, prefix):
@@ -79,7 +82,7 @@ class BaseFairseqModel(nn.Module):
                     c.upgrade_state_dict(state_dict)
                 do_upgrade(c, name)
 
-        do_upgrade(self, '')
+        do_upgrade(self, name)
 
     def make_generation_fast_(self, **kwargs):
         """Optimize model for faster generation."""
@@ -165,6 +168,48 @@ class FairseqModel(BaseFairseqModel):
         return (self.encoder.max_positions(), self.decoder.max_positions())
 
 
+class FairseqMultiModel(BaseFairseqModel):
+    """Base class for combining multiple encoder-decoder models."""
+    def __init__(self, encoders, decoders):
+        super().__init__()
+        assert encoders.keys() == decoders.keys()
+        self.keys = list(encoders.keys())
+        for key in self.keys:
+            assert isinstance(encoders[key], FairseqEncoder)
+            assert isinstance(decoders[key], FairseqDecoder)
+
+        self.models = nn.ModuleDict({
+            key: FairseqModel(encoders[key], decoders[key])
+            for key in self.keys
+        })
+
+    def forward(self, src_tokens, src_lengths, prev_output_tokens):
+        decoder_outs = {}
+        for key in self.keys:
+            encoder_out = self.models[key].encoder(src_tokens, src_lengths)
+            decoder_outs[key] = self.models[key].decoder(prev_output_tokens, encoder_out)
+        return decoder_outs
+
+    def max_positions(self):
+        """Maximum length supported by the model."""
+        return {
+            key: (self.models[key].encoder.max_positions(), self.models[key].decoder.max_positions())
+            for key in self.keys
+        }
+
+    def max_decoder_positions(self):
+        """Maximum length supported by the decoder."""
+        return min(model.decoder.max_positions() for model in self.models.values())
+
+    @property
+    def encoder(self):
+        return self.models[self.keys[0]].encoder
+
+    @property
+    def decoder(self):
+        return self.models[self.keys[0]].decoder
+
+
 class FairseqLanguageModel(BaseFairseqModel):
     """Base class for decoder-only models.
 
@@ -196,3 +241,11 @@ class FairseqLanguageModel(BaseFairseqModel):
     def max_positions(self):
         """Maximum length supported by the model."""
         return self.decoder.max_positions()
+
+    @property
+    def supported_targets(self):
+        return {'future'}
+
+    def remove_head(self):
+        """Removes the head of the model (e.g. the softmax layer) to conserve space when it is not needed"""
+        raise NotImplementedError()

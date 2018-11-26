@@ -281,7 +281,7 @@ def train_language_model(data_dir, arch):
             data_dir,
             '--arch', arch,
             '--optimizer', 'nag',
-            '--lr', '1.0',
+            '--lr', '0.1',
             '--criterion', 'adaptive_loss',
             '--adaptive-softmax-cutoff', '5,10,15',
             '--decoder-layers', '[(850, 3)] * 2 + [(1024,4)]',
@@ -292,6 +292,7 @@ def train_language_model(data_dir, arch):
             '--max-epoch', '1',
             '--no-progress-bar',
             '--distributed-world-size', '1',
+            '--ddp-backend', 'no_c10d',
         ],
     )
     train.main(train_args)

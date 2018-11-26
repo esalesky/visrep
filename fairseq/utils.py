@@ -160,6 +160,10 @@ def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
         model.load_state_dict(state['model'], strict=True)
         ensemble.append(model)
 
+        # some args (e.g., tokens_per_sample) might have been updated while building the model
+        if model_arg_overrides is not None:
+            args = _override_model_args(args, model_arg_overrides)
+
     return ensemble, args
 
 
@@ -312,7 +316,7 @@ def make_positions(tensor, padding_idx, left_pad, onnx_trace=False):
         positions = range_buf.expand_as(tensor)
         if left_pad:
             positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
-        return positions * mask.long() + positions * (1 - mask.long())
+        return positions * mask.long() + padding_idx * (1 - mask.long())
 
     max_pos = padding_idx + 1 + tensor.size(1)
     if not hasattr(make_positions, 'range_buf'):

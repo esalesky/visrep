@@ -5,17 +5,18 @@
 # the root directory of this source tree. An additional grant of patent rights
 # can be found in the PATENTS file in the same directory.
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 
 from torch import nn
-from torch.nn.utils.rnn import pad_sequence
 
 from typing import List, Tuple
 
 from .highway import Highway
 from fairseq.data import Dictionary
+
+CHAR_PAD_IDX = 0
+CHAR_EOS_IDX = 257
 
 
 class CharacterTokenEmbedder(torch.nn.Module):
@@ -27,13 +28,16 @@ class CharacterTokenEmbedder(torch.nn.Module):
             word_embed_dim: int,
             highway_layers: int,
             max_char_len: int = 50,
+            char_inputs: bool = False
     ):
         super(CharacterTokenEmbedder, self).__init__()
 
         self.embedding_dim = word_embed_dim
+        self.max_char_len = max_char_len
         self.char_embeddings = nn.Embedding(257, char_embed_dim, padding_idx=0)
         self.symbol_embeddings = nn.Parameter(torch.FloatTensor(2, word_embed_dim))
         self.eos_idx, self.unk_idx = 0, 1
+        self.char_inputs = char_inputs
 
         self.convolutions = nn.ModuleList()
         for width, out_c in filters:
@@ -41,12 +45,17 @@ class CharacterTokenEmbedder(torch.nn.Module):
                 nn.Conv1d(char_embed_dim, out_c, kernel_size=width)
             )
 
-        final_dim = sum(f[1] for f in filters)
+        last_dim = sum(f[1] for f in filters)
 
-        self.highway = Highway(final_dim, highway_layers)
-        self.projection = nn.Linear(final_dim, word_embed_dim)
+        self.highway = Highway(last_dim, highway_layers) if highway_layers > 0 else None
 
-        self.set_vocab(vocab, max_char_len)
+        self.projection = nn.Linear(last_dim, word_embed_dim)
+
+        assert vocab is not None or char_inputs, "vocab must be set if not using char inputs"
+        self.vocab = None
+        if vocab is not None:
+            self.set_vocab(vocab, max_char_len)
+
         self.reset_parameters()
 
     def set_vocab(self, vocab, max_char_len):
@@ -73,37 +82,45 @@ class CharacterTokenEmbedder(torch.nn.Module):
 
     @property
     def padding_idx(self):
-        return self.vocab.pad()
+        return Dictionary().pad() if self.vocab is None else self.vocab.pad()
 
     def reset_parameters(self):
         nn.init.xavier_normal_(self.char_embeddings.weight)
         nn.init.xavier_normal_(self.symbol_embeddings)
-        nn.init.xavier_normal_(self.projection.weight)
+        nn.init.xavier_uniform_(self.projection.weight)
+
         nn.init.constant_(self.char_embeddings.weight[self.char_embeddings.padding_idx], 0.)
         nn.init.constant_(self.projection.bias, 0.)
 
     def forward(
             self,
-            words: torch.Tensor,
+            input: torch.Tensor,
     ):
-        self.word_to_char = self.word_to_char.type_as(words)
+        if self.char_inputs:
+            chars = input.view(-1, self.max_char_len)
+            pads = chars[:, 0].eq(CHAR_PAD_IDX)
+            eos = chars[:, 0].eq(CHAR_EOS_IDX)
+            if eos.any():
+                chars[eos] = 0
+            unk = None
+        else:
+            flat_words = input.view(-1)
+            chars = self.word_to_char[flat_words.type_as(self.word_to_char)].type_as(input)
+            pads = flat_words.eq(self.vocab.pad())
+            eos = flat_words.eq(self.vocab.eos())
+            unk = flat_words.eq(self.vocab.unk())
 
-        flat_words = words.view(-1)
-        word_embs = self._convolve(self.word_to_char[flat_words])
-
-        pads = flat_words.eq(self.vocab.pad())
+        word_embs = self._convolve(chars)
         if pads.any():
             word_embs[pads] = 0
 
-        eos = flat_words.eq(self.vocab.eos())
         if eos.any():
             word_embs[eos] = self.symbol_embeddings[self.eos_idx]
 
-        unk = flat_words.eq(self.vocab.unk())
-        if unk.any():
+        if unk is not None and unk.any():
             word_embs[unk] = self.symbol_embeddings[self.unk_idx]
 
-        return word_embs.view(words.size() + (-1,))
+        return word_embs.view(input.size()[:2] + (-1,))
 
     def _convolve(
             self,
@@ -120,7 +137,10 @@ class CharacterTokenEmbedder(torch.nn.Module):
             x = F.relu(x)
             conv_result.append(x)
 
-        conv_result = torch.cat(conv_result, dim=-1)
-        conv_result = self.highway(conv_result)
+        x = torch.cat(conv_result, dim=-1)
 
-        return self.projection(conv_result)
+        if self.highway is not None:
+            x = self.highway(x)
+        x = self.projection(x)
+
+        return x

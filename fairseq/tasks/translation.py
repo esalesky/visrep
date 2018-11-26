@@ -9,12 +9,10 @@ import itertools
 import numpy as np
 import os
 
-from torch.utils.data import ConcatDataset
-
 from fairseq import options
 from fairseq.data import (
-    data_utils, Dictionary, LanguagePairDataset, IndexedInMemoryDataset,
-    IndexedRawTextDataset,
+    data_utils, Dictionary, LanguagePairDataset, ConcatDataset,
+    IndexedRawTextDataset, IndexedCachedDataset, IndexedDataset
 )
 
 from . import FairseqTask, register_task
@@ -45,7 +43,7 @@ class TranslationTask(FairseqTask):
     @staticmethod
     def add_args(parser):
         """Add task-specific arguments to the parser."""
-        parser.add_argument('data', help='path to data directory')
+        parser.add_argument('data', nargs='+', help='path(s) to data directorie(s)')
         parser.add_argument('-s', '--source-lang', default=None, metavar='SRC',
                             help='source language')
         parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
@@ -80,13 +78,13 @@ class TranslationTask(FairseqTask):
 
         # find language pair automatically
         if args.source_lang is None or args.target_lang is None:
-            args.source_lang, args.target_lang = data_utils.infer_language_pair(args.data)
+            args.source_lang, args.target_lang = data_utils.infer_language_pair(args.data[0])
         if args.source_lang is None or args.target_lang is None:
             raise Exception('Could not infer language pair, please provide it explicitly')
 
         # load dictionaries
-        src_dict = Dictionary.load(os.path.join(args.data, 'dict.{}.txt'.format(args.source_lang)))
-        tgt_dict = Dictionary.load(os.path.join(args.data, 'dict.{}.txt'.format(args.target_lang)))
+        src_dict = Dictionary.load(os.path.join(args.data[0], 'dict.{}.txt'.format(args.source_lang)))
+        tgt_dict = Dictionary.load(os.path.join(args.data[0], 'dict.{}.txt'.format(args.target_lang)))
         assert src_dict.pad() == tgt_dict.pad()
         assert src_dict.eos() == tgt_dict.eos()
         assert src_dict.unk() == tgt_dict.unk()
@@ -95,72 +93,70 @@ class TranslationTask(FairseqTask):
 
         return cls(args, src_dict, tgt_dict)
 
-    def load_dataset(self, split, combine=False):
+    def load_dataset(self, split, combine=False, **kwargs):
         """Load a given dataset split.
 
         Args:
             split (str): name of the split (e.g., train, valid, test)
         """
 
-        def split_exists(split, src, tgt, lang):
-            filename = os.path.join(self.args.data, '{}.{}-{}.{}'.format(split, src, tgt, lang))
+        def split_exists(split, src, tgt, lang, data_path):
+            filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
             if self.args.raw_text and IndexedRawTextDataset.exists(filename):
                 return True
-            elif not self.args.raw_text and IndexedInMemoryDataset.exists(filename):
+            elif not self.args.raw_text and IndexedDataset.exists(filename):
                 return True
             return False
 
         def indexed_dataset(path, dictionary):
             if self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
-            elif IndexedInMemoryDataset.exists(path):
-                return IndexedInMemoryDataset(path, fix_lua_indexing=True)
+            elif IndexedDataset.exists(path):
+                return IndexedCachedDataset(path, fix_lua_indexing=True)
             return None
 
         src_datasets = []
         tgt_datasets = []
 
-        for k in itertools.count():
-            split_k = split + (str(k) if k > 0 else '')
+        data_paths = self.args.data
 
-            # infer langcode
-            src, tgt = self.args.source_lang, self.args.target_lang
-            if split_exists(split_k, src, tgt, src):
-                prefix = os.path.join(self.args.data, '{}.{}-{}.'.format(split_k, src, tgt))
-            elif split_exists(split_k, tgt, src, src):
-                prefix = os.path.join(self.args.data, '{}.{}-{}.'.format(split_k, tgt, src))
-            else:
-                if k > 0:
-                    break
+        for dk, data_path in enumerate(data_paths):
+            for k in itertools.count():
+                split_k = split + (str(k) if k > 0 else '')
+
+                # infer langcode
+                src, tgt = self.args.source_lang, self.args.target_lang
+                if split_exists(split_k, src, tgt, src, data_path):
+                    prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+                elif split_exists(split_k, tgt, src, src, data_path):
+                    prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, tgt, src))
                 else:
-                    raise FileNotFoundError('Dataset not found: {} ({})'.format(split, self.args.data))
+                    if k > 0 or dk > 0:
+                        break
+                    else:
+                        raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
-            src_datasets.append(indexed_dataset(prefix + src, self.src_dict))
-            tgt_datasets.append(indexed_dataset(prefix + tgt, self.tgt_dict))
+                src_datasets.append(indexed_dataset(prefix + src, self.src_dict))
+                tgt_datasets.append(indexed_dataset(prefix + tgt, self.tgt_dict))
 
-            print('| {} {} {} examples'.format(self.args.data, split_k, len(src_datasets[-1])))
+                print('| {} {} {} examples'.format(data_path, split_k, len(src_datasets[-1])))
 
-            if not combine:
-                break
+                if not combine:
+                    break
 
         assert len(src_datasets) == len(tgt_datasets)
 
         if len(src_datasets) == 1:
             src_dataset, tgt_dataset = src_datasets[0], tgt_datasets[0]
-            src_sizes = src_dataset.sizes
-            tgt_sizes = tgt_dataset.sizes
         else:
-            if self.args.upsample_primary > 1:
-                src_datasets.extend([src_datasets[0]] * (self.args.upsample_primary - 1))
-                tgt_datasets.extend([tgt_datasets[0]] * (self.args.upsample_primary - 1))
-            src_dataset = ConcatDataset(src_datasets)
-            tgt_dataset = ConcatDataset(tgt_datasets)
-            src_sizes = np.concatenate([ds.sizes for ds in src_datasets])
-            tgt_sizes = np.concatenate([ds.sizes for ds in tgt_datasets])
+            sample_ratios = [1] * len(src_datasets)
+            sample_ratios[0] = self.args.upsample_primary
+            src_dataset = ConcatDataset(src_datasets, sample_ratios)
+            tgt_dataset = ConcatDataset(tgt_datasets, sample_ratios)
 
         self.datasets[split] = LanguagePairDataset(
-            src_dataset, src_sizes, self.src_dict,
-            tgt_dataset, tgt_sizes, self.tgt_dict,
+            src_dataset, src_dataset.sizes, self.src_dict,
+            tgt_dataset, tgt_dataset.sizes, self.tgt_dict,
             left_pad_source=self.args.left_pad_source,
             left_pad_target=self.args.left_pad_target,
             max_source_positions=self.args.max_source_positions,
