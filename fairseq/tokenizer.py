@@ -13,6 +13,7 @@ from multiprocessing import Pool
 
 SPACE_NORMALIZER = re.compile(r"\s+")
 
+FEAT_SPILT = "|"
 
 def tokenize_line(line):
     line = SPACE_NORMALIZER.sub(" ", line)
@@ -28,6 +29,7 @@ def safe_readline(f):
         except UnicodeDecodeError:
             pos -= 1
             f.seek(pos) # search where this character begins
+
 
 class Tokenizer:
 
@@ -45,7 +47,9 @@ class Tokenizer:
             line = f.readline()
             while line:
                 for word in tokenize(line):
-                    counter.update([word])
+                    wfs = word.split(FEAT_SPILT)
+                    for wf in wfs:
+                        counter.update([wf])
                 counter.update([eos_word])
                 if f.tell() > end:
                     break
@@ -122,16 +126,25 @@ class Tokenizer:
         if reverse_order:
             words = list(reversed(words))
         nwords = len(words)
-        ids = torch.IntTensor(nwords + 1 if append_eos else nwords)
+        num_feats = len(words[0].split(FEAT_SPILT))
+        ids = [torch.IntTensor(nwords + 1 if append_eos else nwords) for _ in range(num_feats)]
 
         for i, word in enumerate(words):
-            if add_if_not_exist:
-                idx = dict.add_symbol(word)
-            else:
-                idx = dict.index(word)
-            if consumer is not None:
-                consumer(word, idx)
-            ids[i] = idx
-        if append_eos:
-            ids[nwords] = dict.eos_index
-        return ids
+            w_fs = word.split(FEAT_SPILT)
+            if len(w_fs) != len(ids):
+                raise BaseException("bad number of feats")
+            for f_idx, w_f in enumerate(w_fs):
+                if add_if_not_exist:
+                    idx = dict.add_symbol(w_f)
+                else:
+                    idx = dict.index(w_f)
+                if consumer is not None:
+                    consumer(w_f, idx)
+                ids[f_idx][i] = idx
+                if append_eos:
+                    ids[f_idx][nwords] = dict.eos_index
+        if len(ids) == 1:
+            return ids[0]
+        else:
+            ids = torch.cat([i.unsqueeze(1) for i in ids], dim=1)
+            return ids

@@ -12,6 +12,8 @@ import torch
 from fairseq import search, utils
 from fairseq.models import FairseqIncrementalDecoder
 
+import pdb
+
 
 class SequenceGenerator(object):
     def __init__(
@@ -119,7 +121,10 @@ class SequenceGenerator(object):
     def _generate(self, encoder_input, beam_size=None, maxlen=None, prefix_tokens=None):
         """See generate"""
         src_tokens = encoder_input['src_tokens']
-        bsz, srclen = src_tokens.size()
+        if src_tokens.dim() == 3:
+            bsz, srclen, num_feats = src_tokens.size()
+        else:
+            bsz, srclen = src_tokens.size()
         maxlen = min(maxlen, self.maxlen) if maxlen is not None else self.maxlen
 
         # the max beam size is the dictionary size - 1, since we never select pad

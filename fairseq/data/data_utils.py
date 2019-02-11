@@ -24,7 +24,11 @@ def infer_language_pair(path):
 def collate_tokens(values, pad_idx, eos_idx, left_pad, move_eos_to_beginning=False):
     """Convert a list of 1d tensors into a padded 2d tensor."""
     size = max(v.size(0) for v in values)
-    res = values[0].new(len(values), size).fill_(pad_idx)
+    if values[0].dim() == 2:
+        feat_size = values[0].size(1)
+    else:
+        feat_size = 0
+    res = values[0].new(len(values), size, feat_size).fill_(pad_idx)
 
     def copy_tensor(src, dst):
         assert dst.numel() == src.numel()

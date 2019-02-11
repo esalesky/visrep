@@ -332,7 +332,13 @@ def make_positions(tensor, padding_idx, left_pad, onnx_trace=False):
 
 
 def strip_pad(tensor, pad):
-    return tensor[tensor.ne(pad)]
+    if tensor.dim() == 1:
+        return tensor[tensor.ne(pad)]
+    elif tensor.dim() == 2:
+        keep_rows = (tensor[:, 0] != pad).nonzero().squeeze()
+        return tensor[keep_rows, :]
+    else:
+        raise NotImplementedError("cant handle more than 2 dim tensor")
 
 
 def buffered_arange(max):

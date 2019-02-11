@@ -154,6 +154,13 @@ class Trainer(object):
         self.model.train()
         self.zero_grad()
 
+        if dummy_batch:
+            if hasattr(self.model.encoder, 'num_source_feats'):
+                assert self.model.encoder.num_source_feats > 1
+                dummy = samples[0]['net_input']['src_tokens'].unsqueeze(2)
+                dummy = dummy.expand(-1, -1, self.model.encoder.num_source_feats)
+                samples[0]['net_input']['src_tokens'] = dummy
+
         if not dummy_batch:
             self.meters['train_wall'].start()
 

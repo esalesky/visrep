@@ -12,6 +12,8 @@ from fairseq import utils
 
 from . import data_utils, FairseqDataset
 
+import pdb
+
 
 def collate(
     samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False,
@@ -25,11 +27,11 @@ def collate(
             [s[key] for s in samples],
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
         )
-
     id = torch.LongTensor([s['id'] for s in samples])
     src_tokens = merge('source', left_pad=left_pad_source)
     # sort by descending source length
-    src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
+    #src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
+    src_lengths = torch.LongTensor([s['source'].size(0) for s in samples])
     src_lengths, sort_order = src_lengths.sort(descending=True)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
@@ -113,6 +115,9 @@ class LanguagePairDataset(FairseqDataset):
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
+        if len(self.src_sizes) // 2 == len(self.tgt_sizes):
+            self.src_sizes = self.src_sizes[np.arange(0, len(src_sizes), 2)]
+        print(len(self.src_sizes), len(self.tgt_sizes))
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
         self.left_pad_source = left_pad_source
@@ -140,7 +145,6 @@ class LanguagePairDataset(FairseqDataset):
             eos = self.src_dict.eos()
             if self.src[index][-1] == eos:
                 src_item = self.src[index][:-1]
-
         return {
             'id': index,
             'source': src_item,
@@ -205,7 +209,12 @@ class LanguagePairDataset(FairseqDataset):
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
-        return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
+        #print(index, 'src size', self.src_sizes[index], 'tgt size', self.tgt_sizes[index])
+        #return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
+        if self.tgt_sizes is None:
+            return self.src_sizes[index]
+        else:
+            return self.tgt_sizes[index]
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when

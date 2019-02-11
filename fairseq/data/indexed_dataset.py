@@ -13,6 +13,8 @@ import torch
 
 from fairseq.tokenizer import Tokenizer
 
+import pdb
+
 
 def read_longs(f, n):
     a = np.empty(n, dtype=np.int64)
@@ -140,7 +142,7 @@ class IndexedCachedDataset(IndexedDataset):
         tensor_size = self.sizes[self.dim_offsets[i]:self.dim_offsets[i + 1]]
         a = np.empty(tensor_size, dtype=self.dtype)
         ptx = self.cache_index[i]
-        np.copyto(a, self.cache[ptx : ptx + a.size])
+        np.copyto(a, self.cache[ptx: ptx + a.size].reshape(a.shape))
         item = torch.from_numpy(a).long()
         if self.fix_lua_indexing:
             item -= 1  # subtract 1 for 0-based indexing

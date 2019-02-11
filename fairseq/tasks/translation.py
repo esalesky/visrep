@@ -9,6 +9,7 @@ import itertools
 import numpy as np
 import os
 
+
 from fairseq import options
 from fairseq.data import (
     data_utils, Dictionary, LanguagePairDataset, ConcatDataset,
@@ -50,7 +51,7 @@ class TranslationTask(FairseqTask):
                             help='target language')
         parser.add_argument('--raw-text', action='store_true',
                             help='load raw text dataset')
-        parser.add_argument('--left-pad-source', default='True', type=str, metavar='BOOL',
+        parser.add_argument('--left-pad-source', default='False', type=str, metavar='BOOL',
                             help='pad the source on the left')
         parser.add_argument('--left-pad-target', default='False', type=str, metavar='BOOL',
                             help='pad the target on the left')
