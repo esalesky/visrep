@@ -13,22 +13,26 @@ import collections
 import itertools
 import os
 import math
+import random
+
 import torch
 
 from fairseq import distributed_utils, options, progress_bar, tasks, utils
 from fairseq.data import iterators
 from fairseq.trainer import Trainer
 from fairseq.meters import AverageMeter, StopwatchMeter
+from fairseq.utils import import_user_module
 
 
-def main(args):
+def main(args, init_distributed=False):
+    import_user_module(args)
+
     if args.max_tokens is None:
         args.max_tokens = 6000
     print(args)
 
-    if not torch.cuda.is_available():
-        raise NotImplementedError('Training on CPU is not supported')
-    torch.cuda.set_device(args.device_id)
+    if torch.cuda.is_available() and not args.cpu:
+        torch.cuda.set_device(args.device_id)
     torch.manual_seed(args.seed)
 
     # Setup task, e.g., translation, language modeling, etc.
@@ -37,11 +41,21 @@ def main(args):
     # Load dataset splits
     load_dataset_splits(task, ['train', 'valid'])
 
+    # Initialize distributed training (after data loading)
+    if init_distributed:
+        import socket
+        args.distributed_rank = distributed_utils.distributed_init(args)
+        print('| initialized host {} as rank {}'.format(socket.gethostname(), args.distributed_rank))
+
     # Build model and criterion
     model = task.build_model(args)
     criterion = task.build_criterion(args)
+    print(model)
     print('| model {}, criterion {}'.format(args.arch, criterion.__class__.__name__))
-    print('| num. model params: {}'.format(sum(p.numel() for p in model.parameters())))
+    print('| num. model params: {} (num. trained: {})'.format(
+        sum(p.numel() for p in model.parameters()),
+        sum(p.numel() for p in model.parameters() if p.requires_grad),
+    ))
 
     # Make a dummy batch to (i) warm the caching allocator and (ii) as a
     # placeholder DistributedDataParallel when there's an uneven number of
@@ -51,9 +65,10 @@ def main(args):
         model.max_positions(),
     )
     dummy_batch = task.dataset('train').get_dummy_batch(args.max_tokens, max_positions)
+    oom_batch = task.dataset('train').get_dummy_batch(1, max_positions)
 
     # Build trainer
-    trainer = Trainer(args, task, model, criterion, dummy_batch)
+    trainer = Trainer(args, task, model, criterion, dummy_batch, oom_batch)
     print('| training on {} GPUs'.format(args.distributed_world_size))
     print('| max tokens per GPU = {} and max sentences per GPU = {}'.format(
         args.max_tokens,
@@ -71,6 +86,7 @@ def main(args):
         seed=args.seed,
         num_shards=args.distributed_world_size,
         shard_id=args.distributed_rank,
+        num_workers=args.num_workers,
     )
 
     # Load the latest checkpoint if one is available
@@ -208,6 +224,7 @@ def validate(args, trainer, task, epoch_itr, subsets):
             seed=args.seed,
             num_shards=args.distributed_world_size,
             shard_id=args.distributed_rank,
+            num_workers=args.num_workers,
         ).next_epoch_itr(shuffle=False)
         progress = progress_bar.build_progress_bar(
             args, itr, epoch_itr.epoch,
@@ -303,13 +320,24 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss):
         # remove old checkpoints; checkpoints are sorted in descending order
         checkpoints = utils.checkpoint_paths(args.save_dir, pattern=r'checkpoint_\d+_(\d+)\.pt')
         for old_chk in checkpoints[args.keep_interval_updates:]:
-            os.remove(old_chk)
+            if os.path.lexists(old_chk):
+                os.remove(old_chk)
+
+    if args.keep_last_epochs > 0:
+        # remove old epoch checkpoints; checkpoints are sorted in descending order
+        checkpoints = utils.checkpoint_paths(args.save_dir, pattern=r'checkpoint\d+\.pt')
+        for old_chk in checkpoints[args.keep_last_epochs:]:
+            if os.path.lexists(old_chk):
+                os.remove(old_chk)
 
 
 def load_checkpoint(args, trainer, epoch_itr):
     """Load a checkpoint and replay dataloader to match."""
     os.makedirs(args.save_dir, exist_ok=True)
-    checkpoint_path = os.path.join(args.save_dir, args.restore_file)
+    if os.path.isabs(args.restore_file):
+        checkpoint_path = args.restore_file
+    else:
+        checkpoint_path = os.path.join(args.save_dir, args.restore_file)
     if os.path.isfile(checkpoint_path):
         extra_state = trainer.load_checkpoint(checkpoint_path, args.reset_optimizer, args.reset_lr_scheduler,
                                               eval(args.optimizer_overrides))
@@ -325,6 +353,8 @@ def load_checkpoint(args, trainer, epoch_itr):
             if 'best' in extra_state:
                 save_checkpoint.best = extra_state['best']
         return True
+    else:
+        print('| no existing checkpoint found {}'.format(checkpoint_path))
     return False
 
 
@@ -343,17 +373,39 @@ def load_dataset_splits(task, splits):
                     raise e
 
 
-if __name__ == '__main__':
+def distributed_main(i, args):
+    args.device_id = i
+    if args.distributed_rank is None:  # torch.multiprocessing.spawn
+        args.distributed_rank = i
+    main(args, init_distributed=True)
+
+
+def cli_main():
     parser = options.get_training_parser()
     args = options.parse_args_and_arch(parser)
 
-    if args.distributed_port > 0 or args.distributed_init_method is not None:
-        from distributed_train import main as distributed_main
+    if args.distributed_init_method is None:
+        distributed_utils.infer_init_method(args)
 
-        distributed_main(args)
+    if args.distributed_init_method is not None:
+        # distributed training
+        distributed_main(args.device_id, args)
     elif args.distributed_world_size > 1:
-        from multiprocessing_train import main as multiprocessing_main
-
-        multiprocessing_main(args)
+        # fallback for single node with multiple GPUs
+        port = random.randint(10000, 20000)
+        args.distributed_init_method = 'tcp://localhost:{port}'.format(port=port)
+        args.distributed_rank = None  # set based on device id
+        if max(args.update_freq) > 1 and args.ddp_backend != 'no_c10d':
+            print('| NOTE: you may get better performance with: --ddp-backend=no_c10d')
+        torch.multiprocessing.spawn(
+            fn=distributed_main,
+            args=(args, ),
+            nprocs=args.distributed_world_size,
+        )
     else:
+        # single GPU training
         main(args)
+
+
+if __name__ == '__main__':
+    cli_main()

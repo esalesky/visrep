@@ -12,8 +12,12 @@ import torch
 
 from fairseq import options
 from fairseq.data import (
-    Dictionary, LanguagePairDataset, IndexedInMemoryDataset,
-    IndexedRawTextDataset, RoundRobinZipDatasets,
+    Dictionary,
+    IndexedCachedDataset,
+    IndexedDataset,
+    IndexedRawTextDataset,
+    LanguagePairDataset,
+    RoundRobinZipDatasets,
 )
 from fairseq.models import FairseqMultiModel
 
@@ -47,6 +51,7 @@ class MultilingualTranslationTask(FairseqTask):
     @staticmethod
     def add_args(parser):
         """Add task-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('data', metavar='DIR', help='path to data directory')
         parser.add_argument('--lang-pairs', default=None, metavar='PAIRS',
                             help='comma-separated list of language pairs (in training order): en-de,en-fr,de-fr')
@@ -54,6 +59,8 @@ class MultilingualTranslationTask(FairseqTask):
                             help='source language (only needed for inference)')
         parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
                             help='target language (only needed for inference)')
+        parser.add_argument('--lazy-load', action='store_true',
+                            help='load the dataset lazily')
         parser.add_argument('--raw-text', action='store_true',
                             help='load raw text dataset')
         parser.add_argument('--left-pad-source', default='True', type=str, metavar='BOOL',
@@ -64,6 +71,7 @@ class MultilingualTranslationTask(FairseqTask):
                             help='max number of tokens in the source sequence')
         parser.add_argument('--max-target-positions', default=1024, type=int, metavar='N',
                             help='max number of tokens in the target sequence')
+        # fmt: on
 
     def __init__(self, args, dicts, training):
         super().__init__(args)
@@ -110,15 +118,18 @@ class MultilingualTranslationTask(FairseqTask):
             filename = os.path.join(self.args.data, '{}.{}-{}.{}'.format(split, src, tgt, lang))
             if self.args.raw_text and IndexedRawTextDataset.exists(filename):
                 return True
-            elif not self.args.raw_text and IndexedInMemoryDataset.exists(filename):
+            elif not self.args.raw_text and IndexedDataset.exists(filename):
                 return True
             return False
 
         def indexed_dataset(path, dictionary):
             if self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
-            elif IndexedInMemoryDataset.exists(path):
-                return IndexedInMemoryDataset(path, fix_lua_indexing=True)
+            elif IndexedDataset.exists(path):
+                if self.args.lazy_load:
+                    return IndexedDataset(path, fix_lua_indexing=True)
+                else:
+                    return IndexedCachedDataset(path, fix_lua_indexing=True)
             return None
 
         def sort_lang_pair(lang_pair):
@@ -235,7 +246,8 @@ class MultilingualTranslationTask(FairseqTask):
             for k, v in agg_logging_output.items()
         }
         flat_logging_output['loss'] = sum_over_languages('loss')
-        flat_logging_output['nll_loss'] = sum_over_languages('nll_loss')
+        if any('nll_loss' in logging_output for logging_output in agg_logging_outputs.values()):
+            flat_logging_output['nll_loss'] = sum_over_languages('nll_loss')
         flat_logging_output['sample_size'] = sum_over_languages('sample_size')
         flat_logging_output['nsentences'] = sum_over_languages('nsentences')
         flat_logging_output['ntokens'] = sum_over_languages('ntokens')

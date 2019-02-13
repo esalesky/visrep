@@ -12,7 +12,7 @@ computation (e.g., AdaptiveSoftmax) and which therefore do not work with the
 c10d version of DDP.
 
 This version also supports the *accumulate_grads* feature, which allows faster
-training with --update-freq.
+training with `--update-freq`.
 """
 
 import copy
@@ -27,18 +27,18 @@ from . import distributed_utils
 class LegacyDistributedDataParallel(nn.Module):
     """Implements distributed data parallelism at the module level.
 
-    A simplified version of torch.nn.parallel.DistributedDataParallel.
-    This version uses a c10d process group for communication and does
-    not broadcast buffers.
+    A simplified version of :class:`torch.nn.parallel.DistributedDataParallel`.
+    This version uses a c10d process group for communication and does not
+    broadcast buffers.
 
     Args:
-        module: module to be parallelized
-        world_size: number of parallel workers
+        module (~torch.nn.Module): module to be parallelized
+        world_size (int): number of parallel workers
         process_group (optional): the c10d process group to be used for
             distributed data all-reduction. If None, the default process group
             will be used.
-        buffer_size: number of elements to buffer before performing all-reduce
-            (default: 256M).
+        buffer_size (int, optional): number of elements to buffer before
+            performing all-reduce (default: 256M).
     """
 
     def __init__(self, module, world_size, process_group=None, buffer_size=2**28):
@@ -141,6 +141,8 @@ class LegacyDistributedDataParallel(nn.Module):
             for param in self.module.parameters():
                 if not param.requires_grad:
                     continue
+                if param.grad is None:
+                    param.grad = torch.zeros_like(param)
                 if param.grad.requires_grad:
                     raise RuntimeError("DistributedDataParallel only works "
                                        "with gradients that don't require "
@@ -166,4 +168,5 @@ class LegacyDistributedDataParallel(nn.Module):
             def allreduce_hook(*unused):
                 Variable._execution_engine.queue_callback(reduction_fn)
 
-            p.register_hook(allreduce_hook)
+            if p.requires_grad:
+                p.register_hook(allreduce_hook)

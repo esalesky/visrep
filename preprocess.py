@@ -9,110 +9,27 @@
 Data pre-processing: build vocabularies and binarize training data.
 """
 
-import argparse
 from collections import Counter
 from itertools import zip_longest
 import os
 import shutil
 
+from fairseq import options, tasks
+from fairseq.data import indexed_dataset
+from fairseq.tokenizer import Tokenizer
+from multiprocessing import Pool
 
-from fairseq.data import indexed_dataset, dictionary
-from fairseq.tokenizer import Tokenizer, tokenize_line
-from multiprocessing import Pool, Manager, Process
-
-
-def get_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-s", "--source-lang", default=None, metavar="SRC", help="source language"
-    )
-    parser.add_argument(
-        "-t", "--target-lang", default=None, metavar="TARGET", help="target language"
-    )
-    parser.add_argument(
-        "--trainpref", metavar="FP", default=None, help="train file prefix"
-    )
-    parser.add_argument(
-        "--validpref",
-        metavar="FP",
-        default=None,
-        help="comma separated, valid file prefixes",
-    )
-    parser.add_argument(
-        "--testpref",
-        metavar="FP",
-        default=None,
-        help="comma separated, test file prefixes",
-    )
-    parser.add_argument(
-        "--destdir", metavar="DIR", default="data-bin", help="destination dir"
-    )
-    parser.add_argument(
-        "--thresholdtgt",
-        metavar="N",
-        default=0,
-        type=int,
-        help="map words appearing less than threshold times to unknown",
-    )
-    parser.add_argument(
-        "--thresholdsrc",
-        metavar="N",
-        default=0,
-        type=int,
-        help="map words appearing less than threshold times to unknown",
-    )
-    parser.add_argument("--tgtdict", metavar="FP", help="reuse given target dictionary")
-    parser.add_argument("--srcdict", metavar="FP", help="reuse given source dictionary")
-    parser.add_argument(
-        "--nwordstgt",
-        metavar="N",
-        default=-1,
-        type=int,
-        help="number of target words to retain",
-    )
-    parser.add_argument(
-        "--nwordssrc",
-        metavar="N",
-        default=-1,
-        type=int,
-        help="number of source words to retain",
-    )
-    parser.add_argument(
-        "--alignfile",
-        metavar="ALIGN",
-        default=None,
-        help="an alignment file (optional)",
-    )
-    parser.add_argument(
-        "--output-format",
-        metavar="FORMAT",
-        default="binary",
-        choices=["binary", "raw"],
-        help="output format (optional)",
-    )
-    parser.add_argument(
-        "--joined-dictionary", action="store_true", help="Generate joined dictionary"
-    )
-    parser.add_argument(
-        "--only-source", action="store_true", help="Only process the source language"
-    )
-    parser.add_argument(
-        "--padding-factor",
-        metavar="N",
-        default=8,
-        type=int,
-        help="Pad dictionary size to be multiple of N",
-    )
-    parser.add_argument(
-        "--workers", metavar="N", default=1, type=int, help="number of parallel workers"
-    )
-    return parser
+from fairseq.utils import import_user_module
 
 
 def main(args):
+    import_user_module(args)
+
     print(args)
     os.makedirs(args.destdir, exist_ok=True)
     target = not args.only_source
+
+    task = tasks.get_task(args.task)
 
     def train_path(lang):
         return "{}{}".format(args.trainpref, ("." + lang) if lang else "")
@@ -129,50 +46,57 @@ def main(args):
     def dict_path(lang):
         return dest_path("dict", lang) + ".txt"
 
-    if args.joined_dictionary:
-        assert not args.srcdict, "cannot combine --srcdict and --joined-dictionary"
-        assert not args.tgtdict, "cannot combine --tgtdict and --joined-dictionary"
-        src_dict = build_dictionary(
-            {train_path(lang) for lang in [args.source_lang, args.target_lang]},
-            args.workers,
+    def build_dictionary(filenames, src=False, tgt=False):
+        assert src ^ tgt
+        return task.build_dictionary(
+            filenames,
+            workers=args.workers,
+            threshold=args.thresholdsrc if src else args.thresholdtgt,
+            nwords=args.nwordssrc if src else args.nwordstgt,
+            padding_factor=args.padding_factor,
         )
-        tgt_dict = src_dict
-    else:
+
+    if args.joined_dictionary:
+        assert (
+                not args.srcdict or not args.tgtdict
+        ), "cannot use both --srcdict and --tgtdict with --joined-dictionary"
+
         if args.srcdict:
-            src_dict = dictionary.Dictionary.load(args.srcdict)
+            src_dict = task.load_dictionary(args.srcdict)
+        elif args.tgtdict:
+            src_dict = task.load_dictionary(args.tgtdict)
         else:
             assert (
                 args.trainpref
             ), "--trainpref must be set if --srcdict is not specified"
-            src_dict = build_dictionary([train_path(args.source_lang)], args.workers)
+            src_dict = build_dictionary({train_path(lang) for lang in [args.source_lang, args.target_lang]}, src=True)
+        tgt_dict = src_dict
+    else:
+        if args.srcdict:
+            src_dict = task.load_dictionary(args.srcdict)
+        else:
+            assert (
+                args.trainpref
+            ), "--trainpref must be set if --srcdict is not specified"
+            src_dict = build_dictionary([train_path(args.source_lang)], src=True)
+
         if target:
             if args.tgtdict:
-                tgt_dict = dictionary.Dictionary.load(args.tgtdict)
+                tgt_dict = task.load_dictionary(args.tgtdict)
             else:
                 assert (
                     args.trainpref
                 ), "--trainpref must be set if --tgtdict is not specified"
-                tgt_dict = build_dictionary(
-                    [train_path(args.target_lang)], args.workers
-                )
+                tgt_dict = build_dictionary([train_path(args.target_lang)], tgt=True)
+        else:
+            tgt_dict = None
 
-    src_dict.finalize(
-        threshold=args.thresholdsrc,
-        nwords=args.nwordssrc,
-        padding_factor=args.padding_factor,
-    )
     src_dict.save(dict_path(args.source_lang))
-    if target:
-        if not args.joined_dictionary:
-            tgt_dict.finalize(
-                threshold=args.thresholdtgt,
-                nwords=args.nwordstgt,
-                padding_factor=args.padding_factor,
-            )
+    if target and tgt_dict is not None:
         tgt_dict.save(dict_path(args.target_lang))
 
     def make_binary_dataset(input_prefix, output_prefix, lang, num_workers):
-        dict = dictionary.Dictionary.load(dict_path(lang))
+        dict = task.load_dictionary(dict_path(lang))
         print("| [{}] Dictionary: {} types".format(lang, len(dict) - 1))
         n_seq_tok = [0, 0]
         replaced = Counter()
@@ -269,12 +193,10 @@ def main(args):
         assert args.trainpref, "--trainpref must be set if --alignfile is specified"
         src_file_name = train_path(args.source_lang)
         tgt_file_name = train_path(args.target_lang)
-        src_dict = dictionary.Dictionary.load(dict_path(args.source_lang))
-        tgt_dict = dictionary.Dictionary.load(dict_path(args.target_lang))
         freq_map = {}
-        with open(args.alignfile, "r") as align_file:
-            with open(src_file_name, "r") as src_file:
-                with open(tgt_file_name, "r") as tgt_file:
+        with open(args.alignfile, "r", encoding='utf-8') as align_file:
+            with open(src_file_name, "r", encoding='utf-8') as src_file:
+                with open(tgt_file_name, "r", encoding='utf-8') as tgt_file:
                     for a, s, t in zip_longest(align_file, src_file, tgt_file):
                         si = Tokenizer.tokenize(s, src_dict, add_if_not_exist=False)
                         ti = Tokenizer.tokenize(t, tgt_dict, add_if_not_exist=False)
@@ -300,34 +222,17 @@ def main(args):
             align_dict[srcidx] = max(freq_map[srcidx], key=freq_map[srcidx].get)
 
         with open(
-            os.path.join(
-                args.destdir,
-                "alignment.{}-{}.txt".format(args.source_lang, args.target_lang),
-            ),
-            "w",
+                os.path.join(
+                    args.destdir,
+                    "alignment.{}-{}.txt".format(args.source_lang, args.target_lang),
+                ),
+                "w", encoding='utf-8'
         ) as f:
             for k, v in align_dict.items():
                 print("{} {}".format(src_dict[k], tgt_dict[v]), file=f)
 
 
-def build_and_save_dictionary(
-    train_path, output_path, num_workers, freq_threshold, max_words
-):
-    dict = build_dictionary([train_path], num_workers)
-    dict.finalize(threshold=freq_threshold, nwords=max_words)
-    dict_path = os.path.join(output_path, "dict.txt")
-    dict.save(dict_path)
-    return dict_path
-
-
-def build_dictionary(filenames, workers):
-    d = dictionary.Dictionary()
-    for filename in filenames:
-        Tokenizer.add_file_to_dictionary(filename, d, tokenize_line, workers)
-    return d
-
-
-def binarize(args, filename, dict, output_prefix, lang, offset, end):
+def binarize(args, filename, dict, output_prefix, lang, offset, end, append_eos=True):
     ds = indexed_dataset.IndexedDatasetBuilder(
         dataset_dest_file(args, output_prefix, lang, "bin")
     )
@@ -335,28 +240,29 @@ def binarize(args, filename, dict, output_prefix, lang, offset, end):
     def consumer(tensor):
         ds.add_item(tensor)
 
-    res = Tokenizer.binarize(filename, dict, consumer, offset=offset, end=end)
+    res = Tokenizer.binarize(
+        filename,
+        dict,
+        consumer,
+        offset=offset,
+        end=end,
+        append_eos=append_eos
+    )
     ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
     return res
 
 
-def binarize_with_load(args, filename, dict_path, output_prefix, lang, offset, end):
-    dict = dictionary.Dictionary.load(dict_path)
-    binarize(args, filename, dict, output_prefix, lang, offset, end)
-    return dataset_dest_prefix(args, output_prefix, lang)
-
-
 def dataset_dest_prefix(args, output_prefix, lang):
-    base = f"{args.destdir}/{output_prefix}"
+    base = "{}/{}".format(args.destdir, output_prefix)
     lang_part = (
-        f".{args.source_lang}-{args.target_lang}.{lang}" if lang is not None else ""
+        ".{}-{}.{}".format(args.source_lang, args.target_lang, lang) if lang is not None else ""
     )
-    return f"{base}{lang_part}"
+    return "{}{}".format(base, lang_part)
 
 
 def dataset_dest_file(args, output_prefix, lang, extension):
     base = dataset_dest_prefix(args, output_prefix, lang)
-    return f"{base}.{extension}"
+    return "{}.{}".format(base, extension)
 
 
 def get_offsets(input_file, num_workers):
@@ -372,7 +278,11 @@ def merge_files(files, outpath):
     ds.finalize("{}.idx".format(outpath))
 
 
-if __name__ == "__main__":
-    parser = get_parser()
+def cli_main():
+    parser = options.get_preprocessing_parser()
     args = parser.parse_args()
     main(args)
+
+
+if __name__ == "__main__":
+    cli_main()

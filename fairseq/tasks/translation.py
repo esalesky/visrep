@@ -6,14 +6,17 @@
 # can be found in the PATENTS file in the same directory.
 
 import itertools
-import numpy as np
 import os
 
-
-from fairseq import options
+from fairseq import options, utils
 from fairseq.data import (
-    data_utils, Dictionary, LanguagePairDataset, ConcatDataset,
-    IndexedRawTextDataset, IndexedCachedDataset, IndexedDataset
+    ConcatDataset,
+    data_utils,
+    Dictionary,
+    IndexedCachedDataset,
+    IndexedDataset,
+    IndexedRawTextDataset,
+    LanguagePairDataset,
 )
 
 from . import FairseqTask, register_task
@@ -30,8 +33,8 @@ class TranslationTask(FairseqTask):
 
     .. note::
 
-        The translation task is compatible with :mod:`train.py <train>`,
-        :mod:`generate.py <generate>` and :mod:`interactive.py <interactive>`.
+        The translation task is compatible with :mod:`fairseq-train`,
+        :mod:`fairseq-generate` and :mod:`fairseq-interactive`.
 
     The translation task provides the following additional command-line
     arguments:
@@ -44,11 +47,14 @@ class TranslationTask(FairseqTask):
     @staticmethod
     def add_args(parser):
         """Add task-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('data', nargs='+', help='path(s) to data directorie(s)')
         parser.add_argument('-s', '--source-lang', default=None, metavar='SRC',
                             help='source language')
         parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
                             help='target language')
+        parser.add_argument('--lazy-load', action='store_true',
+                            help='load the dataset lazily')
         parser.add_argument('--raw-text', action='store_true',
                             help='load raw text dataset')
         parser.add_argument('--left-pad-source', default='False', type=str, metavar='BOOL',
@@ -61,6 +67,25 @@ class TranslationTask(FairseqTask):
                             help='max number of tokens in the target sequence')
         parser.add_argument('--upsample-primary', default=1, type=int,
                             help='amount to upsample primary dataset')
+        # fmt: on
+
+    @staticmethod
+    def load_pretrained_model(path, src_dict_path, tgt_dict_path, arg_overrides=None):
+        model = utils.load_checkpoint_to_cpu(path)
+        args = model['args']
+        state_dict = model['model']
+        args = utils.override_model_args(args, arg_overrides)
+        src_dict = Dictionary.load(src_dict_path)
+        tgt_dict = Dictionary.load(tgt_dict_path)
+        assert src_dict.pad() == tgt_dict.pad()
+        assert src_dict.eos() == tgt_dict.eos()
+        assert src_dict.unk() == tgt_dict.unk()
+
+        task = TranslationTask(args, src_dict, tgt_dict)
+        model = task.build_model(args)
+        model.upgrade_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=True)
+        return model
 
     def __init__(self, args, src_dict, tgt_dict):
         super().__init__(args)
@@ -84,8 +109,8 @@ class TranslationTask(FairseqTask):
             raise Exception('Could not infer language pair, please provide it explicitly')
 
         # load dictionaries
-        src_dict = Dictionary.load(os.path.join(args.data[0], 'dict.{}.txt'.format(args.source_lang)))
-        tgt_dict = Dictionary.load(os.path.join(args.data[0], 'dict.{}.txt'.format(args.target_lang)))
+        src_dict = cls.load_dictionary(os.path.join(args.data[0], 'dict.{}.txt'.format(args.source_lang)))
+        tgt_dict = cls.load_dictionary(os.path.join(args.data[0], 'dict.{}.txt'.format(args.target_lang)))
         assert src_dict.pad() == tgt_dict.pad()
         assert src_dict.eos() == tgt_dict.eos()
         assert src_dict.unk() == tgt_dict.unk()
@@ -113,7 +138,10 @@ class TranslationTask(FairseqTask):
             if self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
             elif IndexedDataset.exists(path):
-                return IndexedCachedDataset(path, fix_lua_indexing=True)
+                if self.args.lazy_load:
+                    return IndexedDataset(path, fix_lua_indexing=True)
+                else:
+                    return IndexedCachedDataset(path, fix_lua_indexing=True)
             return None
 
         src_datasets = []

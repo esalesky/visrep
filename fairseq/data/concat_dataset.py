@@ -1,3 +1,10 @@
+# Copyright (c) 2017-present, Facebook, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the LICENSE file in
+# the root directory of this source tree. An additional grant of patent rights
+# can be found in the PATENTS file in the same directory.
+
 import bisect
 
 import numpy as np
@@ -22,18 +29,18 @@ class ConcatDataset(FairseqDataset):
         if isinstance(sample_ratios, int):
             sample_ratios = [sample_ratios] * len(self.datasets)
         self.sample_ratios = sample_ratios
-        self.cummulative_sizes = self.cumsum(self.datasets, sample_ratios)
+        self.cumulative_sizes = self.cumsum(self.datasets, sample_ratios)
         self.real_sizes = [len(d) for d in self.datasets]
 
     def __len__(self):
-        return self.cummulative_sizes[-1]
+        return self.cumulative_sizes[-1]
 
     def __getitem__(self, idx):
-        dataset_idx = bisect.bisect_right(self.cummulative_sizes, idx)
+        dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
         if dataset_idx == 0:
             sample_idx = idx
         else:
-            sample_idx = idx - self.cummulative_sizes[dataset_idx - 1]
+            sample_idx = idx - self.cumulative_sizes[dataset_idx - 1]
         sample_idx = sample_idx % self.real_sizes[dataset_idx]
         return self.datasets[dataset_idx][sample_idx]
 
@@ -47,7 +54,7 @@ class ConcatDataset(FairseqDataset):
 
     def prefetch(self, indices):
         frm = 0
-        for to, ds in zip(self.cummulative_sizes, self.datasets):
+        for to, ds in zip(self.cumulative_sizes, self.datasets):
             real_size = len(ds)
             ds.prefetch([(i - frm) % real_size for i in indices if frm <= i < to])
             frm = to

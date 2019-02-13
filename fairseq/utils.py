@@ -4,14 +4,15 @@
 # This source code is licensed under the license found in the LICENSE file in
 # the root directory of this source tree. An additional grant of patent rights
 # can be found in the PATENTS file in the same directory.
-
-from collections import defaultdict, OrderedDict
+import importlib.util
 import logging
 import os
 import re
-import torch
+import sys
 import traceback
+from collections import defaultdict, OrderedDict
 
+import torch
 from torch.serialization import default_restore_location
 
 
@@ -38,7 +39,7 @@ def convert_state_dict_type(state_dict, ttype=torch.FloatTensor):
         return state_dict
 
 
-def save_state(filename, args, model, criterion, optimizer, lr_scheduler,
+def save_state(filename, args, model_state_dict, criterion, optimizer, lr_scheduler,
                num_updates, optim_history=None, extra_state=None):
     if optim_history is None:
         optim_history = []
@@ -46,7 +47,7 @@ def save_state(filename, args, model, criterion, optimizer, lr_scheduler,
         extra_state = {}
     state_dict = {
         'args': args,
-        'model': model.state_dict() if model else {},
+        'model': model_state_dict if model_state_dict else {},
         'optimizer_history': optim_history + [
             {
                 'criterion_name': criterion.__class__.__name__,
@@ -131,6 +132,12 @@ def _upgrade_state_dict(state):
     return state
 
 
+def load_checkpoint_to_cpu(path):
+    state = torch.load(path, map_location=lambda s, l: default_restore_location(s, 'cpu'))
+    state = _upgrade_state_dict(state)
+    return state
+
+
 def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
     """Load an ensemble of models for inference.
 
@@ -143,8 +150,7 @@ def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
     for filename in filenames:
         if not os.path.exists(filename):
             raise IOError('Model file not found: {}'.format(filename))
-        state = torch.load(filename, map_location=lambda s, l: default_restore_location(s, 'cpu'))
-        state = _upgrade_state_dict(state)
+        state = load_checkpoint_to_cpu(filename)
         states.append(state)
 
     ensemble = []
@@ -152,7 +158,7 @@ def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
         args = state['args']
 
         if model_arg_overrides is not None:
-            args = _override_model_args(args, model_arg_overrides)
+            args = override_model_args(args, model_arg_overrides)
 
         # build model for ensemble
         model = task.build_model(args)
@@ -162,12 +168,12 @@ def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
 
         # some args (e.g., tokens_per_sample) might have been updated while building the model
         if model_arg_overrides is not None:
-            args = _override_model_args(args, model_arg_overrides)
+            args = override_model_args(args, model_arg_overrides)
 
     return ensemble, args
 
 
-def _override_model_args(args, model_arg_overrides):
+def override_model_args(args, model_arg_overrides):
     # Uses model_arg_overrides {'arg_name': arg} to override model args
     for arg_name, arg_val in model_arg_overrides.items():
         setattr(args, arg_name, arg_val)
@@ -435,3 +441,15 @@ def resolve_max_positions(*args):
                     map(nullsafe_min, zip(max_positions, arg))
                 )
     return max_positions
+
+
+def import_user_module(args):
+    module_path = getattr(args, 'user_dir', None)
+    if module_path is not None:
+        module_path = os.path.abspath(args.user_dir)
+        module_parent, module_name = os.path.split(module_path)
+
+        if module_name not in sys.modules:
+            sys.path.insert(0, module_parent)
+            importlib.import_module(module_name)
+            sys.path.pop(0)

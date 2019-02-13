@@ -29,22 +29,24 @@ class Trainer(object):
     communication of the gradients across workers.
     """
 
-    def __init__(self, args, task, model, criterion, dummy_batch):
-
-        if not torch.cuda.is_available():
-            raise NotImplementedError('Training on CPU is not supported')
-
+    def __init__(self, args, task, model, criterion, dummy_batch, oom_batch=None):
         self.args = args
         self.task = task
 
         # copy model and criterion to current device
-        self.criterion = criterion.cuda()
+        self.criterion = criterion
+        self._model = model
+        self.cuda = torch.cuda.is_available() and not args.cpu
         if args.fp16:
-            self._model = model.half().cuda()
-        else:
-            self._model = model.cuda()
+            self._model = self._model.half()
+        if self.cuda:
+            self.criterion = self.criterion.cuda()
+            self._model = self._model.cuda()
 
         self._dummy_batch = dummy_batch
+        self._oom_batch = oom_batch
+
+        self._lr_scheduler = None
         self._num_updates = 0
         self._optim_history = None
         self._optimizer = None
@@ -70,7 +72,6 @@ class Trainer(object):
         self.meters['wall'] = TimeMeter()      # wall time in seconds
         self.meters['train_wall'] = StopwatchMeter()  # train wall time in seconds
 
-
     @property
     def model(self):
         if self._wrapped_model is None:
@@ -88,33 +89,45 @@ class Trainer(object):
             self._build_optimizer()
         return self._optimizer
 
+    @property
+    def lr_scheduler(self):
+        if self._lr_scheduler is None:
+            self._build_optimizer()  # this will initialize self._lr_scheduler
+        return self._lr_scheduler
+
     def _build_optimizer(self):
+        params = list(filter(lambda p: p.requires_grad, self.model.parameters()))
         if self.args.fp16:
-            if torch.cuda.get_device_capability(0)[0] < 7:
+            if self.cuda and torch.cuda.get_device_capability(0)[0] < 7:
                 print('| WARNING: your device does NOT support faster training with --fp16, '
                       'please switch to FP32 which is likely to be faster')
-            params = list(filter(lambda p: p.requires_grad, self.model.parameters()))
-            self._optimizer = optim.FP16Optimizer.build_optimizer(self.args, params)
+            if self.args.memory_efficient_fp16:
+                self._optimizer = optim.MemoryEfficientFP16Optimizer.build_optimizer(self.args, params)
+            else:
+                self._optimizer = optim.FP16Optimizer.build_optimizer(self.args, params)
         else:
-            if torch.cuda.get_device_capability(0)[0] >= 7:
+            if self.cuda and torch.cuda.get_device_capability(0)[0] >= 7:
                 print('| NOTICE: your device may support faster training with --fp16')
-            self._optimizer = optim.build_optimizer(self.args, self.model.parameters())
+            self._optimizer = optim.build_optimizer(self.args, params)
 
-        self.lr_scheduler = lr_scheduler.build_lr_scheduler(self.args, self._optimizer)
+        # We should initialize the learning rate scheduler immediately after
+        # building the optimizer, so that the initial learning rate is set.
+        self._lr_scheduler = lr_scheduler.build_lr_scheduler(self.args, self.optimizer)
 
     def save_checkpoint(self, filename, extra_state):
         """Save all training state in a checkpoint file."""
         if distributed_utils.is_master(self.args):  # only save one checkpoint
             extra_state['train_meters'] = self.meters
             utils.save_state(
-                filename, self.args, self.get_model(), self.criterion, self.optimizer,
+                filename, self.args, self.get_model().state_dict(), self.criterion, self.optimizer,
                 self.lr_scheduler, self._num_updates, self._optim_history, extra_state,
             )
 
     def load_checkpoint(self, filename, reset_optimizer=False, reset_lr_scheduler=False, optimizer_overrides=None):
         """Load all training state from a checkpoint file."""
-        extra_state, self._optim_history, last_optim_state = \
-            utils.load_model_state(filename, self.get_model())
+        extra_state, self._optim_history, last_optim_state = utils.load_model_state(
+            filename, self.get_model(),
+        )
         if last_optim_state is not None and not reset_optimizer:
             # rebuild optimizer after loading model, since params may have changed
             self._build_optimizer()
@@ -145,13 +158,9 @@ class Trainer(object):
 
     def train_step(self, samples, dummy_batch=False):
         """Do forward, backward and parameter update."""
-        # Set seed based on args.seed and the update number so that we get
-        # reproducible results when resuming from checkpoints
-        seed = self.args.seed + self.get_num_updates()
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-
+        self._set_seed()
         self.model.train()
+        self.criterion.train()
         self.zero_grad()
 
         if dummy_batch:
@@ -205,6 +214,9 @@ class Trainer(object):
                 else:
                     raise e
 
+        if ooms > 0 and self._oom_batch is not None:
+            self.handle_ooms(ooms)
+
         if dummy_batch:
             return None
 
@@ -217,6 +229,7 @@ class Trainer(object):
             sample_sizes = list(chain.from_iterable(sample_sizes))
             ooms = sum(ooms)
 
+        self.meters['oom'].update(ooms, len(samples))
         if ooms == self.args.distributed_world_size * len(samples):
             print('| WARNING: OOM in all workers, skipping update')
             self.zero_grad()
@@ -259,7 +272,6 @@ class Trainer(object):
             self.meters['clip'].update(
                 1. if grad_norm > self.args.clip_norm and self.args.clip_norm > 0 else 0.
             )
-            self.meters['oom'].update(ooms)
             self.meters['train_loss'].update(logging_output.get('loss', 0), sample_size)
             if 'nll_loss' in logging_output:
                 self.meters['train_nll_loss'].update(logging_output.get('nll_loss', 0), ntokens)
@@ -280,6 +292,7 @@ class Trainer(object):
         """Do forward pass in evaluation mode."""
         with torch.no_grad():
             self.model.eval()
+            self.criterion.eval()
 
             sample = self._prepare_sample(sample)
             if sample is None:
@@ -298,7 +311,8 @@ class Trainer(object):
                     for p in self.model.parameters():
                         if p.grad is not None:
                             del p.grad  # free some memory
-                    torch.cuda.empty_cache()
+                    if self.cuda:
+                        torch.cuda.empty_cache()
                     return self.valid_step(sample, raise_oom=True)
                 else:
                     raise e
@@ -338,6 +352,15 @@ class Trainer(object):
         self.train_step(dummy_batch, dummy_batch=True)
         self.zero_grad()
 
+    def handle_ooms(self, number_of_ooms):
+        """
+        c10d accumulates/syncs gradients between gpus during backward pass.
+        In case of OOMs, gpus may fail to sync, so we manually iterate
+        extra to make sure each gpu makes same number of iterations.
+        """
+        for _ in range(number_of_ooms):
+            self.train_step([self._oom_batch], True)
+
     def zero_grad(self):
         self.optimizer.zero_grad()
 
@@ -370,4 +393,14 @@ class Trainer(object):
     def _prepare_sample(self, sample):
         if sample is None or len(sample) == 0:
             return None
-        return utils.move_to_cuda(sample)
+        if self.cuda:
+            sample = utils.move_to_cuda(sample)
+        return sample
+
+    def _set_seed(self):
+        # Set seed based on args.seed and the update number so that we get
+        # reproducible results when resuming from checkpoints
+        seed = self.args.seed + self.get_num_updates()
+        torch.manual_seed(seed)
+        if self.cuda:
+            torch.cuda.manual_seed(seed)

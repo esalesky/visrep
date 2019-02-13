@@ -16,6 +16,7 @@ import torch
 from fairseq import options, progress_bar, tasks, utils
 from fairseq.meters import StopwatchMeter, TimeMeter
 from fairseq.sequence_scorer import SequenceScorer
+from fairseq.utils import import_user_module
 
 
 class WordStat(object):
@@ -47,6 +48,8 @@ class WordStat(object):
 def main(parsed_args):
     assert parsed_args.path is not None, '--path required for evaluation!'
 
+    import_user_module(parsed_args)
+
     print(parsed_args)
 
     use_cuda = torch.cuda.is_available() and not parsed_args.cpu
@@ -55,7 +58,9 @@ def main(parsed_args):
 
     # Load ensemble
     print('| loading model(s) from {}'.format(parsed_args.path))
-    models, args = utils.load_ensemble_for_inference(parsed_args.path.split(':'), task, model_arg_overrides=eval(parsed_args.model_overrides))
+    models, args = utils.load_ensemble_for_inference(
+        parsed_args.path.split(':'), task, model_arg_overrides=eval(parsed_args.model_overrides),
+    )
 
     for arg in vars(parsed_args).keys():
         if arg not in {'self_target', 'future_target', 'past_target', 'tokens_per_sample', 'output_size_dictionary'}:
@@ -83,9 +88,10 @@ def main(parsed_args):
         max_positions=utils.resolve_max_positions(*[
             model.max_positions() for model in models
         ]),
+        ignore_invalid_inputs=True,
         num_shards=args.num_shards,
         shard_id=args.shard_id,
-        ignore_invalid_inputs=True,
+        num_workers=args.num_workers,
     ).next_epoch_itr(shuffle=False)
 
     gen_timer = StopwatchMeter()
@@ -168,7 +174,11 @@ def main(parsed_args):
             print(ws)
 
 
-if __name__ == '__main__':
+def cli_main():
     parser = options.get_eval_lm_parser()
     args = options.parse_args_and_arch(parser)
     main(args)
+
+
+if __name__ == '__main__':
+    cli_main()

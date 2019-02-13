@@ -49,6 +49,7 @@ class TransformerModel(FairseqModel):
     @staticmethod
     def add_args(parser):
         """Add model-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
         parser.add_argument('--attention-dropout', type=float, metavar='D',
@@ -88,11 +89,14 @@ class TransformerModel(FairseqModel):
         parser.add_argument('--share-all-embeddings', action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
+        parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
+                            help='if set, disables positional embeddings (outside self attention)')
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
                             help='comma separated list of adaptive softmax cutoff points. '
                                  'Must be used with adaptive_loss criterion'),
         parser.add_argument('--adaptive-softmax-dropout', type=float, metavar='D',
                             help='sets adaptive softmax dropout for the tail projections')
+        # fmt: on
 
     @classmethod
     def build_model(cls, args, task):
@@ -153,6 +157,7 @@ class TransformerLanguageModel(FairseqLanguageModel):
     @staticmethod
     def add_args(parser):
         """Add model-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('--dropout', default=0.1, type=float, metavar='D',
                             help='dropout probability')
         parser.add_argument('--attention-dropout', default=0., type=float, metavar='D',
@@ -205,6 +210,7 @@ class TransformerLanguageModel(FairseqLanguageModel):
                             help='if set, ties the projection weights of adaptive softmax and adaptive input')
         parser.add_argument('--decoder-learned-pos', action='store_true',
                             help='use learned positional embeddings in the decoder')
+        # fmt: on
 
     @classmethod
     def build_model(cls, args, task):
@@ -213,7 +219,7 @@ class TransformerLanguageModel(FairseqLanguageModel):
         # make sure all arguments are present in older models
         base_lm_architecture(args)
 
-        if hasattr(args, 'no_tie_adaptive_proj') and args.no_tie_adaptive_proj == False:
+        if hasattr(args, 'no_tie_adaptive_proj') and args.no_tie_adaptive_proj is False:
             # backward compatibility
             args.tie_adaptive_proj = True
 
@@ -223,15 +229,17 @@ class TransformerLanguageModel(FairseqLanguageModel):
             args.max_target_positions = args.tokens_per_sample
 
         if args.character_embeddings:
-            embed_tokens = CharacterTokenEmbedder(task.dictionary, eval(args.character_filters),
-                                                  args.character_embedding_dim,
-                                                  args.decoder_embed_dim,
-                                                  args.char_embedder_highway_layers,
-                                                  )
+            embed_tokens = CharacterTokenEmbedder(
+                task.dictionary, eval(args.character_filters),
+                args.character_embedding_dim, args.decoder_embed_dim,
+                args.char_embedder_highway_layers,
+            )
         elif args.adaptive_input:
-            embed_tokens = AdaptiveInput(len(task.dictionary), task.dictionary.pad(), args.decoder_input_dim,
-                                         args.adaptive_input_factor, args.decoder_embed_dim,
-                                         options.eval_str_list(args.adaptive_input_cutoff, type=int))
+            embed_tokens = AdaptiveInput(
+                len(task.dictionary), task.dictionary.pad(), args.decoder_input_dim,
+                args.adaptive_input_factor, args.decoder_embed_dim,
+                options.eval_str_list(args.adaptive_input_cutoff, type=int),
+            )
         else:
             embed_tokens = Embedding(len(task.dictionary), args.decoder_input_dim, task.dictionary.pad())
 
@@ -242,7 +250,9 @@ class TransformerLanguageModel(FairseqLanguageModel):
                 args.adaptive_softmax_cutoff, args.adaptive_input_cutoff)
             assert args.decoder_input_dim == args.decoder_output_dim
 
-        decoder = TransformerDecoder(args, task.output_dictionary, embed_tokens, no_encoder_attn=True, final_norm=False)
+        decoder = TransformerDecoder(
+            args, task.output_dictionary, embed_tokens, no_encoder_attn=True, final_norm=False,
+        )
         return TransformerLanguageModel(decoder)
 
 
@@ -255,8 +265,8 @@ class TransformerEncoder(FairseqEncoder):
         args (argparse.Namespace): parsed command-line arguments
         dictionary (~fairseq.data.Dictionary): encoding dictionary
         embed_tokens (torch.nn.Embedding): input embedding
-        left_pad (bool, optional): whether the input is left-padded. Default:
-            ``True``
+        left_pad (bool, optional): whether the input is left-padded
+            (default: True).
     """
 
     def __init__(self, args, dictionary, embed_tokens, left_pad=True):
@@ -376,10 +386,12 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         args (argparse.Namespace): parsed command-line arguments
         dictionary (~fairseq.data.Dictionary): decoding dictionary
         embed_tokens (torch.nn.Embedding): output embedding
-        no_encoder_attn (bool, optional): whether to attend to encoder outputs.
-            Default: ``False``
-        left_pad (bool, optional): whether the input is left-padded. Default:
-            ``False``
+        no_encoder_attn (bool, optional): whether to attend to encoder outputs
+            (default: False).
+        left_pad (bool, optional): whether the input is left-padded
+            (default: False).
+        final_norm (bool, optional): apply layer norm to the output of the
+            final decoder layer (default: True).
     """
 
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False, left_pad=False, final_norm=True):
@@ -628,8 +640,8 @@ class TransformerDecoderLayer(nn.Module):
 
     Args:
         args (argparse.Namespace): parsed command-line arguments
-        no_encoder_attn (bool, optional): whether to attend to encoder outputs.
-            Default: ``False``
+        no_encoder_attn (bool, optional): whether to attend to encoder outputs
+            (default: False).
     """
 
     def __init__(self, args, no_encoder_attn=False):

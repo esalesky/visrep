@@ -26,9 +26,9 @@ of the data that is already tokenized into characters and split into separate
 train, valid and test sets.
 
 Download and extract the data from here:
-`tutorial_names.tar.gz <https://s3.amazonaws.com/fairseq-py/data/tutorial_names.tar.gz>`_
+`tutorial_names.tar.gz <https://dl.fbaipublicfiles.com/fairseq/data/tutorial_names.tar.gz>`_
 
-Once extracted, let's preprocess the data using the :ref:`preprocess.py`
+Once extracted, let's preprocess the data using the :ref:`fairseq-preprocess`
 command-line tool to create the dictionaries. While this tool is primarily
 intended for sequence-to-sequence problems, we're able to reuse it here by
 treating the label as a "target" sequence of length 1. We'll also output the
@@ -37,7 +37,7 @@ enhance readability:
 
 .. code-block:: console
 
-  > python preprocess.py \
+  > fairseq-preprocess \
     --trainpref names/train --validpref names/valid --testpref names/test \
     --source-lang input --target-lang label \
     --destdir names-bin --output-format raw
@@ -324,7 +324,7 @@ following contents::
 4. Training the Model
 ---------------------
 
-Now we're ready to train the model. We can use the existing :ref:`train.py`
+Now we're ready to train the model. We can use the existing :ref:`fairseq-train`
 command-line tool for this, making sure to specify our new Task (``--task
 simple_classification``) and Model architecture (``--arch
 pytorch_tutorial_rnn``):
@@ -332,11 +332,11 @@ pytorch_tutorial_rnn``):
 .. note::
 
   You can also configure the dimensionality of the hidden state by passing the
-  ``--hidden-dim`` argument to :ref:`train.py`.
+  ``--hidden-dim`` argument to :ref:`fairseq-train`.
 
 .. code-block:: console
 
-  > python train.py names-bin \
+  > fairseq-train names-bin \
     --task simple_classification \
     --arch pytorch_tutorial_rnn \
     --optimizer adam --lr 0.001 --lr-shrink 0.5 \
@@ -353,17 +353,16 @@ The model files should appear in the :file:`checkpoints/` directory.
 -------------------------------
 
 Finally we can write a short script to evaluate our model on new inputs. Create
-a new file named :file:`eval_classify.py` with the following contents::
+a new file named :file:`eval_classifier.py` with the following contents::
 
   from fairseq import data, options, tasks, utils
   from fairseq.tokenizer import Tokenizer
 
   # Parse command-line arguments for generation
-  parser = options.get_generation_parser()
+  parser = options.get_generation_parser(default_task='simple_classification')
   args = options.parse_args_and_arch(parser)
 
   # Setup task
-  args.task = 'simple_classification'
   task = tasks.setup_task(args)
 
   # Load model

@@ -10,22 +10,23 @@ Translate raw text with a trained model. Batches data on-the-fly.
 """
 
 from collections import namedtuple
-import numpy as np
+import fileinput
 import sys
 
+import numpy as np
 import torch
 
 from fairseq import data, options, tasks, tokenizer, utils
 from fairseq.sequence_generator import SequenceGenerator
-
+from fairseq.utils import import_user_module
 
 Batch = namedtuple('Batch', 'srcs tokens lengths')
 Translation = namedtuple('Translation', 'src_str hypos pos_scores alignments')
 
 
-def buffered_read(buffer_size):
+def buffered_read(input, buffer_size):
     buffer = []
-    for src_str in sys.stdin:
+    for src_str in fileinput.input(files=[input], openhook=fileinput.hook_encoded("utf-8")):
         buffer.append(src_str.strip())
         if len(buffer) >= buffer_size:
             yield buffer
@@ -56,6 +57,8 @@ def make_batches(lines, args, task, max_positions):
 
 
 def main(args):
+    import_user_module(args)
+
     if args.buffer_size < 1:
         args.buffer_size = 1
     if args.max_tokens is None and args.max_sentences is None:
@@ -75,8 +78,9 @@ def main(args):
 
     # Load ensemble
     print('| loading model(s) from {}'.format(args.path))
-    model_paths = args.path.split(':')
-    models, model_args = utils.load_ensemble_for_inference(model_paths, task, model_arg_overrides=eval(args.model_overrides))
+    models, _model_args = utils.load_ensemble_for_inference(
+        args.path.split(':'), task, model_arg_overrides=eval(args.model_overrides),
+    )
 
     # Set dictionaries
     tgt_dict = task.target_dictionary
@@ -97,6 +101,7 @@ def main(args):
         len_penalty=args.lenpen, unk_penalty=args.unkpen,
         sampling=args.sampling, sampling_topk=args.sampling_topk, sampling_temperature=args.sampling_temperature,
         diverse_beam_groups=args.diverse_beam_groups, diverse_beam_strength=args.diverse_beam_strength,
+        match_source_len=args.match_source_len, no_repeat_ngram_size=args.no_repeat_ngram_size,
     )
 
     if use_cuda:
@@ -161,12 +166,12 @@ def main(args):
     if args.buffer_size > 1:
         print('| Sentence buffer size:', args.buffer_size)
     print('| Type the input sentence and press return:')
-    for inputs in buffered_read(args.buffer_size):
+    for inputs in buffered_read(args.input, args.buffer_size):
         indices = []
         results = []
         for batch, batch_indices in make_batches(inputs, args, task, max_positions):
             indices.extend(batch_indices)
-            results += process_batch(batch)
+            results.extend(process_batch(batch))
 
         for i in np.argsort(indices):
             result = results[i]
@@ -178,7 +183,11 @@ def main(args):
                     print(align)
 
 
-if __name__ == '__main__':
+def cli_main():
     parser = options.get_generation_parser(interactive=True)
     args = options.parse_args_and_arch(parser)
     main(args)
+
+
+if __name__ == '__main__':
+    cli_main()

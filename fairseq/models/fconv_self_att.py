@@ -41,6 +41,7 @@ class FConvModelSelfAtt(FairseqModel):
     @staticmethod
     def add_args(parser):
         """Add model-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
         parser.add_argument('--encoder-embed-dim', type=int, metavar='N',
@@ -75,6 +76,7 @@ class FConvModelSelfAtt(FairseqModel):
                             help='path to load checkpoint from pretrained model')
         parser.add_argument('--pretrained', type=str, metavar='EXPR',
                             help='use pretrained model when training [True, ...]')
+        # fmt: on
 
     @classmethod
     def build_model(cls, args, task):
@@ -193,12 +195,19 @@ class FConvEncoder(FairseqEncoder):
         # project to size of convolution
         x = self.fc1(x)
 
+        encoder_padding_mask = src_tokens.eq(self.padding_idx).t()  # -> T x B
+        if not encoder_padding_mask.any():
+            encoder_padding_mask = None
+
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
         # temporal convolutions
         for proj, conv, attention in zip(self.projections, self.convolutions, self.attention):
             residual = x if proj is None else proj(x)
+
+            if encoder_padding_mask is not None:
+                x = x.masked_fill(encoder_padding_mask.unsqueeze(-1), 0)
 
             x = F.dropout(x, p=self.dropout, training=self.training)
             padding_l = (conv.kernel_size[0] - 1) // 2
@@ -216,6 +225,10 @@ class FConvEncoder(FairseqEncoder):
         # project back to size of embedding
         x = self.fc2(x)
 
+        if encoder_padding_mask is not None:
+            encoder_padding_mask = encoder_padding_mask.t()  # -> B x T
+            x = x.masked_fill(encoder_padding_mask.unsqueeze(-1), 0)
+
         # scale gradients (this only affects backward, not forward)
         x = GradMultiply.apply(x, 1.0 / (2.0 * self.num_attention_layers))
 
@@ -224,12 +237,17 @@ class FConvEncoder(FairseqEncoder):
 
         return {
             'encoder_out': (x, y),
+            'encoder_padding_mask': encoder_padding_mask,  # B x T
         }
 
     def reorder_encoder_out(self, encoder_out, new_order):
         encoder_out['encoder_out'] = tuple(
             eo.index_select(0, new_order) for eo in encoder_out['encoder_out']
         )
+
+        if encoder_out['encoder_padding_mask'] is not None:
+            encoder_out['encoder_padding_mask'] = \
+                encoder_out['encoder_padding_mask'].index_select(0, new_order)
 
         if 'pretrained' in encoder_out:
             encoder_out['pretrained']['encoder_out'] = tuple(
@@ -521,6 +539,7 @@ def base_architecture(args):
     args.downsample = getattr(args, 'downsample', 'False')
     args.pretrained_checkpoint = getattr(args, 'pretrained_checkpoint', '')
     args.pretrained = getattr(args, 'pretrained', 'False')
+
 
 @register_model_architecture('fconv_self_att', 'fconv_self_att_wp')
 def fconv_self_att_wp(args):

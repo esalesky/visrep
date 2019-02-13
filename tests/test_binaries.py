@@ -50,6 +50,14 @@ class TestTranslation(unittest.TestCase):
                 train_translation_model(data_dir, 'fconv_iwslt_de_en', ['--fp16'])
                 generate_main(data_dir)
 
+    def test_memory_efficient_fp16(self):
+        with contextlib.redirect_stdout(StringIO()):
+            with tempfile.TemporaryDirectory('test_memory_efficient_fp16') as data_dir:
+                create_dummy_data(data_dir)
+                preprocess_translation_data(data_dir)
+                train_translation_model(data_dir, 'fconv_iwslt_de_en', ['--memory-efficient-fp16'])
+                generate_main(data_dir)
+
     def test_update_freq(self):
         with contextlib.redirect_stdout(StringIO()):
             with tempfile.TemporaryDirectory('test_update_freq') as data_dir:
@@ -68,8 +76,7 @@ class TestTranslation(unittest.TestCase):
                         data_dir, 'fconv_iwslt_de_en', ['--max-target-positions', '5'],
                     )
                 self.assertTrue(
-                    'skip this example with --skip-invalid-size-inputs-valid-test' \
-                    in str(context.exception)
+                    'skip this example with --skip-invalid-size-inputs-valid-test' in str(context.exception)
                 )
                 train_translation_model(
                     data_dir, 'fconv_iwslt_de_en',
@@ -129,6 +136,28 @@ class TestTranslation(unittest.TestCase):
                 create_dummy_data(data_dir)
                 preprocess_translation_data(data_dir)
                 train_translation_model(data_dir, 'transformer_iwslt_de_en')
+                generate_main(data_dir)
+
+    def test_lightconv(self):
+        with contextlib.redirect_stdout(StringIO()):
+            with tempfile.TemporaryDirectory('test_lightconv') as data_dir:
+                create_dummy_data(data_dir)
+                preprocess_translation_data(data_dir)
+                train_translation_model(data_dir, 'lightconv_iwslt_de_en', [
+                    '--encoder-conv-type', 'lightweight',
+                    '--decoder-conv-type', 'lightweight',
+                ])
+                generate_main(data_dir)
+
+    def test_dynamicconv(self):
+        with contextlib.redirect_stdout(StringIO()):
+            with tempfile.TemporaryDirectory('test_dynamicconv') as data_dir:
+                create_dummy_data(data_dir)
+                preprocess_translation_data(data_dir)
+                train_translation_model(data_dir, 'lightconv_iwslt_de_en', [
+                    '--encoder-conv-type', 'dynamic',
+                    '--decoder-conv-type', 'dynamic',
+                ])
                 generate_main(data_dir)
 
 
@@ -194,7 +223,7 @@ def create_dummy_data(data_dir, num_examples=1000, maxlen=20):
 
 
 def preprocess_translation_data(data_dir, extra_flags=None):
-    preprocess_parser = preprocess.get_parser()
+    preprocess_parser = options.get_preprocessing_parser()
     preprocess_args = preprocess_parser.parse_args(
         [
             '--source-lang', 'in',
@@ -253,6 +282,7 @@ def generate_main(data_dir, extra_flags=None):
 
     # evaluate model interactively
     generate_args.buffer_size = 0
+    generate_args.input = '-'
     generate_args.max_sentences = None
     orig_stdin = sys.stdin
     sys.stdin = StringIO('h e l l o\n')
@@ -261,7 +291,7 @@ def generate_main(data_dir, extra_flags=None):
 
 
 def preprocess_lm_data(data_dir):
-    preprocess_parser = preprocess.get_parser()
+    preprocess_parser = options.get_preprocessing_parser()
     preprocess_args = preprocess_parser.parse_args([
         '--only-source',
         '--trainpref', os.path.join(data_dir, 'train.out'),

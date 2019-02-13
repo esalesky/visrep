@@ -48,6 +48,7 @@ class FConvModel(FairseqModel):
     @staticmethod
     def add_args(parser):
         """Add model-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
         parser.add_argument('--encoder-embed-dim', type=int, metavar='N',
@@ -70,6 +71,7 @@ class FConvModel(FairseqModel):
                             help='share input and output embeddings (requires'
                                  ' --decoder-out-embed-dim and --decoder-embed-dim'
                                  ' to be equal)')
+        # fmt: on
 
     @classmethod
     def build_model(cls, args, task):
@@ -177,10 +179,8 @@ class FConvEncoder(FairseqEncoder):
             connections are added between layers when ``residual=1`` (which is
             the default behavior).
         dropout (float, optional): dropout to be applied before each conv layer
-        normalization_constant (float, optional): multiplies the result of the
-            residual block by sqrt(value)
-        left_pad (bool, optional): whether the input is left-padded. Default:
-            ``True``
+        left_pad (bool, optional): whether the input is left-padded
+            (default: True).
     """
 
     def __init__(
@@ -213,7 +213,7 @@ class FConvEncoder(FairseqEncoder):
         self.residuals = []
 
         layer_in_channels = [in_channels]
-        for i, (out_channels, kernel_size, residual) in enumerate(convolutions):
+        for _, (out_channels, kernel_size, residual) in enumerate(convolutions):
             if residual == 0:
                 residual_dim = out_channels
             else:

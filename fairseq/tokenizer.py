@@ -6,10 +6,11 @@
 # can be found in the PATENTS file in the same directory.
 
 from collections import Counter
-import os, re
+from multiprocessing import Pool
+import os
+import re
 
 import torch
-from multiprocessing import Pool
 
 SPACE_NORMALIZER = re.compile(r"\s+")
 
@@ -28,7 +29,8 @@ def safe_readline(f):
             return f.readline()
         except UnicodeDecodeError:
             pos -= 1
-            f.seek(pos) # search where this character begins
+            f.seek(pos)  # search where this character begins
+
 
 
 class Tokenizer:
@@ -36,14 +38,14 @@ class Tokenizer:
     @staticmethod
     def add_file_to_dictionary_single_worker(filename, tokenize, eos_word, worker_id=0, num_workers=1):
         counter = Counter()
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             size = os.fstat(f.fileno()).st_size
             chunk_size = size // num_workers
             offset = worker_id * chunk_size
             end = offset + chunk_size
             f.seek(offset)
             if offset > 0:
-                safe_readline(f) # drop first incomplete line
+                safe_readline(f)  # drop first incomplete line
             line = f.readline()
             while line:
                 for word in tokenize(line):
@@ -77,15 +79,18 @@ class Tokenizer:
             merge_result(Tokenizer.add_file_to_dictionary_single_worker(filename, tokenize, dict.eos_word))
 
     @staticmethod
-    def binarize(filename, dict, consumer, tokenize=tokenize_line,
-                            append_eos=True, reverse_order=False,
-                            offset=0, end=-1):
+    def binarize(
+        filename, dict, consumer, tokenize=tokenize_line, append_eos=True,
+        reverse_order=False, offset=0, end=-1,
+    ):
         nseq, ntok = 0, 0
         replaced = Counter()
+
         def replaced_consumer(word, idx):
             if idx == dict.unk_index and word != dict.unk_word:
                 replaced.update([word])
-        with open(filename, 'r') as f:
+
+        with open(filename, 'r', encoding='utf-8') as f:
             f.seek(offset)
             # next(f) breaks f.tell(), hence readline() must be used
             line = safe_readline(f)
@@ -109,7 +114,7 @@ class Tokenizer:
 
     @staticmethod
     def find_offsets(filename, num_chunks):
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             size = os.fstat(f.fileno()).st_size
             chunk_size = size // num_chunks
             offsets = [0 for _ in range(num_chunks + 1)]

@@ -57,8 +57,12 @@ class Dictionary(object):
             else:
                 return self[i]
 
-        sent = ' '.join(token_string(i) for i in tensor if i != self.eos())
-        if bpe_symbol is not None:
+        if bpe_symbol == 'sentencepiece':
+            sent = ''.join(token_string(i) for i in tensor if i != self.eos())
+            sent = sent.replace('\u2581', ' ').strip()
+        else:
+            sent = ' '.join(token_string(i) for i in tensor if i != self.eos())
+        if bpe_symbol is not None and bpe_symbol != 'sentencepiece':
             sent = (sent + ' ').replace(bpe_symbol, '').rstrip()
         return sent
 
@@ -172,13 +176,15 @@ class Dictionary(object):
                         return cls.load(fd)
             except FileNotFoundError as fnfe:
                 raise fnfe
-            except Exception:
+            except UnicodeError:
                 raise Exception("Incorrect encoding detected in {}, please "
                                 "rebuild the dataset".format(f))
 
         d = cls()
         for line in f.readlines():
             idx = line.rfind(' ')
+            if idx == -1:
+                raise ValueError("Incorrect dictionary format, expected '<token> <cnt>'")
             word = line[:idx]
             count = int(line[idx+1:])
             d.indices[word] = len(d.symbols)
@@ -200,11 +206,15 @@ class Dictionary(object):
         t[-1] = self.eos()
         return t
 
+
 class TruncatedDictionary(object):
 
     def __init__(self, wrapped_dict, length):
-        self.__class__ = type(wrapped_dict.__class__.__name__,
-                              (self.__class__, wrapped_dict.__class__), {})
+        self.__class__ = type(
+            wrapped_dict.__class__.__name__,
+            (self.__class__, wrapped_dict.__class__),
+            {}
+        )
         self.__dict__ = wrapped_dict.__dict__
         self.wrapped_dict = wrapped_dict
         self.length = min(len(self.wrapped_dict), length)

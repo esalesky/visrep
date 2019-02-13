@@ -85,8 +85,8 @@ def filter_by_size(indices, size_fn, max_positions, raise_exception=False):
         size_fn (callable): function that returns the size of a given index
         max_positions (tuple): filter elements larger than this size.
             Comparisons are done component-wise.
-        raise_exception (bool, optional): if ``True``, raise an exception
-            if any elements are filtered. Default: ``False``
+        raise_exception (bool, optional): if ``True``, raise an exception if
+            any elements are filtered (default: False).
     """
     def check_size(idx):
         if isinstance(max_positions, float) or isinstance(max_positions, int):
@@ -96,7 +96,9 @@ def filter_by_size(indices, size_fn, max_positions, raise_exception=False):
             assert isinstance(idx_size, dict)
             intersect_keys = set(max_positions.keys()) & set(idx_size.keys())
             return all(
-                idx_size[key] <= max_positions[key] for key in intersect_keys
+                all(a is None or b is None or a <= b
+                    for a, b in zip(idx_size[key], max_positions[key]))
+                for key in intersect_keys
             )
         else:
             return all(a is None or b is None or a <= b
@@ -104,12 +106,13 @@ def filter_by_size(indices, size_fn, max_positions, raise_exception=False):
 
     ignored = []
     itr = collect_filtered(check_size, indices, ignored)
+
     for idx in itr:
         if len(ignored) > 0 and raise_exception:
             raise Exception((
                 'Size of sample #{} is invalid (={}) since max_positions={}, '
                 'skip this example with --skip-invalid-size-inputs-valid-test'
-            ).format(idx, size_fn(idx), max_positions))
+            ).format(ignored[0], size_fn(ignored[0]), max_positions))
         yield idx
 
     if len(ignored) > 0:
@@ -131,12 +134,12 @@ def batch_by_size(
         indices (List[int]): ordered list of dataset indices
         num_tokens_fn (callable): function that returns the number of tokens at
             a given index
-        max_tokens (int, optional): max number of tokens in each batch.
-            Default: ``None``
+        max_tokens (int, optional): max number of tokens in each batch
+            (default: None).
         max_sentences (int, optional): max number of sentences in each
-            batch. Default: ``None``
+            batch (default: None).
         required_batch_size_multiple (int, optional): require batch size to
-            be a multiple of N. Default: ``1``
+            be a multiple of N (default: 1).
     """
     max_tokens = max_tokens if max_tokens is not None else float('Inf')
     max_sentences = max_sentences if max_sentences is not None else float('Inf')
@@ -158,6 +161,7 @@ def batch_by_size(
     for idx in indices:
         sample_lens.append(num_tokens_fn(idx))
         sample_len = max(sample_len, sample_lens[-1])
+        assert sample_len <= max_tokens, f"sentence at index {idx} exceeds max_tokens limit!"
         num_tokens = (len(batch) + 1) * sample_len
         if is_batch_full(num_tokens):
             mod_len = max(

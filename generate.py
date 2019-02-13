@@ -11,10 +11,11 @@ Translate pre-processed data with a trained model.
 
 import torch
 
-from fairseq import bleu, data, options, progress_bar, tasks, tokenizer, utils
+from fairseq import bleu, options, progress_bar, tasks, tokenizer, utils
 from fairseq.meters import StopwatchMeter, TimeMeter
 from fairseq.sequence_generator import SequenceGenerator
 from fairseq.sequence_scorer import SequenceScorer
+from fairseq.utils import import_user_module
 
 
 def main(args):
@@ -23,6 +24,8 @@ def main(args):
         '--sampling requires --nbest to be equal to --beam'
     assert args.replace_unk is None or args.raw_text, \
         '--replace-unk requires a raw text dataset (--raw-text)'
+
+    import_user_module(args)
 
     if args.max_tokens is None and args.max_sentences is None:
         args.max_tokens = 12000
@@ -41,7 +44,9 @@ def main(args):
 
     # Load ensemble
     print('| loading model(s) from {}'.format(args.path))
-    models, _ = utils.load_ensemble_for_inference(args.path.split(':'), task, model_arg_overrides=eval(args.model_overrides))
+    models, _model_args = utils.load_ensemble_for_inference(
+        args.path.split(':'), task, model_arg_overrides=eval(args.model_overrides),
+    )
 
     # Optimize ensemble for generation
     for model in models:
@@ -69,6 +74,7 @@ def main(args):
         required_batch_size_multiple=8,
         num_shards=args.num_shards,
         shard_id=args.shard_id,
+        num_workers=args.num_workers,
     ).next_epoch_itr(shuffle=False)
 
     # Initialize generator
@@ -82,13 +88,17 @@ def main(args):
             len_penalty=args.lenpen, unk_penalty=args.unkpen,
             sampling=args.sampling, sampling_topk=args.sampling_topk, sampling_temperature=args.sampling_temperature,
             diverse_beam_groups=args.diverse_beam_groups, diverse_beam_strength=args.diverse_beam_strength,
+            match_source_len=args.match_source_len, no_repeat_ngram_size=args.no_repeat_ngram_size,
         )
 
     if use_cuda:
         translator.cuda()
 
     # Generate and compute BLEU score
-    scorer = bleu.Scorer(tgt_dict.pad(), tgt_dict.eos(), tgt_dict.unk())
+    if args.sacrebleu:
+        scorer = bleu.SacrebleuScorer()
+    else:
+        scorer = bleu.Scorer(tgt_dict.pad(), tgt_dict.eos(), tgt_dict.unk())
     num_sentences = 0
     has_target = True
     with progress_bar.build_progress_bar(args, itr) as t:
@@ -153,7 +163,10 @@ def main(args):
                         # Convert back to tokens for evaluation with unk replacement and/or without BPE
                         target_tokens = tokenizer.Tokenizer.tokenize(
                             target_str, tgt_dict, add_if_not_exist=True)
-                    scorer.add(target_tokens, hypo_tokens)
+                    if hasattr(scorer, 'add_string'):
+                        scorer.add_string(target_str, hypo_str)
+                    else:
+                        scorer.add(target_tokens, hypo_tokens)
 
             wps_meter.update(src_tokens.size(0))
             t.log({'wps': round(wps_meter.avg)})
@@ -165,7 +178,11 @@ def main(args):
         print('| Generate {} with beam={}: {}'.format(args.gen_subset, args.beam, scorer.result_string()))
 
 
-if __name__ == '__main__':
+def cli_main():
     parser = options.get_generation_parser()
     args = options.parse_args_and_arch(parser)
     main(args)
+
+
+if __name__ == '__main__':
+    cli_main()

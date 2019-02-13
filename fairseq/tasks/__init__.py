@@ -1,7 +1,8 @@
 # Copyright (c) 2017-present, Facebook, Inc.
 # All rights reserved.
 #
-# This source code is licensed under the license found in the LICENSE file in # the root directory of this source tree. An additional grant of patent rights
+# This source code is licensed under the license found in the LICENSE file in
+# the root directory of this source tree. An additional grant of patent rights
 # can be found in the PATENTS file in the same directory.
 
 import argparse
@@ -9,7 +10,6 @@ import importlib
 import os
 
 from .fairseq_task import FairseqTask
-
 
 TASK_REGISTRY = {}
 TASK_CLASS_NAMES = set()
@@ -65,10 +65,14 @@ for file in os.listdir(os.path.dirname(__file__)):
         if task_name in TASK_REGISTRY:
             parser = argparse.ArgumentParser(add_help=False)
             group_task = parser.add_argument_group('Task name')
-            group_task.add_argument(
-                '--task', metavar=task_name,
-                help='Enable this task with: ``--task=' + task_name + '``'
-            )
+            # fmt: off
+            group_task.add_argument('--task', metavar=task_name,
+                                    help='Enable this task with: ``--task=' + task_name + '``')
+            # fmt: on
             group_args = parser.add_argument_group('Additional command-line arguments')
             TASK_REGISTRY[task_name].add_args(group_args)
             globals()[task_name + '_parser'] = parser
+
+
+def get_task(name):
+    return TASK_REGISTRY[name]

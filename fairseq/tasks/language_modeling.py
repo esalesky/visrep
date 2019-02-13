@@ -9,11 +9,15 @@ import itertools
 import numpy as np
 import os
 
-from torch.utils.data import ConcatDataset
-
 from fairseq.data import (
-    Dictionary, IndexedInMemoryDataset, IndexedRawTextDataset,
-    MonolingualDataset, TokenBlockDataset, TruncatedDictionary
+    ConcatDataset,
+    Dictionary,
+    IndexedCachedDataset,
+    IndexedDataset,
+    IndexedRawTextDataset,
+    MonolingualDataset,
+    TokenBlockDataset,
+    TruncatedDictionary,
 )
 
 from . import FairseqTask, register_task
@@ -25,20 +29,21 @@ class LanguageModelingTask(FairseqTask):
     Train a language model.
 
     Args:
-        dictionary (Dictionary): the dictionary for the  input of the language model
-
-        output_dictionary (Dictionary): the dictionary for the output of the language model.
-        In most cases it will be the same as dictionary, but could possibly be a more limited
-        version of the dictionary (if --output-dictionary-size is used).
-
-        targets (List[str]): list of the target types that the language model should predict.
-        Can be one of "self", "future", and "past". Defaults to "future".
+        dictionary (~fairseq.data.Dictionary): the dictionary for the input of
+            the language model
+        output_dictionary (~fairseq.data.Dictionary): the dictionary for the
+            output of the language model. In most cases it will be the same as
+            *dictionary*, but could possibly be a more limited version of the
+            dictionary (if ``--output-dictionary-size`` is used).
+        targets (List[str]): list of the target types that the language model
+            should predict.  Can be one of "self", "future", and "past".
+            Defaults to "future".
 
     .. note::
 
-        The language modeling task is compatible with :mod:`train.py <train>`,
-        :mod:`generate.py <generate>`, :mod:`interactive.py <interactive>` and
-        :mod:`eval_lm.py <eval_lm>`.
+        The language modeling task is compatible with :mod:`fairseq-train`,
+        :mod:`fairseq-generate`, :mod:`fairseq-interactive` and
+        :mod:`fairseq-eval-lm`.
 
     The language modeling task provides the following additional command-line
     arguments:
@@ -51,6 +56,7 @@ class LanguageModelingTask(FairseqTask):
     @staticmethod
     def add_args(parser):
         """Add task-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument('data', help='path to data directory')
         parser.add_argument('--sample-break-mode',
                             choices=['none', 'complete', 'eos'],
@@ -60,6 +66,8 @@ class LanguageModelingTask(FairseqTask):
                                  'If set to "eos", includes only one sentence per sample.')
         parser.add_argument('--tokens-per-sample', default=1024, type=int,
                             help='max number of tokens per sample for LM dataset')
+        parser.add_argument('--lazy-load', action='store_true',
+                            help='load the dataset lazily')
         parser.add_argument('--raw-text', default=False, action='store_true',
                             help='load raw text dataset')
         parser.add_argument('--output-dictionary-size', default=-1, type=int,
@@ -70,6 +78,7 @@ class LanguageModelingTask(FairseqTask):
                             help='include future target')
         parser.add_argument('--past-target', action='store_true',
                             help='include past target')
+        # fmt: on
 
     def __init__(self, args, dictionary, output_dictionary, targets=None):
         super().__init__(args)
@@ -137,10 +146,11 @@ class LanguageModelingTask(FairseqTask):
 
             if self.args.raw_text and IndexedRawTextDataset.exists(path):
                 ds = IndexedRawTextDataset(path, self.dictionary)
-                tokens = [t for l in ds.tokens_list for t in l]
-            elif not self.args.raw_text and IndexedInMemoryDataset.exists(path):
-                ds = IndexedInMemoryDataset(path, fix_lua_indexing=True)
-                tokens = ds.buffer
+            elif not self.args.raw_text and IndexedDataset.exists(path):
+                if self.args.lazy_load:
+                    ds = IndexedDataset(path, fix_lua_indexing=True)
+                else:
+                    ds = IndexedCachedDataset(path, fix_lua_indexing=True)
             else:
                 if k > 0:
                     break
@@ -149,9 +159,11 @@ class LanguageModelingTask(FairseqTask):
 
             loaded_datasets.append(
                 TokenBlockDataset(
-                    tokens, ds.sizes, self.args.tokens_per_sample, pad=self.dictionary.pad(), eos=self.dictionary.eos(),
+                    ds, ds.sizes, self.args.tokens_per_sample,
+                    pad=self.dictionary.pad(), eos=self.dictionary.eos(),
                     break_mode=self.args.sample_break_mode, include_targets=True,
-                ))
+                )
+            )
 
             print('| {} {} {} examples'.format(self.args.data, split_k, len(loaded_datasets[-1])))
 
