@@ -300,6 +300,7 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
         super().__init__(dictionary, embed_dim, hidden_size, num_layers,
                          dropout_in, dropout_out, bidirectional,
                          left_pad, pretrained_embed, padding_value)
+        self.up_linear = nn.Linear(embed_dim, hidden_size * (2 if bidirectional else 1))
         self.num_source_feats = num_source_feats
 
     def forward(self, src_tokens, src_lengths):
@@ -327,6 +328,7 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
 
         feat_x = [F.dropout(self.embed_tokens(fx).transpose(0, 1), p=self.dropout_in, training=self.training)
                   for fx in feat_tokens]
+
 
         for fx in feat_x:
             x = x + fx
@@ -358,7 +360,7 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
 
         encoder_padding_mask = src_tokens.eq(self.padding_idx).t()
         for fx in feat_x:
-            x = x + fx
+            x = x + self.up_linear(fx)
         return {
             'encoder_out': (x, final_hiddens, final_cells),
             'encoder_padding_mask': encoder_padding_mask if encoder_padding_mask.any() else None
@@ -620,6 +622,17 @@ def base_architecture(args):
 @register_model_architecture('lstm', 'multifeat_lstm_wiseman_iwslt_de_en')
 def lstm_wiseman_iwslt_de_en(args):
     args.num_source_feats = 2
+    args.encoder_layers = getattr(args, 'encoder_layers', 2)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.encoder_bidirectional = True
+    lstm_wiseman_iwslt_de_en(args)
+
+@register_model_architecture('lstm', 'deep_multifeat_lstm_wiseman_iwslt_de_en')
+def lstm_wiseman_iwslt_de_en(args):
+    args.num_source_feats = 2
+    args.encoder_layers = getattr(args, 'encoder_layers', 6)
+    args.decoder_layers = getattr(args, 'decoder_layers', 6)
+    args.encoder_bidirectional = True
     lstm_wiseman_iwslt_de_en(args)
 
 
