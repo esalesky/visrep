@@ -620,7 +620,7 @@ def base_architecture(args):
 
 
 @register_model_architecture('lstm', 'multifeat_lstm_wiseman_iwslt_de_en')
-def lstm_wiseman_iwslt_de_en(args):
+def multifeat_lstm_wiseman_iwslt_de_en(args):
     args.num_source_feats = 2
     args.encoder_layers = getattr(args, 'encoder_layers', 2)
     args.decoder_layers = getattr(args, 'decoder_layers', 2)
@@ -628,7 +628,7 @@ def lstm_wiseman_iwslt_de_en(args):
     lstm_wiseman_iwslt_de_en(args)
 
 @register_model_architecture('lstm', 'deep_multifeat_lstm_wiseman_iwslt_de_en')
-def lstm_wiseman_iwslt_de_en(args):
+def deep_multifeat_lstm_wiseman_iwslt_de_en(args):
     args.num_source_feats = 2
     args.encoder_layers = getattr(args, 'encoder_layers', 6)
     args.decoder_layers = getattr(args, 'decoder_layers', 6)
