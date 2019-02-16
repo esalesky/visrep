@@ -6,6 +6,7 @@
 # can be found in the PATENTS file in the same directory.
 
 import math
+import pdb
 
 import torch
 import torch.nn as nn
@@ -82,7 +83,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
             embedding_shape = torch.cat((bsz.view(1), seq_len.view(1), torch.LongTensor([-1])))
             embeddings = torch.onnx.operators.reshape_from_tensor_shape(flat_embeddings, embedding_shape)
             return embeddings
-        return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
+        return self.weights.index_select(0, positions.view(-1)).view(bsz.item(), seq_len.item(), -1).detach()
 
     def max_positions(self):
         """Maximum number of supported positions."""
