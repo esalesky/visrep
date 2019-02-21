@@ -16,6 +16,7 @@ import sys
 import numpy as np
 import torch
 
+
 from fairseq import data, options, tasks, tokenizer, utils
 from fairseq.sequence_generator import SequenceGenerator
 from fairseq.utils import import_user_module
@@ -41,7 +42,13 @@ def make_batches(lines, args, task, max_positions):
         tokenizer.Tokenizer.tokenize(src_str, task.source_dictionary, add_if_not_exist=False).long()
         for src_str in lines
     ]
-    lengths = np.array([t.numel() for t in tokens])
+    #lengths = np.array([t.numel() for t in tokens])
+    ls = []
+    for t in tokens:
+        ls += [t.size(0)]
+        if t.dim() == 2:
+            ls += [t.size(1)]
+    lengths = np.array(ls)
     itr = task.get_batch_iterator(
         dataset=data.LanguagePairDataset(tokens, lengths, task.source_dictionary),
         max_tokens=args.max_tokens,

@@ -66,6 +66,8 @@ class LSTMModel(FairseqModel):
         parser.add_argument('--num-source-feats', default=1, action='store',
                             help='encoder will except (BS x SEQLEN x FEAT) sized input')
 
+        parser.add_argument('--skip-connect-feats', action='store', choices=[0, 1], type=int,
+                            help='use skip connections and connect feats to top encoder states')
         # Granular dropout settings (if not specified these default to --dropout)
         parser.add_argument('--encoder-dropout-in', type=float, metavar='D',
                             help='dropout probability for encoder input embedding')
@@ -139,7 +141,6 @@ class LSTMModel(FairseqModel):
             pretrained_encoder_embed.weight.requires_grad = False
         if args.decoder_freeze_embed:
             pretrained_decoder_embed.weight.requires_grad = False
-
         if args.num_source_feats > 1:
             encoder = MultiFeatLSTMEncoder(
                 dictionary=task.source_dictionary,
@@ -150,7 +151,8 @@ class LSTMModel(FairseqModel):
                 dropout_out=args.encoder_dropout_out,
                 bidirectional=args.encoder_bidirectional,
                 pretrained_embed=pretrained_encoder_embed,
-                num_source_feats=args.num_source_feats
+                num_source_feats=args.num_source_feats,
+                skip_connect_feats=getattr(args, 'skip_connect_feats', True)
             )
         else:
             encoder = LSTMEncoder(
@@ -233,7 +235,7 @@ class LSTMEncoder(FairseqEncoder):
             )
 
         bsz, seqlen = src_tokens.size()
-        print(bsz, seqlen, 'batch info')
+        ##print(bsz, seqlen, 'batch info')
 
         # embed tokens
         x = self.embed_tokens(src_tokens)
@@ -295,13 +297,18 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
     def __init__(
         self, dictionary, embed_dim=512, hidden_size=512, num_layers=1,
         dropout_in=0.1, dropout_out=0.1, bidirectional=False,
-        left_pad=False, pretrained_embed=None, padding_value=0., num_source_feats=2
+        left_pad=False, pretrained_embed=None, padding_value=0., num_source_feats=2, skip_connect_feats=0
     ):
         super().__init__(dictionary, embed_dim, hidden_size, num_layers,
                          dropout_in, dropout_out, bidirectional,
                          left_pad, pretrained_embed, padding_value)
-        self.up_linear = nn.Linear(embed_dim, hidden_size * (2 if bidirectional else 1))
         self.num_source_feats = num_source_feats
+        self.skip_connect_feats = skip_connect_feats
+        if self.skip_connect_feats == 1:
+            self.up_linear = nn.Linear(embed_dim, hidden_size * (2 if bidirectional else 1))
+        else:
+            pass
+        print('skip_connect_feats', self.skip_connect_feats)
 
     def forward(self, src_tokens, src_lengths):
         if self.left_pad:
@@ -314,7 +321,7 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
 
         assert src_tokens.dim() == 3
         bsz, seqlen, num_feat = src_tokens.size()
-        print(bsz, seqlen, num_feat, 'batch info')
+        ##print(bsz, seqlen, num_feat, 'batch info')
         assert num_feat == self.num_source_feats
         feat_tokens = [src_tokens[:, :, i] for i in range(1, num_feat)]
         src_tokens = src_tokens[:, :, 0]
@@ -328,7 +335,6 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
 
         feat_x = [F.dropout(self.embed_tokens(fx).transpose(0, 1), p=self.dropout_in, training=self.training)
                   for fx in feat_tokens]
-
 
         for fx in feat_x:
             x = x + fx
@@ -359,8 +365,9 @@ class MultiFeatLSTMEncoder(LSTMEncoder):
             final_cells = combine_bidir(final_cells)
 
         encoder_padding_mask = src_tokens.eq(self.padding_idx).t()
-        for fx in feat_x:
-            x = x + self.up_linear(fx)
+        if self.skip_connect_feats == 1:
+            for fx in feat_x:
+                x = x + self.up_linear(fx)
         return {
             'encoder_out': (x, final_hiddens, final_cells),
             'encoder_padding_mask': encoder_padding_mask if encoder_padding_mask.any() else None
@@ -619,26 +626,35 @@ def base_architecture(args):
     args.adaptive_softmax_cutoff = getattr(args, 'adaptive_softmax_cutoff', '10000,50000,200000')
 
 
+@register_model_architecture('lstm', 'skipless_multifeat_lstm_wiseman_iwslt_de_en')
+def skipless_multifeat_lstm_architecture(args):
+    args.num_source_feats = 2
+    args.encoder_layers = getattr(args, 'encoder_layers', 2)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 512)
+    args.encoder_bidirectional = True
+    args.skip_connect_feats = 0
+    lstm_wiseman_iwslt_de_en(args)
+
+
 @register_model_architecture('lstm', 'multifeat_lstm_wiseman_iwslt_de_en')
 def multifeat_lstm_wiseman_iwslt_de_en(args):
     args.num_source_feats = 2
     args.encoder_layers = getattr(args, 'encoder_layers', 2)
     args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 512)
     args.encoder_bidirectional = True
-    lstm_wiseman_iwslt_de_en(args)
-
-@register_model_architecture('lstm', 'deep_multifeat_lstm_wiseman_iwslt_de_en')
-def deep_multifeat_lstm_wiseman_iwslt_de_en(args):
-    args.num_source_feats = 2
-    args.encoder_layers = getattr(args, 'encoder_layers', 6)
-    args.decoder_layers = getattr(args, 'decoder_layers', 6)
-    args.encoder_bidirectional = True
+    args.skip_connect_feats = 1
     lstm_wiseman_iwslt_de_en(args)
 
 
 @register_model_architecture('lstm', 'lstm_wiseman_iwslt_de_en')
 def lstm_wiseman_iwslt_de_en(args):
-    args.dropout = getattr(args, 'dropout', 0.1)
+    args.dropout = getattr(args, 'dropout', 0.2)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 256)
     args.encoder_dropout_in = getattr(args, 'encoder_dropout_in', 0)
     args.encoder_dropout_out = getattr(args, 'encoder_dropout_out', 0)

@@ -114,10 +114,20 @@ class LanguagePairDataset(FairseqDataset):
         self.src = src
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
+        src_alt = self.src_sizes[np.arange(1, len(self.src_sizes), 2)]
+        src_feat = np.all(src_alt == src_alt[0])
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
-        if len(self.src_sizes) // 2 == len(self.tgt_sizes):
+        tgt_alt = self.tgt_sizes[np.arange(1, len(self.tgt_sizes), 2)] if tgt_sizes is not None else None
+        tgt_feat = np.all(tgt_alt == tgt_alt[0]) if tgt_sizes is not None else False
+        if src_feat:
+            #print('multiple features in src dectected...')
             self.src_sizes = self.src_sizes[np.arange(0, len(src_sizes), 2)]
-        print(len(self.src_sizes), len(self.tgt_sizes))
+            #print('final sizes', self.src_sizes)
+        if tgt_feat:
+            #print('multiple features in tgt dectected...')
+            self.tgt_sizes = self.tgt_sizes[np.arange(0, len(tgt_sizes), 2)]
+        ##print(len(self.src_sizes), len(self.tgt_sizes))
+
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
         self.left_pad_source = left_pad_source
