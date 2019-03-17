@@ -8,6 +8,7 @@
 import contextlib
 import os
 
+import pdb
 import numpy as np
 
 
@@ -28,7 +29,10 @@ def collate_tokens(values, pad_idx, eos_idx, left_pad, move_eos_to_beginning=Fal
         feat_size = values[0].size(1)
     else:
         feat_size = 0
-    res = values[0].new(len(values), size, feat_size).fill_(pad_idx)
+    if feat_size == 0:
+        res = values[0].new(len(values), size).fill_(pad_idx)
+    else:
+        res = values[0].new(len(values), size, feat_size).fill_(pad_idx)
 
     def copy_tensor(src, dst):
         assert dst.numel() == src.numel()

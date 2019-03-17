@@ -21,6 +21,8 @@ from multiprocessing import Pool
 
 from fairseq.utils import import_user_module
 
+import pdb
+
 
 def main(args):
     import_user_module(args)
@@ -55,7 +57,6 @@ def main(args):
             nwords=args.nwordssrc if src else args.nwordstgt,
             padding_factor=args.padding_factor,
         )
-
     if args.joined_dictionary:
         assert (
                 not args.srcdict or not args.tgtdict
@@ -78,6 +79,7 @@ def main(args):
             assert (
                 args.trainpref
             ), "--trainpref must be set if --srcdict is not specified"
+            print("buiding src dict")
             src_dict = build_dictionary([train_path(args.source_lang)], src=True)
 
         if target:
@@ -90,12 +92,11 @@ def main(args):
                 tgt_dict = build_dictionary([train_path(args.target_lang)], tgt=True)
         else:
             tgt_dict = None
-
     src_dict.save(dict_path(args.source_lang))
     if target and tgt_dict is not None:
         tgt_dict.save(dict_path(args.target_lang))
 
-    def make_binary_dataset(input_prefix, output_prefix, lang, num_workers):
+    def make_binary_dataset(input_prefix, output_prefix, lang, num_feats, num_workers):
         dict = task.load_dictionary(dict_path(lang))
         print("| [{}] Dictionary: {} types".format(lang, len(dict) - 1))
         n_seq_tok = [0, 0]
@@ -125,6 +126,7 @@ def main(args):
                         lang,
                         offsets[worker_id],
                         offsets[worker_id + 1],
+                        num_feats,
                     ),
                     callback=merge_result,
                 )
@@ -135,7 +137,7 @@ def main(args):
         )
         merge_result(
             Tokenizer.binarize(
-                input_file, dict, lambda t: ds.add_item(t), offset=0, end=offsets[1]
+                input_file, dict, lambda t: ds.add_item(t), offset=0, end=offsets[1], num_feats=num_feats,
             )
         )
         if num_workers > 1:
@@ -160,9 +162,9 @@ def main(args):
             )
         )
 
-    def make_dataset(input_prefix, output_prefix, lang, num_workers=1):
+    def make_dataset(input_prefix, output_prefix, lang, num_feats, num_workers=1):
         if args.output_format == "binary":
-            make_binary_dataset(input_prefix, output_prefix, lang, num_workers)
+            make_binary_dataset(input_prefix, output_prefix, lang, num_feats, num_workers)
         elif args.output_format == "raw":
             # Copy original text file to destination folder
             output_text_file = dest_path(
@@ -171,21 +173,25 @@ def main(args):
             )
             shutil.copyfile(file_name(input_prefix, lang), output_text_file)
 
-    def make_all(lang):
+    def make_all(lang, num_feats):
         if args.trainpref:
-            make_dataset(args.trainpref, "train", lang, num_workers=args.workers)
+            make_dataset(args.trainpref, "train", lang, num_feats, num_workers=args.workers)
         if args.validpref:
             for k, validpref in enumerate(args.validpref.split(",")):
                 outprefix = "valid{}".format(k) if k > 0 else "valid"
-                make_dataset(validpref, outprefix, lang)
+                make_dataset(validpref, outprefix, lang, num_feats)
         if args.testpref:
             for k, testpref in enumerate(args.testpref.split(",")):
                 outprefix = "test{}".format(k) if k > 0 else "test"
-                make_dataset(testpref, outprefix, lang)
-
-    make_all(args.source_lang)
+                make_dataset(testpref, outprefix, lang, num_feats)
+        if args.alttestpref:
+            for k, alttestpref in enumerate(args.alttestpref.split(",")):
+                outprefix = "alttest{}".format(k) if k > 0 else "alttest"
+                make_dataset(alttestpref, outprefix, lang, num_feats)
+    pdb.set_trace()
+    make_all(args.source_lang, args.num_source_feats)
     if target:
-        make_all(args.target_lang)
+        make_all(args.target_lang, args.num_target_feats)
 
     print("| Wrote preprocessed data to {}".format(args.destdir))
 
@@ -281,6 +287,7 @@ def merge_files(files, outpath):
 def cli_main():
     parser = options.get_preprocessing_parser()
     args = parser.parse_args()
+    pdb.set_trace()
     main(args)
 
 

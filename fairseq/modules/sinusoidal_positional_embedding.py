@@ -34,6 +34,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
         )
         self.onnx_trace = False
         self.register_buffer('_float_tensor', torch.FloatTensor(1))
+        self.torch_version = float('.'.join(torch.__version__.split('.')[:2]))
 
     def prepare_for_onnx_export_(self):
         self.onnx_trace = True
@@ -75,7 +76,10 @@ class SinusoidalPositionalEmbedding(nn.Module):
             pos = (timestep.int() + 1).long() if timestep is not None else seq_len
             if self.onnx_trace:
                 return self.weights[self.padding_idx + pos, :].unsqueeze(1).repeat(bsz, 1, 1)
-            return self.weights[self.padding_idx + pos, :].expand(bsz, 1, -1)
+            if self.torch_version < 1.0:
+                return self.weights[self.padding_idx + pos, :].expand(bsz.item(), 1, -1)
+            else:
+                return self.weights[self.padding_idx + pos, :].expand(bsz, 1, -1)
 
         positions = utils.make_positions(input, self.padding_idx, self.left_pad, self.onnx_trace)
         if self.onnx_trace:
@@ -83,7 +87,10 @@ class SinusoidalPositionalEmbedding(nn.Module):
             embedding_shape = torch.cat((bsz.view(1), seq_len.view(1), torch.LongTensor([-1])))
             embeddings = torch.onnx.operators.reshape_from_tensor_shape(flat_embeddings, embedding_shape)
             return embeddings
-        return self.weights.index_select(0, positions.view(-1)).view(bsz.item(), seq_len.item(), -1).detach()
+        if self.torch_version < 1.0:
+            return self.weights.index_select(0, positions.view(-1)).view(bsz.item(), seq_len.item(), -1).detach()
+        else:
+            return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
 
     def max_positions(self):
         """Maximum number of supported positions."""

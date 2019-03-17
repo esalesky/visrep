@@ -334,7 +334,11 @@ def make_positions(tensor, padding_idx, left_pad, onnx_trace=False):
     positions = make_positions.range_buf[:tensor.size(1)].expand_as(tensor)
     if left_pad:
         positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
-    return tensor.clone().masked_scatter_(mask, positions[mask])
+    positions = tensor.clone().masked_scatter_(mask, positions[mask])
+    if positions.min() < 0:
+        raise BaseException("positions should not be less than 0")
+    return positions
+
 
 
 def strip_pad(tensor, pad):

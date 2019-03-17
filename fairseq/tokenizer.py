@@ -12,9 +12,11 @@ import re
 
 import torch
 
+import pdb
+
 SPACE_NORMALIZER = re.compile(r"\s+")
 
-FEAT_SPILT = "|"
+FEAT_SPLIT = "|"
 
 def tokenize_line(line):
     line = SPACE_NORMALIZER.sub(" ", line)
@@ -49,7 +51,7 @@ class Tokenizer:
             line = f.readline()
             while line:
                 for word in tokenize(line):
-                    wfs = word.split(FEAT_SPILT)
+                    wfs = word.split(FEAT_SPLIT)
                     for wf in wfs:
                         counter.update([wf])
                 counter.update([eos_word])
@@ -81,7 +83,7 @@ class Tokenizer:
     @staticmethod
     def binarize(
         filename, dict, consumer, tokenize=tokenize_line, append_eos=True,
-        reverse_order=False, offset=0, end=-1,
+        reverse_order=False, offset=0, end=-1, num_feats=1
     ):
         nseq, ntok = 0, 0
         replaced = Counter()
@@ -105,6 +107,7 @@ class Tokenizer:
                     consumer=replaced_consumer,
                     append_eos=append_eos,
                     reverse_order=reverse_order,
+                    num_feats=num_feats,
                 )
                 nseq += 1
                 ntok += len(ids)
@@ -126,19 +129,18 @@ class Tokenizer:
 
     @staticmethod
     def tokenize(line, dict, tokenize=tokenize_line, add_if_not_exist=True,
-                 consumer=None, append_eos=True, reverse_order=False):
+                 consumer=None, append_eos=True, reverse_order=False, num_feats=1):
         words = tokenize(line)
         if reverse_order:
             words = list(reversed(words))
         nwords = len(words)
-        num_feats = len(words[0].split(FEAT_SPILT))
-        ids = [torch.IntTensor(nwords + 1 if append_eos else nwords) for _ in range(num_feats)]
+        ids = [torch.IntTensor(nwords + 1 if append_eos else nwords).fill_(dict.pad_index) for _ in range(num_feats)]
 
         for i, word in enumerate(words):
-            w_fs = word.split(FEAT_SPILT)
-            if len(w_fs) != len(ids):
-                raise BaseException("bad number of feats")
-            for f_idx, w_f in enumerate(w_fs):
+            w_fs = word.split(FEAT_SPLIT)
+            #if len(w_fs) != len(ids):
+            #    raise BaseException("bad number of feats")
+            for f_idx, w_f in enumerate(w_fs[:num_feats]):
                 if add_if_not_exist:
                     idx = dict.add_symbol(w_f)
                 else:
@@ -146,10 +148,12 @@ class Tokenizer:
                 if consumer is not None:
                     consumer(w_f, idx)
                 ids[f_idx][i] = idx
-                if append_eos:
+                if append_eos and num_feats == 1:
                     ids[f_idx][nwords] = dict.eos_index
         if len(ids) == 1:
             return ids[0]
         else:
             ids = torch.cat([i.unsqueeze(1) for i in ids], dim=1)
+            if append_eos and num_feats > 1:
+                ids[-1, :] = dict.eos_index
             return ids
