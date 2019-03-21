@@ -20,8 +20,10 @@ from fairseq.modules import (
 
 from . import (
     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, register_model,
-    register_model_architecture,
+    register_model_architecture, FLCEncoder, VisualEncoder
 )
+
+
 
 
 @register_model('transformer')
@@ -95,8 +97,12 @@ class TransformerModel(FairseqModel):
                                  'Must be used with adaptive_loss criterion'),
         parser.add_argument('--adaptive-softmax-dropout', type=float, metavar='D',
                             help='sets adaptive softmax dropout for the tail projections')
-        parser.add_argument('--use-robust-feats', default=0, action='store',
+        parser.add_argument('--robust-embedder-type', type=str,
+                            action='store', default='None',
                             help='will create Robust bag of chars encoder')
+        parser.add_argument('--robust-embedder-resource', type=str,
+                            action='store', default=None,
+                            help='path to torch tensor with img embeddings')
         # fmt: on
 
     @classmethod
@@ -145,16 +151,11 @@ class TransformerModel(FairseqModel):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
         if args.num_source_feats > 1:
-            if args.use_robust_feats == 1:
-                encoder_embed_tokens_f = build_embedding(
-                    src_dict, args.encoder_embed_dim, None
-                )
-                encoder_embed_tokens_l = build_embedding(
-                    src_dict, args.encoder_embed_dim, None
-                )
+            if args.robust_embedder_type in ['FLCEncoder', 'VisualEncoder']:
                 encoder = RobustTransformerEncoder(args, src_dict, encoder_embed_tokens,
-                                                   encoder_embed_tokens_f, encoder_embed_tokens_l,
-                                                   num_source_feats=args.num_source_feats)
+                                                   num_source_feats=args.num_source_feats,
+                                                   robust_embedder_type=args.robust_embedder_type,
+                                                   robust_embedder_resource=args.robust_embedder_resource)
             else:
                 encoder = MultiFeatTransformerEncoder(args, src_dict, encoder_embed_tokens, num_source_feats=args.num_source_feats)
         else:
@@ -327,8 +328,7 @@ class TransformerEncoder(FairseqEncoder):
         # embed tokens and positions
         x = self.embed_scale * self.embed_tokens(src_tokens)
         if self.embed_positions is not None:
-            ps = self.embed_positions(src_tokens)
-            x += ps  # self.embed_positions(src_tokens)
+            x += self.embed_positions(src_tokens)
         x = F.dropout(x, p=self.dropout, training=self.training)
 
         # B x T x C -> T x B x C
@@ -393,18 +393,34 @@ class TransformerEncoder(FairseqEncoder):
 
 
 class RobustTransformerEncoder(TransformerEncoder):
-    def __init__(self, args, dictionary, embed_tokens, embed_tokens_f, embed_tokens_l,
-                 left_pad=False, num_source_feats=2):
-        self.num_source_feats = num_source_feats
+    def __init__(self, args, dictionary, embed_tokens,
+                 left_pad=False, num_source_feats=2,
+                 robust_embedder_type=None, robust_embedder_resource=None):
         super().__init__(args, dictionary, embed_tokens, left_pad)
+        self.num_source_feats = num_source_feats
         embed_dim = embed_tokens.embedding_dim
-        self.embed_tokens_f = embed_tokens_f
-        self.embed_tokens_l = embed_tokens_l
         assert not left_pad
-        self.robust_ff = nn.Sequential(nn.Linear(3 * embed_dim, 3 * embed_dim),
-                                       nn.ReLU(),
-                                       nn.Linear(3 * embed_dim, embed_dim),
-                                       nn.ReLU())
+        if robust_embedder_type == 'FLCEncoder':
+            self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=0.1)
+        elif robust_embedder_type == 'VisualEncoder':
+            def load_image_embedding_from_file(embed_path, padding_idx):
+                img_tensor = torch.load(embed_path)
+                img_r = img_tensor.size(1)
+                img_c = img_tensor.size(2)
+                img_tensor = img_tensor.view(-1, img_r * img_c)
+                img_emb = torch.nn.Embedding(img_tensor.size(0), img_tensor.size(1), padding_idx=padding_idx)
+                img_emb.weight.data = img_tensor
+                return img_emb, img_r, img_c
+            img_emb, img_r, img_c = load_image_embedding_from_file(robust_embedder_resource,
+                                                                   self.embed_tokens.padding_idx)
+            self.robust_embedder = VisualEncoder(embed_dim,
+                                                 img_r=img_r,
+                                                 img_c=img_c,
+                                                 img_emb=img_emb,
+                                                 dropout_in=0.1)
+        else:
+            raise NotImplementedError("unknown embed_type for RobustLSTMEncoder")
+
 
     def forward(self, src_tokens, src_lengths):
         """
@@ -427,13 +443,7 @@ class RobustTransformerEncoder(TransformerEncoder):
         ##print(bsz, seqlen, num_feat, 'batch info')
         assert num_feat == self.num_source_feats, "unexpected num_feat!"
         src_tokens_f = src_tokens[:, :, 0]
-        src_tokens_l = src_tokens[:, :, 1]
-        src_tokens_boc = src_tokens[:, :, 2:]
-        emb_f = self.embed_tokens_f(src_tokens_f)
-        emb_l = self.embed_tokens_l(src_tokens_l)
-        emb_boc = self.embed_tokens(src_tokens_boc).mean(dim=2)
-        emb = torch.cat([emb_f, emb_boc, emb_l], dim=2)
-        x = self.robust_ff(emb)
+        x = self.robust_embedder(src_tokens)
         x = self.embed_scale * x
         if self.embed_positions is not None:
             ps = self.embed_positions(src_tokens_f)
@@ -465,9 +475,9 @@ class MultiFeatTransformerEncoder(TransformerEncoder):
     def __init__(self, args, dictionary, embed_tokens, left_pad=False, num_source_feats=2):
         self.num_source_feats = num_source_feats
         super().__init__(args, dictionary, embed_tokens, left_pad)
+        assert not left_pad
 
     def forward(self, src_tokens, src_lengths):
-        print(src_tokens.shape)
         """
         Args:
             src_tokens (LongTensor): tokens in the source language of shape
@@ -487,7 +497,7 @@ class MultiFeatTransformerEncoder(TransformerEncoder):
         bsz, seqlen, num_feat = src_tokens.size()
         print(bsz, seqlen, num_feat, 'batch info')
         assert num_feat == self.num_source_feats
-        ##feat_tokens = [src_tokens[:, :, 1], src_tokens[:, :, 2]]  ## for i in range(1, num_feat)]
+        feat_tokens = [src_tokens[:, :, i] for i in range(1, num_feat)]
         src_tokens = src_tokens[:, :, 0]
 
         x = self.embed_scale * self.embed_tokens(src_tokens)
@@ -498,11 +508,11 @@ class MultiFeatTransformerEncoder(TransformerEncoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
-       ##feat_x = [F.dropout(self.embed_tokens(fx).transpose(0, 1), p=self.dropout, training=self.training)
-        ##          for fx in feat_tokens]
+        feat_x = [F.dropout(self.embed_tokens(fx).transpose(0, 1), p=self.dropout, training=self.training)
+                  for fx in feat_tokens]
 
-        ##for fx in feat_x:
-        ##    x = x + fx
+        for fx in feat_x:
+            x = x + fx
 
         # compute padding mask
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
@@ -1018,10 +1028,24 @@ def multifeat_transformer_iwslt_de_en(args):
     transformer_iwslt_de_en(args)
 
 
-@register_model_architecture('transformer', 'robust_transformer_iwslt_de_en')
-def robust_transformer_iwslt_de_en(args):
+@register_model_architecture('transformer', 'flc_robust_transformer')
+def flc_robust_transformer(args):
     args.num_source_feats = 20
-    args.use_robust_feats = 1
+    args.robust_embedder_type = 'FLCEncoder'
+    transformer_iwslt_de_en(args)
+
+
+@register_model_architecture('transformer', 'visual_robust_transformer')
+def visual_robust_transformer(args):
+    args.num_source_feats = 20
+    args.robust_embedder_type = 'VisualEncoder'
+    args.robust_embedder_resource = getattr(args, 'robust_embedder_resource', None)
+    assert args.robust_embedder_resource is not None
+    transformer_iwslt_de_en(args)
+
+
+@register_model_architecture('transformer', 'nonrobust_transformer')
+def nonrobust_transformer(args):
     transformer_iwslt_de_en(args)
 
 

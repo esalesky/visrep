@@ -21,8 +21,6 @@ from multiprocessing import Pool
 
 from fairseq.utils import import_user_module
 
-import pdb
-
 
 def main(args):
     import_user_module(args)
@@ -79,7 +77,6 @@ def main(args):
             assert (
                 args.trainpref
             ), "--trainpref must be set if --srcdict is not specified"
-            print("buiding src dict")
             src_dict = build_dictionary([train_path(args.source_lang)], src=True)
 
         if target:
@@ -188,7 +185,6 @@ def main(args):
             for k, alttestpref in enumerate(args.alttestpref.split(",")):
                 outprefix = "alttest{}".format(k) if k > 0 else "alttest"
                 make_dataset(alttestpref, outprefix, lang, num_feats)
-    pdb.set_trace()
     make_all(args.source_lang, args.num_source_feats)
     if target:
         make_all(args.target_lang, args.num_target_feats)
@@ -287,7 +283,6 @@ def merge_files(files, outpath):
 def cli_main():
     parser = options.get_preprocessing_parser()
     args = parser.parse_args()
-    pdb.set_trace()
     main(args)
 
 

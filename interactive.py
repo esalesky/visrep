@@ -48,7 +48,7 @@ def make_batches(lines, args, task, max_positions):
         ls += [t.size(0)]
         if t.dim() == 2:
             ls += [t.size(1)]
-    lengths = np.array(ls)
+    lengths = ls #np.array(ls)
     itr = task.get_batch_iterator(
         dataset=data.LanguagePairDataset(tokens, lengths, task.source_dictionary),
         max_tokens=args.max_tokens,

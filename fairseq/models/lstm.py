@@ -13,7 +13,7 @@ from fairseq import options, utils
 from fairseq.modules import AdaptiveSoftmax
 from . import (
     FairseqEncoder, FairseqIncrementalDecoder, FairseqModel, register_model,
-    register_model_architecture,
+    register_model_architecture, FLCEncoder, VisualEncoder
 )
 
 
@@ -63,8 +63,13 @@ class LSTMModel(FairseqModel):
         parser.add_argument('--share-all-embeddings', default=False, action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
-        parser.add_argument('--use-robust-feats', default=0, action='store',
+
+        parser.add_argument('--robust-embedder-type', type=str,
+                            action='store', default='None',
                             help='will create Robust bag of chars encoder')
+        parser.add_argument('--robust-embedder-resource', type=str,
+                            action='store', default=None,
+                            help='path to torch tensor with img embeddings')
 
         parser.add_argument('--skip-connect-feats', action='store', choices=[0, 1], type=int,
                             help='use skip connections and connect feats to top encoder states')
@@ -142,7 +147,7 @@ class LSTMModel(FairseqModel):
         if args.decoder_freeze_embed:
             pretrained_decoder_embed.weight.requires_grad = False
         if args.num_source_feats > 1:
-            if args.use_robust_feats == 1:
+            if args.robust_embedder_type in ['FLCEncoder', 'VisualEncoder']:
                 encoder = RobustLSTMEncoder(
                     dictionary=task.source_dictionary,
                     embed_dim=args.encoder_embed_dim,
@@ -152,7 +157,9 @@ class LSTMModel(FairseqModel):
                     dropout_out=args.encoder_dropout_out,
                     bidirectional=args.encoder_bidirectional,
                     pretrained_embed=pretrained_encoder_embed,
-                    num_source_feats=args.num_source_feats
+                    num_source_feats=args.num_source_feats,
+                    robust_embedder_type=args.robust_embedder_type,
+                    robust_embedder_resource=args.robust_embedder_resource
                 )
             else:
                 encoder = MultiFeatLSTMEncoder(
@@ -306,27 +313,40 @@ class LSTMEncoder(FairseqEncoder):
 
 
 class RobustLSTMEncoder(LSTMEncoder):
-    """Multi Feature LSTM encoder."""
+    """Robust Multi Feature LSTM encoder."""
     def __init__(
         self, dictionary, embed_dim=512, hidden_size=512, num_layers=1,
         dropout_in=0.1, dropout_out=0.1, bidirectional=False,
-        left_pad=False, pretrained_embed=None, padding_value=0., num_source_feats=2
+        left_pad=False, pretrained_embed=None, padding_value=0.,
+        num_source_feats=2, robust_embedder_type=None, robust_embedder_resource=None
     ):
-        super().__init__(dictionary, embed_dim, hidden_size, num_layers,
-                         dropout_in, dropout_out, bidirectional,
-                         left_pad, pretrained_embed, padding_value)
+        super(RobustLSTMEncoder, self).__init__(dictionary, embed_dim, hidden_size, num_layers,
+                                                dropout_in, dropout_out, bidirectional,
+                                                left_pad, pretrained_embed, padding_value)
         self.num_source_feats = num_source_feats
-        num_embeddings = len(dictionary)
-        self.embed_tokens_f = Embedding(num_embeddings, embed_dim, self.padding_idx)
-        self.embed_tokens_l = Embedding(num_embeddings, embed_dim, self.padding_idx)
-        self.robust_ff = nn.Sequential(nn.Linear(3 * embed_dim, 3 * embed_dim),
-                                       nn.ReLU(),
-                                       nn.Dropout(dropout_in),
-                                       nn.Linear(3 * embed_dim, embed_dim),
-                                       nn.ReLU(),
-                                       nn.Dropout(dropout_in))
+        if robust_embedder_type == 'FLCEncoder':
+            self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=dropout_in)
+        elif robust_embedder_type == 'VisualEncoder':
+            def load_image_embedding_from_file(embed_path, padding_idx):
+                img_tensor = torch.load(embed_path)
+                img_r = img_tensor.size(1)
+                img_c = img_tensor.size(2)
+                img_tensor = img_tensor.view(-1, img_r * img_c)
+                img_emb = torch.nn.Embedding(img_tensor.size(0), img_tensor.size(1), padding_idx=padding_idx)
+                img_emb.weight.data = img_tensor
+                return img_emb, img_r, img_c
+            img_emb, img_r, img_c = load_image_embedding_from_file(robust_embedder_resource,
+                                                                   self.embed_tokens.padding_idx)
+            self.robust_embedder = VisualEncoder(embed_dim,
+                                                 img_r=img_r,
+                                                 img_c=img_c,
+                                                 img_emb=img_emb,
+                                                 dropout_in=dropout_in)
+        else:
+            raise NotImplementedError("unknown embed_type for RobustLSTMEncoder")
 
     def forward(self, src_tokens, src_lengths):
+        assert not self.left_pad
         if self.left_pad:
             # convert left-padding to right-padding
             src_tokens = utils.convert_padding_direction(
@@ -340,14 +360,7 @@ class RobustLSTMEncoder(LSTMEncoder):
         ##print(bsz, seqlen, num_feat, 'batch info')
         assert num_feat == self.num_source_feats, "unexpected num_feat!"
         src_tokens_f = src_tokens[:, :, 0]
-        src_tokens_l = src_tokens[:, :, 1]
-        src_tokens_boc = src_tokens[:, :, 2:]
-        emb_f = self.embed_tokens_f(src_tokens_f)
-        emb_l = self.embed_tokens_l(src_tokens_l)
-        emb_boc = self.embed_tokens(src_tokens_boc).mean(dim=2)
-        emb = torch.cat([emb_f, emb_boc, emb_l], dim=2)
-        x = self.robust_ff(emb)
-
+        x = self.robust_embedder(src_tokens)
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
         # pack embedded source tokens into a PackedSequence
@@ -691,6 +704,7 @@ def Linear(in_features, out_features, bias=True, dropout=0):
 def base_architecture(args):
     args.dropout = getattr(args, 'dropout', 0.1)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.robust_embedder_type = getattr(args, 'robust_embedder_type', None)
     args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)
     args.encoder_freeze_embed = getattr(args, 'encoder_freeze_embed', False)
     args.encoder_hidden_size = getattr(args, 'encoder_hidden_size', args.encoder_embed_dim)
@@ -712,8 +726,8 @@ def base_architecture(args):
     args.adaptive_softmax_cutoff = getattr(args, 'adaptive_softmax_cutoff', '10000,50000,200000')
 
 
-@register_model_architecture('lstm', 'multifeat_lstm_wiseman_iwslt_de_en')
-def multifeat_lstm_wiseman_iwslt_de_en(args):
+@register_model_architecture('lstm', 'multifeat_lstm')
+def multifeat_lstm(args):
     args.num_source_feats = 2
     args.encoder_layers = getattr(args, 'encoder_layers', 2)
     args.decoder_layers = getattr(args, 'decoder_layers', 2)
@@ -725,10 +739,10 @@ def multifeat_lstm_wiseman_iwslt_de_en(args):
     lstm_wiseman_iwslt_de_en(args)
 
 
-@register_model_architecture('lstm', 'robust_lstm_wiseman_iwslt_de_en')
-def robust_lstm_wiseman_iwslt_de_en(args):
-    args.num_source_feats = 20
-    args.use_robust_feats = 1
+@register_model_architecture('lstm', 'flc_robust_lstm')
+def flc_robust_lstm(args):
+    args.num_source_feats = 20 # TODO:pass this from cmd line??
+    args.robust_embedder_type = 'FLCEncoder'
     args.encoder_layers = getattr(args, 'encoder_layers', 2)
     args.decoder_layers = getattr(args, 'decoder_layers', 2)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
@@ -739,15 +753,43 @@ def robust_lstm_wiseman_iwslt_de_en(args):
     lstm_wiseman_iwslt_de_en(args)
 
 
+@register_model_architecture('lstm', 'visual_robust_lstm')
+def visual_robust_lstm(args):
+    args.num_source_feats = 20 # TODO:pass this from cmd line??
+    args.robust_embedder_type = 'VisualEncoder'
+    args.robust_embedder_resource = getattr(args, 'robust_embedder_resource', None)
+    assert args.robust_embedder_resource is not None
+    args.encoder_layers = getattr(args, 'encoder_layers', 2)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 512)
+    args.encoder_bidirectional = True
+    args.skip_connect_feats = 0
+    lstm_wiseman_iwslt_de_en(args)
+
+
+@register_model_architecture('lstm', 'nonrobust_lstm')
+def nonrobust_lstm_wiseman_iwslt_de_en(args):
+    args.dropout = getattr(args, 'dropout', 0.2)
+    args.encoder_layers = getattr(args, 'encoder_layers', 2)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 512)
+    args.encoder_bidirectional = True
+    lstm_wiseman_iwslt_de_en(args)
+
+
 @register_model_architecture('lstm', 'lstm_wiseman_iwslt_de_en')
 def lstm_wiseman_iwslt_de_en(args):
     args.dropout = getattr(args, 'dropout', 0.2)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 256)
-    args.encoder_dropout_in = getattr(args, 'encoder_dropout_in', 0)
-    args.encoder_dropout_out = getattr(args, 'encoder_dropout_out', 0)
+    args.encoder_dropout_in = getattr(args, 'encoder_dropout_in', 0.1)
+    args.encoder_dropout_out = getattr(args, 'encoder_dropout_out', 0.1)
     args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 256)
     args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 256)
-    args.decoder_dropout_in = getattr(args, 'decoder_dropout_in', 0)
+    args.decoder_dropout_in = getattr(args, 'decoder_dropout_in', 0.1)
     args.decoder_dropout_out = getattr(args, 'decoder_dropout_out', args.dropout)
     base_architecture(args)
 
