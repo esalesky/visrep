@@ -38,8 +38,13 @@ class VisualEncoder(nn.Module):
         self.img_emb.weight.requires_grad = False
         self.img_r = img_r
         self.img_c = img_c
-        self.conv2d = torch.nn.Conv2d(1, 10, kernel_size=(26, 20), stride=(1, 5))
-        self.flatten = torch.nn.Linear(450, embed_dim)
+        self.conv_seq = nn.Sequential(torch.nn.Conv2d(1, 32, kernel_size=(7, 7), stride=(3, 3)),
+                                      torch.nn.Dropout(dropout_in),
+                                      torch.nn.Conv2d(32, 32, kernel_size=(7, 7), stride=(3, 3)),
+                                      torch.nn.Dropout(dropout_in),
+                                      torch.nn.Conv2d(32, 512, kernel_size=(1, 24), stride=(1, 1)))
+
+
 
     def save_img_debug(self, img_t, name):
         img = img_t.cpu().numpy() * 255.0
@@ -54,7 +59,7 @@ class VisualEncoder(nn.Module):
         emb = emb.view(-1, num_chars, self.img_r, self.img_c)  # (bsz * seqlen, num_chars, 26, 12)
         tiled_emb = torch.cat([emb[:, i, :, :] for i in range(num_chars)], dim=2) # (bsz * seqlen, 26, 12 * num_chars) TODO:replace with view op
         emb = tiled_emb.unsqueeze(1)
-        emb = self.conv2d(emb).squeeze(2).view(-1, 10 * 45)
-        emb = self.flatten(emb)
+        emb = self.conv_seq(emb)
+        emb = emb.squeeze(3).squeeze(2)
         emb = emb.view(bsz, seqlen, -1) # (bsz, seqlen, embed_dim)
         return emb
