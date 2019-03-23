@@ -24,8 +24,6 @@ from . import (
 )
 
 
-
-
 @register_model('transformer')
 class TransformerModel(FairseqModel):
     """
@@ -286,6 +284,7 @@ class TransformerEncoder(FairseqEncoder):
 
     def __init__(self, args, dictionary, embed_tokens, left_pad=False):
         super().__init__(dictionary)
+        assert not left_pad
         self.dropout = args.dropout
 
         embed_dim = embed_tokens.embedding_dim
@@ -326,6 +325,9 @@ class TransformerEncoder(FairseqEncoder):
                   padding elements of shape `(batch, src_len)`
         """
         # embed tokens and positions
+        if src_tokens.dim() == 3:
+            assert src_tokens.size(2) == 1
+            src_tokens = src_tokens.squeeze(2)
         x = self.embed_scale * self.embed_tokens(src_tokens)
         if self.embed_positions is not None:
             x += self.embed_positions(src_tokens)

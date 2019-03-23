@@ -12,7 +12,6 @@ import re
 
 import torch
 
-import pdb
 
 SPACE_NORMALIZER = re.compile(r"\s+")
 
@@ -135,7 +134,6 @@ class Tokenizer:
             words = list(reversed(words))
         nwords = len(words)
         ids = [torch.IntTensor(nwords + 1 if append_eos else nwords).fill_(dict.pad_index) for _ in range(num_feats)]
-
         for i, word in enumerate(words):
             w_fs = word.split(FEAT_SPLIT)
             #if len(w_fs) != len(ids):
@@ -150,10 +148,7 @@ class Tokenizer:
                 ids[f_idx][i] = idx
                 if append_eos and num_feats == 1:
                     ids[f_idx][nwords] = dict.eos_index
-        if len(ids) == 1:
-            return ids[0]
-        else:
-            ids = torch.cat([i.unsqueeze(1) for i in ids], dim=1)
-            if append_eos and num_feats > 1:
-                ids[-1, :] = dict.eos_index
-            return ids
+        ids = torch.cat([i.unsqueeze(1) for i in ids], dim=1)
+        if append_eos and num_feats > 1:
+            ids[-1, :] = dict.eos_index
+        return ids

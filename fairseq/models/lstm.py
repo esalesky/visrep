@@ -254,6 +254,10 @@ class LSTMEncoder(FairseqEncoder):
                 left_to_right=True,
             )
 
+        if src_tokens.dim() == 3:
+            assert src_tokens.size(2) == 1
+            src_tokens = src_tokens.squeeze(2)
+
         bsz, seqlen = src_tokens.size()
         ##print(bsz, seqlen, 'batch info')
 

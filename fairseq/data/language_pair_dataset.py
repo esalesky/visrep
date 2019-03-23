@@ -12,13 +12,13 @@ from fairseq import utils
 
 from . import data_utils, FairseqDataset
 
-import pdb
-
 
 def collate(
-    samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False,
+    samples, pad_idx, eos_idx, left_pad_source=False, left_pad_target=False,
     input_feeding=True,
 ):
+
+    assert not left_pad_source
     if len(samples) == 0:
         return {}
 
@@ -103,7 +103,7 @@ class LanguagePairDataset(FairseqDataset):
     def __init__(
         self, src, src_sizes, src_dict,
         tgt=None, tgt_sizes=None, tgt_dict=None,
-        left_pad_source=True, left_pad_target=False,
+        left_pad_source=False, left_pad_target=False,
         max_source_positions=1024, max_target_positions=1024,
         shuffle=True, input_feeding=True, remove_eos_from_source=False, append_eos_to_target=False,
     ):
