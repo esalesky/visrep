@@ -4,7 +4,6 @@ import argparse
 import torch
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
-import pdb
 np.set_printoptions(precision=1)
 
 #font_path = "/usr/share/fonts/truetype/inconsolata/Inconsolata.otf"
@@ -33,7 +32,7 @@ if __name__ == '__main__':
             del draw
             m = np.asarray(im) / 255.0
             if idx % 25 == 0:
-                pdb.set_trace()
+                pass
         else:
             if idx == 1:
                 m = np.zeros((H, W))

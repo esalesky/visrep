@@ -560,11 +560,17 @@ class LSTMDecoder(FairseqIncrementalDecoder):
             self.fc_out = Linear(out_embed_dim, num_embeddings, dropout=dropout_out)
 
     def forward(self, prev_output_tokens, encoder_out_dict, incremental_state=None):
+
+        if prev_output_tokens.dim() == 3:
+            assert prev_output_tokens.size(2) == 1
+            prev_output_tokens = prev_output_tokens.squeeze(2)
+
         encoder_out = encoder_out_dict['encoder_out']
         encoder_padding_mask = encoder_out_dict['encoder_padding_mask']
 
         if incremental_state is not None:
             prev_output_tokens = prev_output_tokens[:, -1:]
+
         bsz, seqlen = prev_output_tokens.size()
 
         # get outputs from encoder

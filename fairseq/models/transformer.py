@@ -621,6 +621,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                   tgt_len, src_len)`
         """
         # embed positions
+        if prev_output_tokens.dim() == 3:
+            assert prev_output_tokens.size(2) == 1
+            prev_output_tokens = prev_output_tokens.squeeze(2)
         positions = self.embed_positions(
             prev_output_tokens,
             incremental_state=incremental_state,
