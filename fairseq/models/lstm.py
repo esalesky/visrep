@@ -13,7 +13,7 @@ from fairseq import options, utils
 from fairseq.modules import AdaptiveSoftmax
 from . import (
     FairseqEncoder, FairseqIncrementalDecoder, FairseqModel, register_model,
-    register_model_architecture, FLCEncoder, VisualEncoder
+    register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder
 )
 
 
@@ -330,6 +330,8 @@ class RobustLSTMEncoder(LSTMEncoder):
         self.num_source_feats = num_source_feats
         if robust_embedder_type == 'FLCEncoder':
             self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=dropout_in)
+        elif robust_embedder_type == 'OldFLCEncoder':
+            self.robust_embedder = OldFLCEncoder(self.embed_tokens, dropout_in=dropout_in)
         elif robust_embedder_type == 'VisualEncoder':
             def load_image_embedding_from_file(embed_path, padding_idx):
                 img_tensor = torch.load(embed_path)
@@ -746,6 +748,20 @@ def multifeat_lstm(args):
     args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 512)
     args.encoder_bidirectional = True
     args.skip_connect_feats = 1
+    lstm_wiseman_iwslt_de_en(args)
+
+
+@register_model_architecture('lstm', 'old_flc_robust_lstm')
+def old_flc_robust_lstm(args):
+    args.num_source_feats = 20 # TODO:pass this from cmd line??
+    args.robust_embedder_type = 'OldFLCEncoder'
+    args.encoder_layers = getattr(args, 'encoder_layers', 2)
+    args.decoder_layers = getattr(args, 'decoder_layers', 2)
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 512)
+    args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 512)
+    args.encoder_bidirectional = True
+    args.skip_connect_feats = 0
     lstm_wiseman_iwslt_de_en(args)
 
 

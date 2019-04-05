@@ -3,14 +3,119 @@ __author__ = 'arenduchintala'
 import torch
 import torch.nn as nn
 from PIL import Image
-import numpy as np
+
+
+class HighwayNetwork(nn.Module):
+
+    def __init__(self, input_size):
+        super(HighwayNetwork, self).__init__()
+        # transform gate
+        self.trans_gate = nn.Sequential(
+            nn.Linear(input_size, input_size),
+            nn.Sigmoid())
+        # highway
+        self.activation = nn.ReLU()
+
+        self.h_layer = nn.Sequential(nn.Linear(input_size, input_size),
+                                     self.activation)
+        self.trans_gate[0].weight.data.uniform_(-0.05, 0.05)
+        self.h_layer[0].weight.data.uniform_(-0.05, 0.05)
+        self.trans_gate[0].bias.data.fill_(0)
+        self.h_layer[0].bias.data.fill_(0)
+
+    def forward(self, x):
+        t = self.trans_gate(x)
+        h = self.h_layer(x)
+        z = torch.mul(t, h) + torch.mul(1.0 - t, x)
+        return z
+
+
+class CharCNNEncoder(nn.Module):
+    def __init__(self, embed_tokens, num_chars, dropout_in=0.1):
+        super(CharCNNEncoder, self).__init__()
+        self.num_chars = num_chars
+        self.embed_tokens = embed_tokens
+        self.cnn = nn.Conv1d(self.embed_tokens.embedding_dim, 512, kernel_size=6, padding=0)
+        self.mp = nn.MaxPool1d(num_chars - 5)
+        self.cnn.weight.data.uniform_(-0.05, 0.05)
+        out_channel, in_channel, kernel_size = self.cnn.weight.shape
+        # approximating many smaller kernel sizes with one large kernel by zeroing out kernel elements
+        for i in [1, 2, 3, 4, 5]:
+            x = torch.Tensor(85, 512, 6).uniform_(-0.05, 0.05)
+            x[:, :, torch.arange(i, 6).long()] = 0
+            self.cnn.weight.data[torch.arange((i - 1) * 85, i * 85).long(), :, :] = x
+        self.cnn.bias.data.fill_(0.0)
+        self.highway = HighwayNetwork(self.embed_tokens.embedding_dim)
+
+    def forward(self, src_tokens):
+        assert src_tokens.dim() == 3
+        bsz, seqlen, num_chars = src_tokens.shape
+        src_tokens_reshape = src_tokens.view(-1, num_chars)
+        emb = self.embed_tokens(src_tokens_reshape) # (bsz * seqlen, num_chars, 512)
+        emb = emb.transpose(1, 2)  #(bsz * seqlen, 512, num_chars)
+        emb = self.mp(self.cnn(emb)).squeeze(2)
+        emb = self.highway(emb)
+        return emb.view(bsz, seqlen, -1) # (bsz, seqlen, embed_dim)
+
+
+class MultiFeatEncoder(nn.Module):
+    def __init__(self, embed_tokens):
+        self.embed_tokens = embed_tokens
+
+    def forward(self, src_tokens):
+        assert src_tokens.dim() == 3
+        bsz, seqlen, num_feat = src_tokens.size()
+        feat_tokens = [src_tokens[:, :, i] for i in range(1, num_feat)]
+        feat_x = [self.embed_tokens(fx) for fx in feat_tokens]
+        x = self.embed_tokens(src_tokens[:, :, 0])
+        for fx in feat_x:
+            x = x + fx
+        return x
+
+
+class OldFLCEncoder(nn.Module):
+    def __init__(self, embed_tokens, dropout_in=0.1):
+        super(OldFLCEncoder, self).__init__()
+        self.embed_tokens_boc = embed_tokens
+        self.embed_tokens_f = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
+                                           embed_tokens.padding_idx)
+        self.embed_tokens_l = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
+                                           embed_tokens.padding_idx)
+        nn.init.uniform_(self.embed_tokens_f.weight, -0.1, 0.1)
+        nn.init.uniform_(self.embed_tokens_l.weight, -0.1, 0.1)
+        nn.init.constant_(self.embed_tokens_f.weight[embed_tokens.padding_idx], 0)
+        nn.init.constant_(self.embed_tokens_l.weight[embed_tokens.padding_idx], 0)
+        embed_dim = self.embed_tokens_boc.embedding_dim
+        self.robust_ff = nn.Sequential(nn.Linear(3 * embed_dim, 3 * embed_dim),
+                                       nn.ReLU(),
+                                       nn.Linear(3 * embed_dim, embed_dim),
+                                       nn.ReLU())
+
+    def forward(self, src_tokens):
+        assert src_tokens.dim() == 3
+        src_tokens_f = src_tokens[:, :, 0]
+        src_tokens_l = src_tokens[:, :, 1]
+        src_tokens_boc = src_tokens[:, :, 2:]
+        emb_f = self.embed_tokens_f(src_tokens_f)
+        emb_l = self.embed_tokens_l(src_tokens_l)
+        emb_boc = self.embed_tokens_boc(src_tokens_boc).mean(dim=2)
+        emb = torch.cat([emb_f, emb_boc, emb_l], dim=2)
+        return self.robust_ff(emb)
 
 
 class FLCEncoder(nn.Module):
     def __init__(self, embed_tokens, dropout_in=0.1):
         super(FLCEncoder, self).__init__()
-        self.embed_tokens = embed_tokens
-        embed_dim = self.embed_tokens.embedding_dim
+        self.embed_tokens_boc = embed_tokens
+        self.embed_tokens_f = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
+                                           embed_tokens.padding_idx)
+        self.embed_tokens_l = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
+                                           embed_tokens.padding_idx)
+        nn.init.uniform_(self.embed_tokens_f.weight, -0.1, 0.1)
+        nn.init.uniform_(self.embed_tokens_l.weight, -0.1, 0.1)
+        nn.init.constant_(self.embed_tokens_f.weight[embed_tokens.padding_idx], 0)
+        nn.init.constant_(self.embed_tokens_l.weight[embed_tokens.padding_idx], 0)
+        embed_dim = self.embed_tokens_boc.embedding_dim
         self.robust_ff = nn.Sequential(nn.Linear(3 * embed_dim, 3 * embed_dim),
                                        nn.ReLU(),
                                        nn.Linear(3 * embed_dim, 3 * embed_dim),
@@ -22,9 +127,9 @@ class FLCEncoder(nn.Module):
         src_tokens_f = src_tokens[:, :, 0]
         src_tokens_l = src_tokens[:, :, 1]
         src_tokens_boc = src_tokens[:, :, 2:]
-        emb_f = self.embed_tokens(src_tokens_f)
-        emb_l = self.embed_tokens(src_tokens_l)
-        emb_boc = self.embed_tokens(src_tokens_boc).mean(dim=2)
+        emb_f = self.embed_tokens_f(src_tokens_f)
+        emb_l = self.embed_tokens_l(src_tokens_l)
+        emb_boc = self.embed_tokens_boc(src_tokens_boc).mean(dim=2)
         emb = torch.cat([emb_f, emb_boc, emb_l], dim=2)
         return self.robust_ff(emb)
 
