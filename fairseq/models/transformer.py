@@ -20,7 +20,7 @@ from fairseq.modules import (
 
 from . import (
     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, register_model,
-    register_model_architecture, FLCEncoder, VisualEncoder
+    register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder, CharCNNEncoder, MultiFeatEncoder
 )
 
 
@@ -149,13 +149,10 @@ class TransformerModel(FairseqModel):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
         if args.num_source_feats > 1:
-            if args.robust_embedder_type in ['FLCEncoder', 'VisualEncoder']:
-                encoder = RobustTransformerEncoder(args, src_dict, encoder_embed_tokens,
-                                                   num_source_feats=args.num_source_feats,
-                                                   robust_embedder_type=args.robust_embedder_type,
-                                                   robust_embedder_resource=args.robust_embedder_resource)
-            else:
-                encoder = MultiFeatTransformerEncoder(args, src_dict, encoder_embed_tokens, num_source_feats=args.num_source_feats)
+            encoder = RobustTransformerEncoder(args, src_dict, encoder_embed_tokens,
+                                               num_source_feats=args.num_source_feats,
+                                               robust_embedder_type=args.robust_embedder_type,
+                                               robust_embedder_resource=args.robust_embedder_resource)
         else:
             encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens)
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
@@ -403,7 +400,13 @@ class RobustTransformerEncoder(TransformerEncoder):
         embed_dim = embed_tokens.embedding_dim
         assert not left_pad
         if robust_embedder_type == 'FLCEncoder':
-            self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=0.1)
+            self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=self.dropout)
+        elif robust_embedder_type == 'OldFLCEncoder':
+            self.robust_embedder = OldFLCEncoder(self.embed_tokens, dropout_in=self.dropout)
+        elif robust_embedder_type == 'MultiFeatEncoder':
+            self.robust_embedder = MultiFeatEncoder(self.embed_tokens)
+        elif robust_embedder_type == 'CharCNNEncoder':
+            self.robust_embedder = CharCNNEncoder(self.embed_tokens, self.num_source_feats)
         elif robust_embedder_type == 'VisualEncoder':
             def load_image_embedding_from_file(embed_path, padding_idx):
                 img_tensor = torch.load(embed_path)
@@ -422,7 +425,6 @@ class RobustTransformerEncoder(TransformerEncoder):
                                                  dropout_in=0.1)
         else:
             raise NotImplementedError("unknown embed_type for RobustLSTMEncoder")
-
 
     def forward(self, src_tokens, src_lengths):
         """
@@ -457,67 +459,6 @@ class RobustTransformerEncoder(TransformerEncoder):
 
         # compute padding mask
         encoder_padding_mask = src_tokens_f.eq(self.padding_idx)
-        if not encoder_padding_mask.any():
-            encoder_padding_mask = None
-
-        # encoder layers
-        for layer in self.layers:
-            x = layer(x, encoder_padding_mask)
-
-        if self.normalize:
-            x = self.layer_norm(x)
-
-        return {
-            'encoder_out': x,  # T x B x C
-            'encoder_padding_mask': encoder_padding_mask,  # B x T
-        }
-
-
-class MultiFeatTransformerEncoder(TransformerEncoder):
-    def __init__(self, args, dictionary, embed_tokens, left_pad=False, num_source_feats=2):
-        self.num_source_feats = num_source_feats
-        super().__init__(args, dictionary, embed_tokens, left_pad)
-        assert not left_pad
-
-    def forward(self, src_tokens, src_lengths):
-        """
-        Args:
-            src_tokens (LongTensor): tokens in the source language of shape
-                `(batch, src_len)`
-            src_lengths (torch.LongTensor): lengths of each source sentence of
-                shape `(batch)`
-
-        Returns:
-            dict:
-                - **encoder_out** (Tensor): the last encoder layer's output of
-                  shape `(src_len, batch, embed_dim)`
-                - **encoder_padding_mask** (ByteTensor): the positions of
-                  padding elements of shape `(batch, src_len)`
-        """
-        # embed tokens and positions
-        assert src_tokens.dim() == 3
-        bsz, seqlen, num_feat = src_tokens.size()
-        print(bsz, seqlen, num_feat, 'batch info')
-        assert num_feat == self.num_source_feats
-        feat_tokens = [src_tokens[:, :, i] for i in range(1, num_feat)]
-        src_tokens = src_tokens[:, :, 0]
-
-        x = self.embed_scale * self.embed_tokens(src_tokens)
-        if self.embed_positions is not None:
-            x += self.embed_positions(src_tokens)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-
-        # B x T x C -> T x B x C
-        x = x.transpose(0, 1)
-
-        feat_x = [F.dropout(self.embed_tokens(fx).transpose(0, 1), p=self.dropout, training=self.training)
-                  for fx in feat_tokens]
-
-        for fx in feat_x:
-            x = x + fx
-
-        # compute padding mask
-        encoder_padding_mask = src_tokens.eq(self.padding_idx)
         if not encoder_padding_mask.any():
             encoder_padding_mask = None
 
@@ -1030,19 +971,33 @@ def base_architecture(args):
 @register_model_architecture('transformer', 'multifeat_transformer_iwslt_de_en')
 def multifeat_transformer_iwslt_de_en(args):
     args.num_source_feats = 2
+    args.robust_embedder_type = 'MultiFeatEncoder'
     transformer_iwslt_de_en(args)
 
 
 @register_model_architecture('transformer', 'flc_robust_transformer')
 def flc_robust_transformer(args):
-    args.num_source_feats = 20
+    args.num_source_feats = getattr(args, 'num_source_feats', None)
     args.robust_embedder_type = 'FLCEncoder'
+    transformer_iwslt_de_en(args)
+
+
+@register_model_architecture('transformer', 'old_flc_robust_transformer')
+def old_flc_robust_transformer(args):
+    args.num_source_feats = getattr(args, 'num_source_feats', None)
+    args.robust_embedder_type = 'OldFLCEncoder'
+    transformer_iwslt_de_en(args)
+
+
+@register_model_architecture('transformer', 'charcnn_robust_transformer')
+def charcnn_robust_transformer(args):
+    args.num_source_feats = getattr(args, 'num_source_feats', None)
+    args.robust_embedder_type = 'CharCNNEncoder'
     transformer_iwslt_de_en(args)
 
 
 @register_model_architecture('transformer', 'visual_robust_transformer')
 def visual_robust_transformer(args):
-    args.num_source_feats = 20
     args.robust_embedder_type = 'VisualEncoder'
     args.robust_embedder_resource = getattr(args, 'robust_embedder_resource', None)
     assert args.robust_embedder_resource is not None
