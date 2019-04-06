@@ -113,6 +113,9 @@ def main(args):
         wps_meter = TimeMeter()
         for sample_id, src_tokens, target_tokens, hypos in translations:
             # Process input and ground truth
+            if target_tokens.dim() == 2:
+                assert target_tokens.size(1) == 1
+                target_tokens = target_tokens.view(-1)
             has_target = target_tokens is not None
             target_tokens = target_tokens.int().cpu() if has_target else None
 

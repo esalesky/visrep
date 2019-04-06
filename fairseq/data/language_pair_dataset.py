@@ -17,7 +17,6 @@ def collate(
     samples, pad_idx, eos_idx, left_pad_source=False, left_pad_target=False,
     input_feeding=True,
 ):
-
     assert not left_pad_source
     if len(samples) == 0:
         return {}

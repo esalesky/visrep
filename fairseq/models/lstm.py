@@ -329,9 +329,17 @@ class RobustLSTMEncoder(LSTMEncoder):
                                                 left_pad, pretrained_embed, padding_value)
         self.num_source_feats = num_source_feats
         if robust_embedder_type == 'FLCEncoder':
-            self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=dropout_in)
+            num_embeddings = len(dictionary)
+            embed_tokens_f = Embedding(num_embeddings, embed_dim, dictionary.pad())
+            embed_tokens_l = Embedding(num_embeddings, embed_dim, dictionary.pad())
+            self.robust_embedder = FLCEncoder(self.embed_tokens, embed_tokens_f, embed_tokens_l,
+                                              dropout_in=dropout_in)
         elif robust_embedder_type == 'OldFLCEncoder':
-            self.robust_embedder = OldFLCEncoder(self.embed_tokens, dropout_in=dropout_in)
+            num_embeddings = len(dictionary)
+            embed_tokens_f = Embedding(num_embeddings, embed_dim, dictionary.pad())
+            embed_tokens_l = Embedding(num_embeddings, embed_dim, dictionary.pad())
+            self.robust_embedder = OldFLCEncoder(self.embed_tokens, embed_tokens_f, embed_tokens_l,
+                                                 dropout_in=dropout_in)
         elif robust_embedder_type == 'VisualEncoder':
             def load_image_embedding_from_file(embed_path, padding_idx):
                 img_tensor = torch.load(embed_path)

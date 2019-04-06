@@ -400,9 +400,19 @@ class RobustTransformerEncoder(TransformerEncoder):
         embed_dim = embed_tokens.embedding_dim
         assert not left_pad
         if robust_embedder_type == 'FLCEncoder':
-            self.robust_embedder = FLCEncoder(self.embed_tokens, dropout_in=self.dropout)
+            num_embeddings = len(dictionary)
+            padding_idx = dictionary.pad()
+            embed_tokens_f = Embedding(num_embeddings, embed_dim, padding_idx)
+            embed_tokens_l = Embedding(num_embeddings, embed_dim, padding_idx)
+            self.robust_embedder = FLCEncoder(self.embed_tokens, embed_tokens_f, embed_tokens_l,
+                                              dropout_in=self.dropout)
         elif robust_embedder_type == 'OldFLCEncoder':
-            self.robust_embedder = OldFLCEncoder(self.embed_tokens, dropout_in=self.dropout)
+            num_embeddings = len(dictionary)
+            padding_idx = dictionary.pad()
+            embed_tokens_f = Embedding(num_embeddings, embed_dim, padding_idx)
+            embed_tokens_l = Embedding(num_embeddings, embed_dim, padding_idx)
+            self.robust_embedder = OldFLCEncoder(self.embed_tokens, embed_tokens_f, embed_tokens_l,
+                                                 dropout_in=self.dropout)
         elif robust_embedder_type == 'MultiFeatEncoder':
             self.robust_embedder = MultiFeatEncoder(self.embed_tokens)
         elif robust_embedder_type == 'CharCNNEncoder':
@@ -444,6 +454,8 @@ class RobustTransformerEncoder(TransformerEncoder):
         # embed tokens and positions
         assert src_tokens.dim() == 3
         bsz, seqlen, num_feat = src_tokens.size()
+        if src_lengths[0] != src_lengths[-1]:
+            assert src_tokens[-1, :, 0][-1].item() == self.embed_tokens.padding_idx  # ensures padding is on the right...
         ##print(bsz, seqlen, num_feat, 'batch info')
         assert num_feat == self.num_source_feats, "unexpected num_feat!"
         src_tokens_f = src_tokens[:, :, 0]

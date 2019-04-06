@@ -74,17 +74,11 @@ class MultiFeatEncoder(nn.Module):
 
 
 class OldFLCEncoder(nn.Module):
-    def __init__(self, embed_tokens, dropout_in=0.1):
+    def __init__(self, embed_tokens_boc, embed_tokens_f, embed_tokens_l, dropout_in=0.1):
         super(OldFLCEncoder, self).__init__()
-        self.embed_tokens_boc = embed_tokens
-        self.embed_tokens_f = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
-                                           embed_tokens.padding_idx)
-        self.embed_tokens_l = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
-                                           embed_tokens.padding_idx)
-        nn.init.uniform_(self.embed_tokens_f.weight, -0.1, 0.1)
-        nn.init.uniform_(self.embed_tokens_l.weight, -0.1, 0.1)
-        nn.init.constant_(self.embed_tokens_f.weight[embed_tokens.padding_idx], 0)
-        nn.init.constant_(self.embed_tokens_l.weight[embed_tokens.padding_idx], 0)
+        self.embed_tokens_boc = embed_tokens_boc
+        self.embed_tokens_f = embed_tokens_f
+        self.embed_tokens_l = embed_tokens_l
         embed_dim = self.embed_tokens_boc.embedding_dim
         self.robust_ff = nn.Sequential(nn.Linear(3 * embed_dim, 3 * embed_dim),
                                        nn.ReLU(),
@@ -104,17 +98,11 @@ class OldFLCEncoder(nn.Module):
 
 
 class FLCEncoder(nn.Module):
-    def __init__(self, embed_tokens, dropout_in=0.1):
+    def __init__(self, embed_tokens_boc, embed_tokens_f, embed_tokens_l, dropout_in=0.1):
         super(FLCEncoder, self).__init__()
-        self.embed_tokens_boc = embed_tokens
-        self.embed_tokens_f = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
-                                           embed_tokens.padding_idx)
-        self.embed_tokens_l = nn.Embedding(embed_tokens.num_embeddings, embed_tokens.embedding_dim,
-                                           embed_tokens.padding_idx)
-        nn.init.uniform_(self.embed_tokens_f.weight, -0.1, 0.1)
-        nn.init.uniform_(self.embed_tokens_l.weight, -0.1, 0.1)
-        nn.init.constant_(self.embed_tokens_f.weight[embed_tokens.padding_idx], 0)
-        nn.init.constant_(self.embed_tokens_l.weight[embed_tokens.padding_idx], 0)
+        self.embed_tokens_boc = embed_tokens_boc
+        self.embed_tokens_f = embed_tokens_f
+        self.embed_tokens_l = embed_tokens_l
         embed_dim = self.embed_tokens_boc.embedding_dim
         self.robust_ff = nn.Sequential(nn.Linear(3 * embed_dim, 3 * embed_dim),
                                        nn.ReLU(),
