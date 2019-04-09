@@ -20,7 +20,8 @@ from fairseq.modules import (
 
 from . import (
     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, register_model,
-    register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder, CharCNNEncoder, MultiFeatEncoder
+    register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder, VisualEdgeEncoder, CharCNNEncoder,
+    MultiFeatEncoder
 )
 
 
@@ -432,7 +433,26 @@ class RobustTransformerEncoder(TransformerEncoder):
                                                  img_r=img_r,
                                                  img_c=img_c,
                                                  img_emb=img_emb,
+                                                 num_chars=self.num_source_feats,
                                                  dropout_in=0.1)
+        elif robust_embedder_type == 'VisualEdgeEncoder':
+            def load_image_embedding_from_file(embed_path, padding_idx):
+                print("load_image_embedding_from_file", embed_path)
+                img_tensor = torch.load(embed_path)
+                img_r = img_tensor.size(1)
+                img_c = img_tensor.size(2)
+                img_tensor = img_tensor.view(-1, img_r * img_c)
+                img_emb = torch.nn.Embedding(img_tensor.size(0), img_tensor.size(1), padding_idx=padding_idx)
+                img_emb.weight.data = img_tensor
+                return img_emb, img_r, img_c
+            img_emb, img_r, img_c = load_image_embedding_from_file(robust_embedder_resource,
+                                                                   self.embed_tokens.padding_idx)
+            self.robust_embedder = VisualEdgeEncoder(embed_dim,
+                                                     img_r=img_r,
+                                                     img_c=img_c,
+                                                     img_emb=img_emb,
+                                                     num_chars=self.num_source_feats,
+                                                     dropout_in=0.1)
         else:
             raise NotImplementedError("unknown embed_type for RobustLSTMEncoder")
 
@@ -1011,6 +1031,14 @@ def charcnn_robust_transformer(args):
 @register_model_architecture('transformer', 'visual_robust_transformer')
 def visual_robust_transformer(args):
     args.robust_embedder_type = 'VisualEncoder'
+    args.robust_embedder_resource = getattr(args, 'robust_embedder_resource', None)
+    assert args.robust_embedder_resource is not None
+    transformer_iwslt_de_en(args)
+
+
+@register_model_architecture('transformer', 'visual_edge_robust_transformer')
+def visual_edge_robust_transformer(args):
+    args.robust_embedder_type = 'VisualEdgeEncoder'
     args.robust_embedder_resource = getattr(args, 'robust_embedder_resource', None)
     assert args.robust_embedder_resource is not None
     transformer_iwslt_de_en(args)

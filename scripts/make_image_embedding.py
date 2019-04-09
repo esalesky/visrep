@@ -4,9 +4,11 @@ import argparse
 import torch
 import numpy as np
 from PIL import Image, ImageFont, ImageDraw
-np.set_printoptions(precision=1)
 
-#font_path = "/usr/share/fonts/truetype/inconsolata/Inconsolata.otf"
+import pdb
+
+np.set_printoptions(precision=1)
+chars = "abcdefghijklmnopqrstuvwzyxABCDEFGHIJKLMNOPQRSTUVWXY123"
 if __name__ == '__main__':
     opt = argparse.ArgumentParser(description="write program description here")
 
@@ -19,18 +21,20 @@ if __name__ == '__main__':
     src_dict = [i.split()[0] for i in src_dict]
     src_dict = ['<lua>', '<pad>', '</s>', '<unk>'] + src_dict
     font = ImageFont.truetype(options.font_path, 24)
-    H = 26  # this size was set manually for the default font and font size
-    W = 12
+    _W, H = font.getsize(chars)
+    W = _W // len(chars)  # this size was set manually for the default font and font size
     mat = np.zeros((len(src_dict), H, W))
     for idx, c in enumerate(src_dict):
         if idx >= 4:
             print(c, idx)
-            im = Image.new('L', (W, H))
+            im = Image.new('L', (W + _W, H))
             draw = ImageDraw.Draw(im)
-            w, h = font.getsize(c)
-            draw.text(((W - w) // 2, (H - h) // 2), c, font=font, fill="white")
+            #w, h = font.getsize(c + chars)
+            draw.text((0, 0), c + chars, font=font, fill="white")
             del draw
             m = np.asarray(im) / 255.0
+            m = m[:, :12]
+            Image.fromarray(m * 255.0).convert("L").save(options.preprocessed_dir + "/img_" + c + ".png")
             if idx % 25 == 0:
                 pass
         else:
@@ -40,4 +44,4 @@ if __name__ == '__main__':
                 m = np.random.uniform(0.0, 1.0, (H, W))
         mat[idx, :, :] = m
     t = torch.Tensor(mat)
-    torch.save(t, options.preprocessed_dir + '/dict.img')
+    torch.save(t, options.preprocessed_dir + '/tmp.dict.img')
