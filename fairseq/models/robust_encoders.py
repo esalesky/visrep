@@ -6,6 +6,8 @@ from PIL import Image
 from scipy.ndimage.filters import gaussian_filter
 import numpy as np
 
+import pdb
+
 
 class SobelLayer(nn.Module):
     def __init__(self):
@@ -200,7 +202,7 @@ class VisualEncoder(nn.Module):
 
 
 class VisualEdgeEncoder(nn.Module):
-    def __init__(self, embed_dim, img_r, img_c, img_emb, num_chars, dropout_in=0.1):
+    def __init__(self, embed_dim, img_r, img_c, img_emb, num_chars, edge_threshold, dropout_in=0.1):
         super(VisualEdgeEncoder, self).__init__()
         self.img_emb = img_emb
         self.num_chars = num_chars
@@ -210,7 +212,7 @@ class VisualEdgeEncoder(nn.Module):
         self.img_c = img_c
         self.g_layer = GaussianLayer()
         self.g_layer.blur.weight.requires_grad = False
-        self.threshold = 0.1
+        self.threshold = edge_threshold
         self.s_layer = SobelLayer()
         self.cnn = nn.Conv1d(self.img_r + 1, 512, kernel_size=6 * self.img_c, padding=0)
         self.mp = nn.MaxPool1d(num_chars * self.img_c - (6 * img_c - 1) + 1)
@@ -237,17 +239,14 @@ class VisualEdgeEncoder(nn.Module):
         emb = emb.view(-1, num_chars, self.img_r, self.img_c)  # (bsz * seqlen, num_chars, 26, 12)
         tiled_emb = torch.cat([emb[:, i, :, :] for i in range(num_chars)], dim=2) # (bsz * seqlen, 26, 12 * num_chars) TODO:replace with view op
         emb = tiled_emb.unsqueeze(1)
-        emb = self.g_layer(emb)
-        emb[emb > self.threshold] = 1
-        emb[emb <= self.threshold] = 0
-        emb = self.s_layer(emb)
         #pdb.set_trace()
-        #for j in [82, 139, 108, 260, 439, 99, 120, 117]:
+        #for j in [10, 20, 30, 40, 50, 80, 12, 23, 34, 456, 57, 23, 35, 8, 23, 450,1213, 135, 1353, 250, 94]:
         #    foo = emb[j, 0, :, :]
-        #    self.save_img_debug(foo, str(j) + '.' + "normal.png")
-        #    foo = self.g_layer(foo.unsqueeze(0).unsqueeze(0))
+        #    foo = foo.unsqueeze(0).unsqueeze(0)
+        #    self.save_img_debug(foo[0, 0, :, :], str(j) + '.' + "normal.png")
+        #    foo = self.g_layer(foo)
         #    self.save_img_debug(foo[0, 0, :, :], str(j) + '.' + "blur.png")
-        #    for t in [0.05, 0.1, 0.15]:
+        #    for t in [0.025, 0.05, 0.1, 0.15]:
         #        _f = foo.clone()
         #        _f[foo > t] = 1
         #        _f[foo <= t] = 0
@@ -255,6 +254,10 @@ class VisualEdgeEncoder(nn.Module):
         #        s_f = self.s_layer(_f)
         #        self.save_img_debug(s_f[0, 0, :, :], str(j) + '.' + str(t) + 'sobel.thresh.png')
         #pdb.set_trace()
+        emb = self.g_layer(emb)
+        emb[emb > self.threshold] = 1
+        emb[emb <= self.threshold] = 0
+        emb = self.s_layer(emb)
         emb = emb.squeeze(1)
         emb = self.mp(self.cnn(emb)).squeeze(2)
         emb = self.highway(emb)

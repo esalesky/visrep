@@ -102,6 +102,9 @@ class TransformerModel(FairseqModel):
         parser.add_argument('--robust-embedder-resource', type=str,
                             action='store', default=None,
                             help='path to torch tensor with img embeddings')
+        parser.add_argument('--edge-threshold', type=float,
+                            action='store', default=0.0,
+                            help='controls the softness of edge detection')
         # fmt: on
 
     @classmethod
@@ -153,7 +156,8 @@ class TransformerModel(FairseqModel):
             encoder = RobustTransformerEncoder(args, src_dict, encoder_embed_tokens,
                                                num_source_feats=args.num_source_feats,
                                                robust_embedder_type=args.robust_embedder_type,
-                                               robust_embedder_resource=args.robust_embedder_resource)
+                                               robust_embedder_resource=args.robust_embedder_resource,
+                                               edge_threshold=args.edge_threshold)
         else:
             encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens)
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
@@ -395,7 +399,7 @@ class TransformerEncoder(FairseqEncoder):
 class RobustTransformerEncoder(TransformerEncoder):
     def __init__(self, args, dictionary, embed_tokens,
                  left_pad=False, num_source_feats=2,
-                 robust_embedder_type=None, robust_embedder_resource=None):
+                 robust_embedder_type=None, robust_embedder_resource=None, edge_threshold=None):
         super().__init__(args, dictionary, embed_tokens, left_pad)
         self.num_source_feats = num_source_feats
         embed_dim = embed_tokens.embedding_dim
@@ -452,6 +456,7 @@ class RobustTransformerEncoder(TransformerEncoder):
                                                      img_c=img_c,
                                                      img_emb=img_emb,
                                                      num_chars=self.num_source_feats,
+                                                     edge_threshold=edge_threshold,
                                                      dropout_in=0.1)
         else:
             raise NotImplementedError("unknown embed_type for RobustLSTMEncoder")
@@ -1041,6 +1046,7 @@ def visual_edge_robust_transformer(args):
     args.robust_embedder_type = 'VisualEdgeEncoder'
     args.robust_embedder_resource = getattr(args, 'robust_embedder_resource', None)
     assert args.robust_embedder_resource is not None
+    args.edge_threshold = getattr(args, 'edge_threshold', 0.1)
     transformer_iwslt_de_en(args)
 
 
