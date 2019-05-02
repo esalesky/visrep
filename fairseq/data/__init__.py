@@ -10,7 +10,8 @@ from .fairseq_dataset import FairseqDataset
 from .backtranslation_dataset import BacktranslationDataset
 from .concat_dataset import ConcatDataset
 from .indexed_dataset import IndexedCachedDataset, IndexedDataset, IndexedRawTextDataset
-from .language_pair_dataset import LanguagePairDataset
+from .indexed_dataset import IndexedImageWordDataset, IndexedImageLineDataset
+from .language_pair_dataset import LanguagePairDataset, ImagePairDataset
 from .monolingual_dataset import MonolingualDataset
 from .round_robin_zip_datasets import RoundRobinZipDatasets
 from .token_block_dataset import TokenBlockDataset
@@ -34,7 +35,10 @@ __all__ = [
     'IndexedCachedDataset',
     'IndexedDataset',
     'IndexedRawTextDataset',
+    'IndexedImageWordDataset',
+    'IndexedImageLineDataset',
     'LanguagePairDataset',
+    'ImagePairDataset',
     'MonolingualDataset',
     'RoundRobinZipDatasets',
     'ShardedIterator',

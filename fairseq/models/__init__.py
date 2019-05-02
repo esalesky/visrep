@@ -23,6 +23,7 @@ from .composite_encoder import CompositeEncoder  # noqa: F401
 from .distributed_fairseq_model import DistributedFairseqModel  # noqa: F401
 
 from .robust_encoders import MultiFeatEncoder, OldFLCEncoder, FLCEncoder, VisualEncoder, CharCNNEncoder, VisualEdgeEncoder
+from .image_encoder import ImageEncoder
 
 
 MODEL_REGISTRY = {}

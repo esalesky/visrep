@@ -16,7 +16,10 @@ from fairseq.data import (
     IndexedCachedDataset,
     IndexedDataset,
     IndexedRawTextDataset,
+    IndexedImageLineDataset,
+    IndexedImageWordDataset,
     LanguagePairDataset,
+    ImagePairDataset,
 )
 
 from . import FairseqTask, register_task
@@ -67,6 +70,22 @@ class TranslationTask(FairseqTask):
                             help='max number of tokens in the target sequence')
         parser.add_argument('--upsample-primary', default=1, type=int,
                             help='amount to upsample primary dataset')
+
+        parser.add_argument('--image-word-text', action='store_true', 
+                            help='use word image dataset')
+        parser.add_argument('--image-font-path', default=None, type=str, 
+                            help='Font path')
+        parser.add_argument('--image-font-size', default=16, type=int, 
+                            help='Font size')
+        parser.add_argument('--image-width', default=30, type=int, 
+                            help='Image width')
+        parser.add_argument('--image-height', default=150, type=int, 
+                            help='Image height')
+        parser.add_argument('--image-samples-path', default=None, type=str, 
+                            help='Image Samples path')
+        parser.add_argument('--image-verbose', action='store_true', 
+                            help='image verbose output')
+
         # fmt: on
 
     @staticmethod
@@ -130,13 +149,23 @@ class TranslationTask(FairseqTask):
             filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
             if self.args.raw_text and IndexedRawTextDataset.exists(filename):
                 return True
+            elif self.args.image_word_text and IndexedImageWordDataset.exists(filename):
+                return True
             elif not self.args.raw_text and IndexedDataset.exists(filename):
                 return True
             return False
 
-        def indexed_dataset(path, dictionary):
+        def indexed_dataset(path, dictionary, is_src = False):
             if self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
+            elif self.args.image_word_text:
+                if is_src == True:
+                    return IndexedImageWordDataset(path, dictionary, 
+                                self.args.image_verbose,                   
+                                self.args.image_font_path,self.args.image_font_size,
+                                self.args.image_width,self.args.image_height)
+                else:
+                    return IndexedRawTextDataset(path, dictionary)
             elif IndexedDataset.exists(path):
                 if self.args.lazy_load:
                     return IndexedDataset(path, fix_lua_indexing=True)
@@ -165,8 +194,8 @@ class TranslationTask(FairseqTask):
                     else:
                         raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
-                src_datasets.append(indexed_dataset(prefix + src, self.src_dict))
-                tgt_datasets.append(indexed_dataset(prefix + tgt, self.tgt_dict))
+                src_datasets.append(indexed_dataset(prefix + src, self.src_dict, is_src=True))
+                tgt_datasets.append(indexed_dataset(prefix + tgt, self.tgt_dict, is_src=False))
 
                 print('| {} {} {} examples'.format(data_path, split_k, len(src_datasets[-1])))
 
@@ -183,14 +212,29 @@ class TranslationTask(FairseqTask):
             src_dataset = ConcatDataset(src_datasets, sample_ratios)
             tgt_dataset = ConcatDataset(tgt_datasets, sample_ratios)
 
-        self.datasets[split] = LanguagePairDataset(
-            src_dataset, src_dataset.sizes, self.src_dict,
-            tgt_dataset, tgt_dataset.sizes, self.tgt_dict,
-            left_pad_source=self.args.left_pad_source,
-            left_pad_target=self.args.left_pad_target,
-            max_source_positions=self.args.max_source_positions,
-            max_target_positions=self.args.max_target_positions,
-        )
+        if self.args.image_word_text:
+            self.datasets[split] = ImagePairDataset(
+                src_dataset, src_dataset.sizes, self.src_dict,
+                tgt_dataset, tgt_dataset.sizes, self.tgt_dict,
+                self.args.image_verbose,
+                self.args.image_samples_path,
+                self.args.image_font_path,self.args.image_font_size,
+                self.args.image_width,self.args.image_height,
+                left_pad_source=self.args.left_pad_source,
+                left_pad_target=self.args.left_pad_target,
+                max_source_positions=self.args.max_source_positions,
+                max_target_positions=self.args.max_target_positions,
+            )        
+        else:
+            self.datasets[split] = LanguagePairDataset(
+                src_dataset, src_dataset.sizes, self.src_dict,
+                tgt_dataset, tgt_dataset.sizes, self.tgt_dict,
+                left_pad_source=self.args.left_pad_source,
+                left_pad_target=self.args.left_pad_target,
+                max_source_positions=self.args.max_source_positions,
+                max_target_positions=self.args.max_target_positions,
+            )
+
 
     def max_positions(self):
         """Return the max sentence length allowed by the task."""
