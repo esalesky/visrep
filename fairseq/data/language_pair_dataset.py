@@ -397,15 +397,21 @@ class ImagePairDataset(FairseqDataset):
     def __getitem__(self, index):
        
         tgt_item = self.tgt[index] if self.tgt is not None else None
+        # token list
+        # word list
+        # src line
+        # image words
+        # image words width
         src_item, src_word, src_line, src_img_list, src_img_width = self.src[index]
         
         if self.image_verbose == True:
-            if self.image_samples_path != None and index % 10 == 0:
+            if self.image_samples_path != None and index % 1000 == 0:
                 #print(len(src_img_list), src_line)
                 for idx, img in enumerate(src_img_list):
                     img_height, img_width = img.shape[:2]
                     #print('   token %s, image height %d, width %d' % (src_word[idx], img_height, img_width))
-                    cv2.imwrite(self.image_samples_path + '/' + src_word[idx] + '_' + str(idx) + '.png', img)
+                    if idx < 10:
+                        cv2.imwrite(self.image_samples_path + '/word_' + src_word[idx] + '_' + str(index) + '_' + str(idx) + '.png', img)
 
         # Append EOS to end of tgt sentence if it does not have an EOS and remove
         # EOS from end of src sentence if it exists. This is useful when we use

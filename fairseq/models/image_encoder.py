@@ -24,25 +24,39 @@ Bridge output
 
 class ImageEncoder(nn.Module):
     
-    def __init__(self, input_channels=3, output_dim=512):
+    def __init__(self,
+                 input_channels=3, input_line_height=30, input_line_width=200,
+                 maxpool_ratio_height = 0.5, maxpool_ratio_width=0.7,
+                 kernel_size_2d=3, stride_2d=1, padding_2d=1,
+                 output_dim=512):
+
         super(ImageEncoder, self).__init__()
         
         self.bridge_output_dim = output_dim # 512
         self.num_in_channels = input_channels # 3
-        
+        self.input_line_height = input_line_height
+        self.input_line_width = input_line_width
+        self.kernel_size_2d = kernel_size_2d
+        self.stride_2d = stride_2d
+        self.padding_2d = padding_2d
+        self.maxpool_ratio_height = maxpool_ratio_height
+        self.maxpool_ratio_width = maxpool_ratio_width
+
+
+        # VGG style architecture
         self.cnn = nn.Sequential(
-            *self.ConvBNReLU(self.num_in_channels , 64),
-            *self.ConvBNReLU(64, 64),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
-            *self.ConvBNReLU(64, 128),
-            *self.ConvBNReLU(128, 128),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
-            *self.ConvBNReLU(128, 256),
-            *self.ConvBNReLU(256, 256),
-            *self.ConvBNReLU(256, 256)
+            *self.ConvBNReLU(self.num_in_channels , 64, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(64, 64, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            nn.FractionalMaxPool2d(2, output_ratio=(self.maxpool_ratio_height, self.maxpool_ratio_width)),
+            *self.ConvBNReLU(64, 128, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(128, 128, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            nn.FractionalMaxPool2d(2, output_ratio=(self.maxpool_ratio_height, self.maxpool_ratio_width)),
+            *self.ConvBNReLU(128, 256, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(256, 256, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(256, 256, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d)
         )
         
-        fake_input_width = 600
+        fake_input_width = 200
         cnn_out_h, cnn_out_w = self.cnn_input_size_to_output_size((self.input_line_height, fake_input_width))
         cnn_out_c = self.cnn_output_num_channels()
         cnn_feat_size = cnn_out_c * cnn_out_h
@@ -50,7 +64,14 @@ class ImageEncoder(nn.Module):
         logger.info('CNN out height %d' % (cnn_out_h))
         logger.info('CNN out channels %d' % (cnn_out_c))
         logger.info('CNN feature size (channels %d x height %d) = %d' % (cnn_out_c, cnn_out_h, cnn_feat_size))
-                
+
+        # Word image encoder
+        self.bridge_layer = nn.Sequential(
+            nn.Linear(self.input_channels * self.input_line_height * self.input_line_width, self.bridge_output_dim),
+            nn.ReLU(inplace=True)
+        )
+
+        # Line image encoder
         self.bridge_layer = nn.Sequential(
             nn.Linear(cnn_feat_size, self.bridge_output_dim),
             nn.ReLU(inplace=True)
@@ -97,8 +118,8 @@ class ImageEncoder(nn.Module):
             logger.info.info("Warning: Running model on CPU")
 
                         
-    def ConvBNReLU(self, nInputMaps, nOutputMaps):
-        return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=3, padding=1),
+    def ConvBNReLU(self, nInputMaps, nOutputMaps, kernel_size_2d=3, stride_2d=1, padding_2d=1):
+        return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=kernel_size_2d, padding=padding_2d, stide=stride_2d),
                 nn.BatchNorm2d(nOutputMaps),
                 nn.ReLU(inplace=True)]
 

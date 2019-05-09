@@ -99,6 +99,17 @@ class ImageGenerator():
         font_name = random.choice(self.font_list)
         font = pygame.freetype.Font(font_name, self.font_size)
 
+        ''' Random style '''
+        font_style = random.randint(1,6)
+        if font_style == 1:
+            font.style = pygame.freetype.STYLE_NORMAL
+        elif font_style == 2:
+            font.style = pygame.freetype.STYLE_OBLIQUE
+        elif font_style == 3:
+            font.style = pygame.freetype.STYLE_STRONG
+        else:
+            font.style = pygame.freetype.STYLE_DEFAULT
+
         ''' Set colors '''
         img_colors = self.img_colors[0]
         surf.fill(pygame.color.THECOLORS[img_colors[0].lower()])

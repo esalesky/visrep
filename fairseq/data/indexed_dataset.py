@@ -220,15 +220,23 @@ class IndexedImageWordDataset(torch.utils.data.Dataset):
         self.word_encoder = word_encoder
         self.image_verbose = image_verbose
         self.image_generator = ImageGenerator(image_font_path, image_font_size,
-                                              image_width,image_height)
+                                              image_width, image_height)
 
     def read_data(self, path, dictionary):
+        print('IndexedImageWordDataset loading data %s' % (path))
+        drop_cnt = 0
         with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
+            for line_ctr, line in enumerate(f):
                 self.lines.append(line.strip('\n'))
-                #print(line.strip('\n'))
 
                 words = tokenize_line(line)
+                if line_ctr % 10000 == 0:
+                    print(line_ctr, len(words), line.strip('\n'))
+
+                #if len(words) > 30:
+                #    drop_cnt += 1
+                #    continue
+
                 self.word_list.append(words)
 
                 tokens = Tokenizer.tokenize(
@@ -240,6 +248,7 @@ class IndexedImageWordDataset(torch.utils.data.Dataset):
                 self.tokens_list.append(tokens)
                 self.sizes.append(len(tokens))
         self.sizes = np.array(self.sizes)
+        print('...data load complete, total lines %d, dropped %d' % (len(self.lines), drop_cnt))
 
     def check_index(self, i):
         if i < 0 or i >= self.size:

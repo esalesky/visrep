@@ -19,7 +19,7 @@ from fairseq.data import (
     IndexedImageLineDataset,
     IndexedImageWordDataset,
     LanguagePairDataset,
-    ImagePairDataset,
+    ImagePairDataset
 )
 
 from . import FairseqTask, register_task
@@ -71,8 +71,10 @@ class TranslationTask(FairseqTask):
         parser.add_argument('--upsample-primary', default=1, type=int,
                             help='amount to upsample primary dataset')
 
-        parser.add_argument('--image-word-text', action='store_true', 
-                            help='use word image dataset')
+        # Image dataset loader parameters
+        parser.add_argument('--image-type', type=str, default=None,
+                            help='use word or line image dataset (word | line)')
+
         parser.add_argument('--image-font-path', default=None, type=str, 
                             help='Font path')
         parser.add_argument('--image-font-size', default=16, type=int, 
@@ -81,8 +83,22 @@ class TranslationTask(FairseqTask):
                             help='Image width')
         parser.add_argument('--image-height', default=150, type=int, 
                             help='Image height')
-        parser.add_argument('--image-samples-path', default=None, type=str, 
+        parser.add_argument('--image-samples-path', default=None, type=str,
                             help='Image Samples path')
+
+        # Image encoder parameters
+        parser.add_argument('--image-stride', default=1, type=int,
+                            help='Image stride')
+        parser.add_argument('--image-pad', default=1, type=int,
+                            help='Image padding')
+        parser.add_argument('--image-kernel', default=3, type=int,
+                            help='Image kernel size')
+        parser.add_argument('--image-maxpool-width', default=0.5, type=float,
+                            help='Image frac maxpool ratio width')
+        parser.add_argument('--image-maxpool-height', default=0.7, type=float,
+                            help='Image frac maxpool ratio height')
+
+
         parser.add_argument('--image-verbose', action='store_true', 
                             help='image verbose output')
 
@@ -149,8 +165,12 @@ class TranslationTask(FairseqTask):
             filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
             if self.args.raw_text and IndexedRawTextDataset.exists(filename):
                 return True
-            elif self.args.image_word_text and IndexedImageWordDataset.exists(filename):
-                return True
+            #elif self.args.image_word_text and IndexedImageWordDataset.exists(filename):
+            elif self.args.image_type != None:
+                if self.args.image_type == 'word' and IndexedImageWordDataset.exists(filename):
+                    return True
+                elif self.args.image_type == 'line' and IndexedImageLineDataset.exists(filename):
+                    return True
             elif not self.args.raw_text and IndexedDataset.exists(filename):
                 return True
             return False
@@ -158,12 +178,20 @@ class TranslationTask(FairseqTask):
         def indexed_dataset(path, dictionary, is_src = False):
             if self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
-            elif self.args.image_word_text:
+            elif self.args.image_type != None:
                 if is_src == True:
-                    return IndexedImageWordDataset(path, dictionary, 
-                                self.args.image_verbose,                   
-                                self.args.image_font_path,self.args.image_font_size,
-                                self.args.image_width,self.args.image_height)
+                    print('Image_type %s' % (self.args.image_type ))
+                    if self.args.image_type == 'word':
+                        return IndexedImageWordDataset(path, dictionary,
+                                    self.args.image_verbose,
+                                    self.args.image_font_path,self.args.image_font_size,
+                                    self.args.image_width,self.args.image_height)
+                    elif  self.args.image_type == 'line':
+                        return IndexedImageLineDataset(path, dictionary,
+                                                       self.args.image_verbose,
+                                                       self.args.image_font_path, self.args.image_font_size,
+                                                       self.args.image_width, self.args.image_height)
+
                 else:
                     return IndexedRawTextDataset(path, dictionary)
             elif IndexedDataset.exists(path):
@@ -212,7 +240,7 @@ class TranslationTask(FairseqTask):
             src_dataset = ConcatDataset(src_datasets, sample_ratios)
             tgt_dataset = ConcatDataset(tgt_datasets, sample_ratios)
 
-        if self.args.image_word_text:
+        if self.args.image_type != None:
             self.datasets[split] = ImagePairDataset(
                 src_dataset, src_dataset.sizes, self.src_dict,
                 tgt_dataset, tgt_dataset.sizes, self.tgt_dict,
