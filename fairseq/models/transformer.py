@@ -526,6 +526,7 @@ class RobustTransformerEncoder(TransformerEncoder):
 
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
+        embedding = x
 
         # compute padding mask
         encoder_padding_mask = src_tokens_f.eq(self.padding_idx)
@@ -540,6 +541,7 @@ class RobustTransformerEncoder(TransformerEncoder):
             x = self.layer_norm(x)
 
         return {
+            'embedding_out': embedding,  #  T x B x C
             'encoder_out': x,  # T x B x C
             'encoder_padding_mask': encoder_padding_mask,  # B x T
         }

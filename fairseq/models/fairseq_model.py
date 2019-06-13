@@ -31,6 +31,9 @@ class BaseFairseqModel(nn.Module):
         """Build a new model instance."""
         raise NotImplementedError('FairseqModels must implement the build_model method')
 
+    def get_sources(self, sample):
+        return sample['source']
+
     def get_targets(self, sample, net_output):
         """Get targets from either the sample or the net's output."""
         return sample['target']
@@ -177,6 +180,7 @@ class FairseqModel(BaseFairseqModel):
         """
         encoder_out = self.encoder(src_tokens, src_lengths)
         decoder_out = self.decoder(prev_output_tokens, encoder_out)
+        decoder_out['source_embedding_out'] = encoder_out['embedding_out']
         return decoder_out
 
     def max_positions(self):

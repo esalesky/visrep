@@ -18,6 +18,12 @@ class CrossEntropyCriterion(FairseqCriterion):
 
     def __init__(self, args, task):
         super().__init__(args, task)
+        self.apply_source_loss = args.source_loss
+        self.source_loss_scale = args.source_loss_scale
+
+        if self.apply_source_loss:
+            self.source_output_layer = nn.Linear(args.embed_dim, len(tasks.src_dictionary))
+
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -33,6 +39,15 @@ class CrossEntropyCriterion(FairseqCriterion):
         target = model.get_targets(sample, net_output).view(-1)
         loss = F.nll_loss(lprobs, target, size_average=False, ignore_index=self.padding_idx,
                           reduce=reduce)
+
+
+        if (self.apply_source_loss):
+            source = model.get_sources(sample)
+            slogits = self.source_output_layer()
+            sprobs = F.softmax(slogits, dim=-1)
+            source_loss = F.nll_loss(sprobs, source, size_average=False, ignore_index=self.padding_idx, reduce=reduce)
+            loss += source_loss
+
         sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {
             'loss': utils.item(loss.data) if reduce else loss.data,
