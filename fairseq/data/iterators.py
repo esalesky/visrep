@@ -14,7 +14,7 @@ import numpy as np
 import torch
 
 from . import data_utils
-
+from .ocr_dataset import OCRGroupedSampler 
 
 class CountingIterator(object):
     """Wrapper around an iterable that maintains the iteration count.
@@ -250,3 +250,115 @@ class ShardedIterator(object):
 
     def __next__(self):
         return next(self.itr)[1]
+
+
+class OCREpochBatchIterator(object):
+    def __init__(
+        self, dataset, batch_size, collate_fn, seed=1, num_shards=1, shard_id=0, num_workers=0, epoch=0, eval=False
+    ):
+        assert isinstance(dataset, torch.utils.data.Dataset)
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.collate_fn = collate_fn
+        #self.frozen_batches = tuple(batch_sampler)
+        self.seed = seed
+        self.num_shards = num_shards
+        self.shard_id = shard_id
+        self.num_workers = num_workers
+        
+        self.eval = eval
+
+        self.epoch = epoch
+        self._cur_epoch_itr = None
+        self._next_epoch_itr = None
+        self._supports_prefetch = getattr(dataset, 'supports_prefetch', False)
+
+    def __len__(self):
+        return self.batch_size
+        #return len(self.frozen_batches)
+
+    def next_epoch_itr(self, shuffle=True, fix_batches_to_gpus=False):
+        """Return a new iterator over the dataset.
+
+        Args:
+            shuffle (bool, optional): shuffle batches before returning the
+                iterator (default: True).
+            fix_batches_to_gpus: ensure that batches are always
+                allocated to the same shards across epochs. Requires
+                that :attr:`dataset` supports prefetching (default: False).
+        """
+        if self._next_epoch_itr is not None:
+            self._cur_epoch_itr = self._next_epoch_itr
+            self._next_epoch_itr = None
+        else:
+            self.epoch += 1
+            self._cur_epoch_itr = self._get_iterator_for_epoch(
+                self.epoch, shuffle, fix_batches_to_gpus=fix_batches_to_gpus,
+            )
+        return self._cur_epoch_itr
+
+    def end_of_epoch(self):
+        """Returns whether the most recent epoch iterator has been exhausted"""
+        return not self._cur_epoch_itr.has_next()
+
+    @property
+    def iterations_in_epoch(self):
+        """The number of consumed batches in the current epoch."""
+        if self._cur_epoch_itr is not None:
+            return self._cur_epoch_itr.count
+        elif self._next_epoch_itr is not None:
+            return self._next_epoch_itr.count
+        return 0
+
+    def state_dict(self):
+        """Returns a dictionary containing a whole state of the iterator."""
+        return {
+            'epoch': self.epoch,
+            'iterations_in_epoch': self.iterations_in_epoch,
+        }
+
+    def load_state_dict(self, state_dict):
+        """Copies the state of the iterator from the given *state_dict*."""
+        self.epoch = state_dict['epoch']
+        itr_pos = state_dict.get('iterations_in_epoch', 0)
+        if itr_pos > 0:
+            # fast-forward epoch iterator
+            self._next_epoch_itr = self._get_iterator_for_epoch(
+                self.epoch,
+                shuffle=state_dict.get('shuffle', True),
+                offset=itr_pos,
+            )
+
+
+    def _get_iterator_for_epoch(self, epoch, shuffle, fix_batches_to_gpus=False, offset=0):
+        if self.eval:
+            #print('_get_iterator_for_epoch: Eval')            
+            return CountingIterator(
+                torch.utils.data.DataLoader(
+                    self.dataset,
+                    self.batch_size,
+                    sampler=OCRGroupedSampler(self.dataset, rand=False),
+                    collate_fn=self.collate_fn,
+                    #batch_sampler=batches[offset:],
+                    num_workers=self.num_workers,
+                    pin_memory=True, 
+                    drop_last=False,
+                ),
+                #start=offset,
+            )
+        else:
+            #print('_get_iterator_for_epoch: Train')
+            return CountingIterator(
+                torch.utils.data.DataLoader(
+                    self.dataset,
+                    self.batch_size,
+                    sampler=OCRGroupedSampler(self.dataset, rand=True),
+                    collate_fn=self.collate_fn,
+                    #batch_sampler=batches[offset:],
+                    num_workers=self.num_workers,
+                    pin_memory=True, 
+                    drop_last=True,
+                ),
+                #start=offset,
+            )
+

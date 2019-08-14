@@ -16,12 +16,16 @@ from .monolingual_dataset import MonolingualDataset
 from .round_robin_zip_datasets import RoundRobinZipDatasets
 from .token_block_dataset import TokenBlockDataset
 from .transform_eos_dataset import TransformEosDataset
+from .ocr_dataset import OCRDataset
+from .json_dictionary import JSONDictionary
+from .augment import ImageAug
 
 from .iterators import (
     CountingIterator,
     EpochBatchIterator,
     GroupedIterator,
     ShardedIterator,
+    OCREpochBatchIterator
 )
 
 __all__ = [
@@ -44,4 +48,8 @@ __all__ = [
     'ShardedIterator',
     'TokenBlockDataset',
     'TransformEosDataset',
+    'OCRDataset',
+    'JSONDictionary',
+    'OCREpochBatchIterator',
+    'ImageAug',    
 ]

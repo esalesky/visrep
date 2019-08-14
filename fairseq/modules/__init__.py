@@ -21,6 +21,10 @@ from .multihead_attention import MultiheadAttention
 from .scalar_bias import ScalarBias
 from .sinusoidal_positional_embedding import SinusoidalPositionalEmbedding
 from .unfold1d import unfold1d
+from .densenet import densenet121
+from .resnet import resnet50
+from .seresnext import se_resnet50
+from .vgg import vgg_vista
 
 __all__ = [
     'AdaptiveInput',
@@ -38,5 +42,9 @@ __all__ = [
     'MultiheadAttention',
     'ScalarBias',
     'SinusoidalPositionalEmbedding',
+    'se_resnet50',
+    'densenet121',
+    'resnet50',
+    'vgg_vista',    
     'unfold1d',
 ]
