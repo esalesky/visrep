@@ -10,8 +10,9 @@ from .fairseq_dataset import FairseqDataset
 from .backtranslation_dataset import BacktranslationDataset
 from .concat_dataset import ConcatDataset
 from .indexed_dataset import IndexedCachedDataset, IndexedDataset, IndexedRawTextDataset
-from .indexed_dataset import IndexedImageWordDataset, IndexedImageLineDataset
-from .language_pair_dataset import LanguagePairDataset, ImagePairDataset
+from .indexed_image_dataset import IndexedImageWordDataset, IndexedImageLineDataset
+from .language_pair_dataset import LanguagePairDataset
+from .image_pair_dataset import ImagePairDataset
 from .monolingual_dataset import MonolingualDataset
 from .round_robin_zip_datasets import RoundRobinZipDatasets
 from .token_block_dataset import TokenBlockDataset
@@ -51,5 +52,5 @@ __all__ = [
     'OCRDataset',
     'JSONDictionary',
     'OCREpochBatchIterator',
-    'ImageAug',    
+    'ImageAug',   
 ]

@@ -314,6 +314,12 @@ def add_optimization_args(parser):
                        help='minimum learning rate')
     group.add_argument('--min-loss-scale', default=1e-4, type=float, metavar='D',
                        help='minimum loss scale (for FP16 training)')
+
+    parser.add_argument('--source-loss', action='store_true',
+                            help='enable source side loss')
+    group.add_argument('--source-loss-scale', default=0.00, type=float,
+                       help='source loss scale')
+
     # fmt: on
     return group
 

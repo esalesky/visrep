@@ -1,9 +1,3 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
 
 import numpy as np
 import torch
@@ -14,7 +8,7 @@ from fairseq import utils
 from . import data_utils, FairseqDataset
 
 
-def collate(
+def image_collate(
     samples, pad_idx, eos_idx, left_pad_source=False, left_pad_target=False,
     input_feeding=True,
 ):
@@ -27,14 +21,33 @@ def collate(
             [s[key] for s in samples],
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
         )
+
     id = torch.LongTensor([s['id'] for s in samples])
     src_tokens = merge('source', left_pad=left_pad_source)
+
     # sort by descending source length
-    #src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
+    # src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
     src_lengths = torch.LongTensor([s['source'].size(0) for s in samples])
     src_lengths, sort_order = src_lengths.sort(descending=True)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
+
+    biggest_size = samples[0]['source_image'][0].shape
+    src_images_tensor = torch.zeros(len(samples), len(src_tokens[0]), biggest_size[0], biggest_size[1], biggest_size[2])  # CHW
+    max_word = len(src_tokens[0])
+
+    for sample_idx, img_sample in enumerate(samples):
+        word_sample = samples[sample_idx]
+        len_word_sample = len(samples[sample_idx]['source_image'])
+        for word_idx in range(max_word - 1):
+            if word_idx < len_word_sample - 1:
+                width = samples[sample_idx]['source_image'][word_idx].size(2)
+                src_images_tensor[sample_idx, word_idx:, :, :width] = samples[sample_idx]['source_image'][word_idx]
+            else:
+                zero_image = torch.ones(biggest_size[0], biggest_size[1], biggest_size[2])
+                width = zero_image.size(2)
+                src_images_tensor[sample_idx, word_idx:, :, :width] = zero_image
+    src_images_tensor = src_images_tensor.index_select(0, sort_order)
 
     prev_output_tokens = None
     target = None
@@ -62,17 +75,17 @@ def collate(
         'net_input': {
             'src_tokens': src_tokens,
             'src_lengths': src_lengths,
+            'src_images': src_images_tensor,
         },
         'target': target,
     }
-    #print('collate', batch)
-    
+
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
     return batch
 
 
-class LanguagePairDataset(FairseqDataset):
+class ImagePairDataset(FairseqDataset):
     """
     A pair of torch.utils.data.Datasets.
 
@@ -105,7 +118,12 @@ class LanguagePairDataset(FairseqDataset):
     def __init__(
         self, src, src_sizes, src_dict,
         tgt=None, tgt_sizes=None, tgt_dict=None,
-        left_pad_source=False, left_pad_target=False,
+        transform=None,
+        image_verbose=False,
+        image_samples_path=None,
+        image_font_path=None, image_font_size=16,
+        image_width=150, image_height=30, image_channel=3,
+        left_pad_source=True, left_pad_target=False,
         max_source_positions=1024, max_target_positions=1024,
         shuffle=True, input_feeding=True, remove_eos_from_source=False, append_eos_to_target=False,
     ):
@@ -116,22 +134,19 @@ class LanguagePairDataset(FairseqDataset):
         self.src = src
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
-        src_alt = self.src_sizes[np.arange(1, len(self.src_sizes), 2)]
-        src_feat = np.all(src_alt == src_alt[0])
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
-        tgt_alt = self.tgt_sizes[np.arange(1, len(self.tgt_sizes), 2)] if tgt_sizes is not None else None
-        tgt_feat = np.all(tgt_alt == tgt_alt[0]) if tgt_sizes is not None else False
-        if src_feat:
-            #print('multiple features in src dectected...')
-            self.src_sizes = self.src_sizes[np.arange(0, len(src_sizes), 2)]
-            #print('final sizes', self.src_sizes)
-        if tgt_feat:
-            #print('multiple features in tgt dectected...')
-            self.tgt_sizes = self.tgt_sizes[np.arange(0, len(tgt_sizes), 2)]
-        ##print(len(self.src_sizes), len(self.tgt_sizes))
-
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
+        self.transform = transform
+
+        self.image_verbose = image_verbose
+        self.image_samples_path = image_samples_path
+        self.image_font_path = image_font_path
+        self.image_font_size = image_font_size
+        self.image_width = image_width
+        self.image_height = image_height
+        self.image_channel = image_channel
+
         self.left_pad_source = left_pad_source
         self.left_pad_target = left_pad_target
         self.max_source_positions = max_source_positions
@@ -142,12 +157,26 @@ class LanguagePairDataset(FairseqDataset):
         self.append_eos_to_target = append_eos_to_target
 
     def __getitem__(self, index):
+        # This is a list of words
         tgt_item = self.tgt[index] if self.tgt is not None else None
-        src_item = self.src[index]
-        # Append EOS to end of tgt sentence if it does not have an EOS and remove
-        # EOS from end of src sentence if it exists. This is useful when we use
-        # use existing datasets for opposite directions i.e., when we want to
-        # use tgt_dataset as src_dataset and vice versa
+        # src_item, src_word, src_line, src_img_list, src_img_width = self.src[index]
+        src_item, src_word, src_line, src_img_list = self.src[index]
+
+        src_images = []
+        for src_img in src_img_list:
+            src_img = np.array(src_img)
+            # print('src_image before transpose', src_img.shape)
+            # src_img = np.transpose(src_img, (2, 0, 1))  # HWC -> CHW
+            # print('src_image AFTER transpose', src_img.shape)
+            if self.transform is not None:
+                # print('transform')
+                src_img = self.transform(src_img)
+            # print('src_image transform', src_img.shape)
+            src_images.append(src_img)
+        # src_images = np.concatenate(src_images, axis=None)
+
+        # print('..orig source at 0 and -1', src_item[0], src_item[-1])
+
         if self.append_eos_to_target:
             eos = self.tgt_dict.eos() if self.tgt_dict else self.src_dict.eos()
             if self.tgt and self.tgt[index][-1] != eos:
@@ -157,13 +186,20 @@ class LanguagePairDataset(FairseqDataset):
             eos = self.src_dict.eos()
             if self.src[index][-1] == eos:
                 src_item = self.src[index][:-1]
-                
+
+        # print('..id ', index)
+        # print('..source len', src_item.shape)
+        # print('..target len', tgt_item.shape)
+        # print('..src img len', len(src_images), src_images[0].shape)
+
         sample = {
             'id': index,
             'source': src_item,
             'target': tgt_item,
+            'source_image': src_images,
         }
-        #print('LanguagePairDataset.__getitem__', index, sample)
+
+        # print('sample', sample)
         return sample
 
     def __len__(self):
@@ -198,7 +234,7 @@ class LanguagePairDataset(FairseqDataset):
                   target sentence of shape `(bsz, tgt_len)`. Padding will appear
                   on the left if *left_pad_target* is ``True``.
         """
-        return collate(
+        return image_collate(
             samples, pad_idx=self.src_dict.pad(), eos_idx=self.src_dict.eos(),
             left_pad_source=self.left_pad_source, left_pad_target=self.left_pad_target,
             input_feeding=self.input_feeding,
@@ -206,30 +242,56 @@ class LanguagePairDataset(FairseqDataset):
 
     def get_dummy_batch(self, num_tokens, max_positions, src_len=128, tgt_len=128):
         """Return a dummy batch with a given number of tokens."""
-        src_len, tgt_len = utils.resolve_max_positions(
-            (src_len, tgt_len),
-            max_positions,
-            (self.max_source_positions, self.max_target_positions),
-        )
-        bsz = max(num_tokens // max(src_len, tgt_len), 1)
-        return self.collater([
-            {
-                'id': i,
-                'source': self.src_dict.dummy_sentence(src_len),
-                'target': self.tgt_dict.dummy_sentence(tgt_len) if self.tgt_dict is not None else None,
-            }
-            for i in range(bsz)
-        ])
+        index = 0
+        tgt_item = self.tgt[index] if self.tgt is not None else None
+        src_item, src_word, src_line, src_img_list = self.src[index]
+
+        # print('DUMMY DUMMY')
+        # print(src_item)
+        # print(src_word)
+        src_images = []
+        for src_img in src_img_list:
+            src_img = np.array(src_img)
+            # print('src_image before transpose', src_img.shape)
+            # src_img = np.transpose(src_img, (2, 0, 1))  # HWC -> CHW
+            # print('src_image AFTER transpose', src_img.shape)
+            if self.transform is not None:
+                # print('transform')
+                src_img = self.transform(src_img)
+            # print('src_image transform', src_img.shape)
+            src_images.append(src_img)
+        # print('')
+        # src_images = np.concatenate(src_images, axis=0)
+
+        bsz = 16
+#         samples_batch = [
+#             {
+#                 'id': index,
+#                 'source': src_item,
+#                 'target': tgt_item,
+#                 'source_image': src_images,
+#             }
+#             for i in range(bsz)
+#         ]
+
+        samples_batch = {
+            'id': index,
+            'source': src_item,
+            'target': tgt_item,
+            'source_image': src_images,
+        }
+
+        # print('..id', index)
+        # print('..source len', src_item.shape)
+        # print('..target len', tgt_item.shape)
+        # print('..src img len', len(src_images), src_images[0].shape)
+
+        return self.collater([samples_batch for i in range(bsz)])
 
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
-        #print(index, 'src size', self.src_sizes[index], 'tgt size', self.tgt_sizes[index])
-        #return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
-        if self.tgt_sizes is None:
-            return self.src_sizes[index]
-        else:
-            return self.tgt_sizes[index]
+        return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when

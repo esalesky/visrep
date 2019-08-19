@@ -180,14 +180,60 @@ class FairseqModel(BaseFairseqModel):
         """
         encoder_out = self.encoder(src_tokens, src_lengths)
         decoder_out = self.decoder(prev_output_tokens, encoder_out)
-        decoder_out['source_embedding_out'] = encoder_out['embedding_out']
+        #decoder_out['source_embedding_out'] = encoder_out['embedding_out']
         return decoder_out
 
     def max_positions(self):
         """Maximum length supported by the model."""
         return (self.encoder.max_positions(), self.decoder.max_positions())
 
+class FairseqVisualModel(BaseFairseqModel):
+    """Base class for encoder-decoder models.
 
+    Args:
+        encoder (FairseqEncoder): the encoder
+        decoder (FairseqDecoder): the decoder
+    """
+
+    def __init__(self, encoder, decoder):
+        super().__init__()
+
+        self.encoder = encoder
+        self.decoder = decoder
+        assert isinstance(self.encoder, FairseqEncoder)
+        assert isinstance(self.decoder, FairseqDecoder)
+
+    def forward(self, src_tokens, src_lengths, prev_output_tokens, src_images=None):
+        """
+        Run the forward pass for an encoder-decoder model.
+
+        First feed a batch of source tokens through the encoder. Then, feed the
+        encoder output and previous decoder outputs (i.e., input feeding/teacher
+        forcing) to the decoder to produce the next outputs::
+
+            encoder_out = self.encoder(src_tokens, src_lengths)
+            return self.decoder(prev_output_tokens, encoder_out)
+
+        Args:
+            src_tokens (LongTensor): tokens in the source language of shape
+                `(batch, src_len)`
+            src_lengths (LongTensor): source sentence lengths of shape `(batch)`
+            prev_output_tokens (LongTensor): previous decoder outputs of shape
+                `(batch, tgt_len)`, for input feeding/teacher forcing
+
+        Returns:
+            the decoder's output, typically of shape `(batch, tgt_len, vocab)`
+        """
+        encoder_out = self.encoder(src_tokens, src_lengths) #, src_images_width=None, src_images_width=None)
+        decoder_out = self.decoder(prev_output_tokens, encoder_out)
+        #decoder_out['source_embedding_out'] = encoder_out['embedding_out']
+        return decoder_out
+
+    def max_positions(self):
+        """Maximum length supported by the model."""
+        return (self.encoder.max_positions(), self.decoder.max_positions())
+    
+    
 class FairseqMultiModel(BaseFairseqModel):
     """Base class for combining multiple encoder-decoder models."""
     def __init__(self, encoders, decoders):

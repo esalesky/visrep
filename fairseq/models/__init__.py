@@ -15,6 +15,7 @@ from .fairseq_incremental_decoder import FairseqIncrementalDecoder  # noqa: F401
 from .fairseq_model import (
     BaseFairseqModel,
     FairseqModel,  # noqa: F401
+    FairseqVisualModel,
     FairseqMultiModel,  # noqa: F401
     FairseqLanguageModel,  # noqa: F401
 )
