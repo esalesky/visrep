@@ -21,7 +21,7 @@ from fairseq.modules import (
 from . import (
     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, register_model,
     register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder, VisualEdgeEncoder, CharCNNEncoder,
-    MultiFeatEncoder, ImageEncoder
+    MultiFeatEncoder
 )
 
 
@@ -459,38 +459,6 @@ class RobustTransformerEncoder(TransformerEncoder):
                                                      num_chars=self.num_source_feats,
                                                      edge_threshold=edge_threshold,
                                                      dropout_in=0.1)
-        elif robust_embedder_type == 'ImageWordEncoder':
-
- #           def load_image_embedding_from_file(embed_path, padding_idx):
- #               print("load_image_embedding_from_file", embed_path)
- #               img_tensor = torch.load(embed_path)
- #               img_r = img_tensor.size(1)
- #               img_c = img_tensor.size(2)
- #               img_tensor = img_tensor.view(-1, img_r * img_c)
- #               img_emb = torch.nn.Embedding(img_tensor.size(0), img_tensor.size(1), padding_idx=padding_idx)
- #               img_emb.weight.data = img_tensor
- #               return img_emb, img_r, img_c
- #
- #           img_emb, img_r, img_c = load_image_embedding_from_file(robust_embedder_resource,
- #                                                                  self.embed_tokens.padding_idx)
-
-            self.robust_embedder = ImageEncoder(input_channels=3, input_line_height=30, input_line_width=200, output_dim=512)
-
-
-        elif robust_embedder_type == 'ImageLineEncoder':
-
- #           def load_image_embedding_from_file(embed_path, padding_idx):
- #               print("load_image_embedding_from_file", embed_path)
- #               img_tensor = torch.load(embed_path)
- #               img_r = img_tensor.size(1)
- #               img_c = img_tensor.size(2)
- #               img_tensor = img_tensor.view(-1, img_r * img_c)
- #               img_emb = torch.nn.Embedding(img_tensor.size(0), img_tensor.size(1), padding_idx=padding_idx)
- #               img_emb.weight.data = img_tensor
- #               return img_emb, img_r, img_c
-
-            self.robust_embedder = ImageEncoder(input_channels=3, input_line_height=30, input_line_width=200, output_dim=512)
-
         else:
             raise NotImplementedError("unknown embed_type for RobustLSTMEncoder")
 

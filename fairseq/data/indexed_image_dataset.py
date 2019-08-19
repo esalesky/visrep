@@ -56,8 +56,9 @@ class IndexedImageWordDataset(torch.utils.data.Dataset):
                 self.tokens_list.append(tokens)
                 self.sizes.append(len(tokens))
 
-                if line_ctr > 5000:
-                    break
+                # if line_ctr > 5000:
+                #    print('....Only loading 5000 lines in src')
+                #    break
 
         self.sizes = np.array(self.sizes)
         print('...data load complete, total lines %d, dropped %d' % (len(self.lines), drop_cnt))

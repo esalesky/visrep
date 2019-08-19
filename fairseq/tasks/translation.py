@@ -81,6 +81,8 @@ class TranslationTask(FairseqTask):
                             help='Font path')
         parser.add_argument('--image-font-size', default=16, type=int,
                             help='Font size')
+        parser.add_argument('--image-channels', default=3, type=int,
+                            help='image channels')
         parser.add_argument('--image-width', default=30, type=int,
                             help='Image width')
         parser.add_argument('--image-height', default=150, type=int,
@@ -99,6 +101,9 @@ class TranslationTask(FairseqTask):
                             help='Image frac maxpool ratio width')
         parser.add_argument('--image-maxpool-height', default=0.7, type=float,
                             help='Image frac maxpool ratio height')
+
+        parser.add_argument('--image-embed-dim', default=512, type=int,
+                            help='image embedding dimension')
 
         parser.add_argument("--augment", action='store_true',
                             default=False, help="Add image aug library")

@@ -21,7 +21,7 @@ from fairseq.modules import (
 from . import (
     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, FairseqVisualModel, register_model,
     register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder, VisualEdgeEncoder, CharCNNEncoder,
-    MultiFeatEncoder, ImageEncoder
+    MultiFeatEncoder, ImageWordEncoder
 )
 
 from fairseq.models.transformer import Embedding, RobustTransformerEncoder, TransformerEncoder, TransformerDecoder
@@ -48,8 +48,8 @@ class VisualTransformerModel(FairseqVisualModel):
         :prog:
     """
 
-    def __init__(self, args, encoder, decoder):
-        super().__init__(encoder, decoder)
+    def __init__(self, args, encoder, decoder, visual_encoder):
+        super().__init__(encoder, decoder, visual_encoder)
         self.args = args
 
     @staticmethod
@@ -169,9 +169,23 @@ class VisualTransformerModel(FairseqVisualModel):
         else:
             encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens)
 
+        visual_encoder = None
+        if args.image_type is not None:
+            visual_encoder = ImageWordEncoder(
+                dictionary=task.source_dictionary,
+                input_channels=args.image_channels,
+                input_line_height=args.image_height,
+                input_line_width=args.image_width,
+                maxpool_ratio_height=args.image_maxpool_height,
+                maxpool_ratio_width=args.image_maxpool_width,
+                kernel_size_2d=args.image_kernel,
+                stride_2d=args.image_stride,
+                padding_2d=args.image_pad,
+                output_dim=args.image_embed_dim)
+            
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
 
-        return VisualTransformerModel(args, encoder, decoder)
+        return VisualTransformerModel(args, encoder, decoder, visual_encoder)
 
     def forward(self, src_tokens, src_lengths, prev_output_tokens, src_images=None):
         """
@@ -197,11 +211,11 @@ class VisualTransformerModel(FairseqVisualModel):
 
         # print('...visual_transformer forward')
         if self.args.image_verbose:
-            print('...visual_transformer forward', src_images.shape)
-            print('......first image', src_images[0][0].shape, len(src_images[0]))
+            # print('...visual_transformer forward', src_images.shape)
+            # print('......first image', src_images[0][0].shape, len(src_images[0]))
 
             b, t, c, h, w = src_images.shape
-            print(b, t, c, h, w)
+            # print(b, t, c, h, w)
             for ctr in range(len(src_images[0])):
                 token_id = src_tokens[0][ctr].cpu()
                 # print(int(token_id))
@@ -209,14 +223,21 @@ class VisualTransformerModel(FairseqVisualModel):
                 # print(int(token_id), word)
                 image = np.uint8(src_images[0][ctr].cpu().squeeze()).transpose((1, 2, 0)) * 255
                 outimage = self.args.image_samples_path + '/word_' + str(int(token_id)) + '_' + str(word) + '.png'
-                print('write image ...', outimage)
+                # print('write image ...', outimage)
                 cv2.imwrite(outimage, image)
 
             # src_images = src_images.contiguous().view(-1, src_images.size(-3), src_images.size(-2), src_images.size(-1))
+            # print('...image shape', src_images.shape)
             src_images = src_images.view(-1, src_images.size(-3), src_images.size(-2), src_images.size(-1))
-            print('...image reshape', src_images.shape)
-            src_images = src_images.view(b, t, c, h, w)
-            print('...image back', src_images.shape)
+            # print('...image reshape', src_images.shape)
+            # src_images = src_images.view(b, t, c, h, w)
+            # print('...image back', src_images.shape)
+
+        if src_images is not None:
+            visual_encoder_out = self.visual_encoder(src_images)
+            # print('visual encoder out shape', visual_encoder_out['encoder_out'].shape)
+            visual_encoder_out['encoder_out'] = visual_encoder_out['encoder_out'].view(b, t, self.args.image_embed_dim)
+            # print('visual encoder out RESHAPE', visual_encoder_out['encoder_out'].shape)
 
         # cv2.imwrite(self.image_samples_path + '/word_' + src_word[idx] + '_' + str(index) + '_' + str(idx) + '.png', img)
         encoder_out = self.encoder(src_tokens, src_lengths)

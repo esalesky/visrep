@@ -187,6 +187,7 @@ class FairseqModel(BaseFairseqModel):
         """Maximum length supported by the model."""
         return (self.encoder.max_positions(), self.decoder.max_positions())
 
+
 class FairseqVisualModel(BaseFairseqModel):
     """Base class for encoder-decoder models.
 
@@ -195,15 +196,20 @@ class FairseqVisualModel(BaseFairseqModel):
         decoder (FairseqDecoder): the decoder
     """
 
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, decoder, visual_encoder=None):
         super().__init__()
 
         self.encoder = encoder
         self.decoder = decoder
+        self.visual_encoder = visual_encoder
+
+        if self.visual_encoder is not None:
+            assert isinstance(self.visual_encoder, FairseqEncoder)
         assert isinstance(self.encoder, FairseqEncoder)
         assert isinstance(self.decoder, FairseqDecoder)
 
-    def forward(self, src_tokens, src_lengths, prev_output_tokens, src_images=None):
+    def forward(self, src_tokens, src_lengths,
+                prev_output_tokens, src_images=None):
         """
         Run the forward pass for an encoder-decoder model.
 
@@ -224,16 +230,18 @@ class FairseqVisualModel(BaseFairseqModel):
         Returns:
             the decoder's output, typically of shape `(batch, tgt_len, vocab)`
         """
-        encoder_out = self.encoder(src_tokens, src_lengths) #, src_images_width=None, src_images_width=None)
+
+        if self.visual_encoder is not None:
+            visual_encoder_out = self.visual_encoder(src_images)
+        encoder_out = self.encoder(src_tokens, src_lengths)
         decoder_out = self.decoder(prev_output_tokens, encoder_out)
-        #decoder_out['source_embedding_out'] = encoder_out['embedding_out']
         return decoder_out
 
     def max_positions(self):
         """Maximum length supported by the model."""
         return (self.encoder.max_positions(), self.decoder.max_positions())
-    
-    
+
+
 class FairseqMultiModel(BaseFairseqModel):
     """Base class for combining multiple encoder-decoder models."""
     def __init__(self, encoders, decoders):

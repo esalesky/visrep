@@ -8,31 +8,30 @@ import logging
 
 logger = logging.getLogger('root')
 
+from . import (
+    FairseqEncoder,
+)
 
 '''
 
-Image encoder
+Image word encoder
 
-CNN Input
- [1, 3, 30, 135]  # batch, channels, height, width
-CNN Output / Bridge input
- [1, 256, 7, 65]  # batch, channels, height, width
-Bridge output
- [65, 1, 512]     # width, batch, features
- 
+CNN input c 3 h 30 w 120 
+CNN out c 256, h 7, w 58
+CNN feature size 1792 (c * h * w)
+CNN output dim 512
+
 '''
 
-class ImageEncoder(nn.Module):
-    
-    def __init__(self,
-                 input_channels=3, input_line_height=30, input_line_width=200,
-                 maxpool_ratio_height = 0.5, maxpool_ratio_width=0.7,
-                 kernel_size_2d=3, stride_2d=1, padding_2d=1,
-                 output_dim=512):
+class ImageWordEncoder(FairseqEncoder):
 
-        super(ImageEncoder, self).__init__()
+    def __init__(self, dictionary, input_channels=3, input_line_height=30, 
+                 input_line_width=200, maxpool_ratio_height = 0.5, 
+                 maxpool_ratio_width=0.7, kernel_size_2d=3, stride_2d=1, 
+                 padding_2d=1, output_dim=512):
+        super().__init__(dictionary)
         
-        self.bridge_output_dim = output_dim # 512
+        self.output_dim = output_dim # 512
         self.num_in_channels = input_channels # 3
         self.input_line_height = input_line_height
         self.input_line_width = input_line_width
@@ -43,96 +42,63 @@ class ImageEncoder(nn.Module):
         self.maxpool_ratio_width = maxpool_ratio_width
 
 
-        # VGG style architecture
-        self.cnn = nn.Sequential(
-            *self.ConvBNReLU(self.num_in_channels , 64, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
-            *self.ConvBNReLU(64, 64, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
-            nn.FractionalMaxPool2d(2, output_ratio=(self.maxpool_ratio_height, self.maxpool_ratio_width)),
-            *self.ConvBNReLU(64, 128, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
-            *self.ConvBNReLU(128, 128, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
-            nn.FractionalMaxPool2d(2, output_ratio=(self.maxpool_ratio_height, self.maxpool_ratio_width)),
-            *self.ConvBNReLU(128, 256, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
-            *self.ConvBNReLU(256, 256, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d),
-            *self.ConvBNReLU(256, 256, kernel_size_2d=self.kernel_size_2d, stride_2d=self.stride_2d, padding_2d=self.padding_2d)
+        self.encoder = nn.Sequential(
+            *self.ConvBNReLU(
+                self.num_in_channels, 64, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(
+                64, 64, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+
+            nn.FractionalMaxPool2d(
+                2, output_ratio=(self.maxpool_ratio_height,
+                                 self.maxpool_ratio_width)),
+
+            *self.ConvBNReLU(
+                64, 128, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(
+                128, 128, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+
+            nn.FractionalMaxPool2d(
+                2, output_ratio=(self.maxpool_ratio_height,
+                                 self.maxpool_ratio_width)),
+
+            *self.ConvBNReLU(
+                128, 256, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(
+                256, 256, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d),
+            *self.ConvBNReLU(
+                256, 256, kernel_size_2d=self.kernel_size_2d,
+                stride_2d=self.stride_2d, padding_2d=self.padding_2d)
         )
         
-        fake_input_width = 200
-        cnn_out_h, cnn_out_w = self.cnn_input_size_to_output_size((self.input_line_height, fake_input_width))
+
+        cnn_out_h, cnn_out_w = self.cnn_input_size_to_output_size(
+            (self.input_line_height, self.input_line_width))
         cnn_out_c = self.cnn_output_num_channels()
-        cnn_feat_size = cnn_out_c * cnn_out_h
+
+        cnn_feat_size = cnn_out_c * cnn_out_h * cnn_out_w
+
+        logger.info('CNN input c %d h %d w %d ' % (self.num_in_channels, self.input_line_height, self.input_line_width ))
+        logger.info('CNN output c %d h %d w %d' % (cnn_out_c, cnn_out_h, cnn_out_w))
+        logger.info('CNN feature size %d (c*h*w)' % (cnn_feat_size))
+        logger.info('CNN output dim %d' % (self.output_dim))
         
-        logger.info('CNN out height %d' % (cnn_out_h))
-        logger.info('CNN out channels %d' % (cnn_out_c))
-        logger.info('CNN feature size (channels %d x height %d) = %d' % (cnn_out_c, cnn_out_h, cnn_feat_size))
-
-        # Word image encoder
-        self.bridge_layer = nn.Sequential(
-            nn.Linear(self.input_channels * self.input_line_height * self.input_line_width, self.bridge_output_dim),
+        self.encode_fc = nn.Sequential(
+            nn.Linear(cnn_feat_size, self.output_dim),
             nn.ReLU(inplace=True)
         )
 
-        # Line image encoder
-        self.bridge_layer = nn.Sequential(
-            nn.Linear(cnn_feat_size, self.bridge_output_dim),
-            nn.ReLU(inplace=True)
-        )
-
-        # initialize parameters
-        for param in self.parameters():
-            torch.nn.init.uniform_(param, -0.08, 0.08)
-
-        total_params = 0
-        for param in self.parameters():
-            local_params = 1
-            for d in param.size():
-                local_params *= d
-            total_params += local_params
-
-        cnn_params = 0
-        for param in self.cnn.parameters():
-            local_params = 1
-            for d in param.size():
-                local_params *= d
-            cnn_params += local_params
-            
-        logger.info("Total Model Params = %d" % total_params)
-        logger.info("\tCNN Params = %d" % cnn_params)
-
-        logger.info("Model looks like:")
-        logger.info(repr(self))
-
-        if torch.cuda.device_count() > 0:   
-            logger.info('...available %d GPUs' % torch.cuda.device_count())  
-        else:
-            logger.info('...available CPU')
-            
-        if torch.cuda.is_available() and self.gpu:
-            logger.info('...using GPUS')
-            self.cnn = self.cnn.cuda()
-            self.bridge_layer = self.bridge_layer.cuda()
-
-            if self.multigpu:
-                print('...using MULTIPLE GPUS...torch.nn.DataParallel')
-                self.cnn = torch.nn.DataParallel(self.cnn)
-        else:
-            logger.info.info("Warning: Running model on CPU")
-
-                        
-    def ConvBNReLU(self, nInputMaps, nOutputMaps, kernel_size_2d=3, stride_2d=1, padding_2d=1):
-        return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=kernel_size_2d, padding=padding_2d, stide=stride_2d),
-                nn.BatchNorm2d(nOutputMaps),
-                nn.ReLU(inplace=True)]
-
-
-    def cnn_input_size_to_output_size(self, in_size):
-        out_h, out_w = in_size
-
-        for module in self.cnn.modules():
-            out_h, out_w = self.calculate_hw(module, out_h, out_w)
-
-        return (out_h, out_w)
-    
-    
+    def ConvBNReLU(self, nInputMaps, nOutputMaps, kernel_size_2d=3,
+                   stride_2d=1, padding_2d=1):
+        return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=kernel_size_2d, 
+                          padding=padding_2d, stride=stride_2d),
+                          nn.BatchNorm2d(nOutputMaps), nn.ReLU(inplace=True)]
+        
     def calculate_hw(self, module, out_h, out_w):
         if isinstance(module, nn.Conv2d) or isinstance(module, nn.MaxPool2d):
             if isinstance(module.padding, tuple):
@@ -152,8 +118,12 @@ class ImageEncoder(nn.Module):
             else:
                 kernel_size_y = kernel_size_x = module.kernel_size
 
-            out_h = math.floor((out_h + 2.0 * padding_y - dilation_y * (kernel_size_y - 1) - 1) / stride_y + 1)
-            out_w = math.floor((out_w + 2.0 * padding_x - dilation_x * (kernel_size_x - 1) - 1) / stride_x + 1)
+            out_h = math.floor(
+                (out_h + 2.0 * padding_y - dilation_y *
+                 (kernel_size_y - 1) - 1) / stride_y + 1)
+            out_w = math.floor(
+                (out_w + 2.0 * padding_x - dilation_x *
+                 (kernel_size_x - 1) - 1) / stride_x + 1)
         elif isinstance(module, nn.FractionalMaxPool2d):
             if module.output_size is not None:
                 out_h, out_w = module.output_size
@@ -163,28 +133,43 @@ class ImageEncoder(nn.Module):
 
         return out_h, out_w
 
-
     def cnn_output_num_channels(self):
         out_c = 0
-        for module in self.cnn.modules():
+        for module in self.encoder.modules():
             if isinstance(module, nn.Conv2d):
                 out_c = module.out_channels
         return out_c
 
-        
-    def forward(self, x):
-        cnn_output = self.cnn(x)
+    def cnn_input_size_to_output_size(self, in_size):
+        out_h, out_w = in_size
 
-        b, c, h, w = cnn_output.size()
-        #print('forward -> cnn size b %d, c %d, h %d, w %d' % (b, c, h, w))
-        
-        cnn_output = cnn_output.permute(3, 0, 1, 2).contiguous()
+        for module in self.encoder.modules():
+            out_h, out_w = self.calculate_hw(module, out_h, out_w)
 
-        features = self.bridge_layer(cnn_output.view(-1, c * h)).view(w, b, -1)
-        #print('forward -> bridge size ', features.size())
-        
-        return features
-    
-    
-            
-    
+        return (out_h, out_w)
+
+    def forward(self, src_images):
+        encoded = self.encoder(src_images)
+        batch, channel, height, width = encoded.size()
+        encode_fc_view = encoded.view(-1, channel * height * width)
+        encode_fc = self.encode_fc(encode_fc_view)
+        return {
+            'encoder_out': encode_fc,  
+            'encoder_padding_mask': None,
+        }
+
+    def reorder_encoder_out(self, encoder_out, new_order):
+        encoder_out['encoder_out'] = tuple(
+            eo.index_select(1, new_order)
+            for eo in encoder_out['encoder_out']
+        )
+        if encoder_out['encoder_padding_mask'] is not None:
+            encoder_out['encoder_padding_mask'] = \
+                encoder_out['encoder_padding_mask'].index_select(1, new_order)
+        return encoder_out
+
+    def max_positions(self):
+        """Maximum input length supported by the encoder."""
+        #return self.embed_positions.max_positions()
+        return int(1e5)  # an arbitrary large number
+
