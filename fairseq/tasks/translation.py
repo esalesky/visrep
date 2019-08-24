@@ -18,6 +18,8 @@ from fairseq.data import (
     IndexedRawTextDataset,
     IndexedImageLineDataset,
     IndexedImageWordDataset,
+    IndexedImageDataset,
+    IndexedImageCachedDataset,
     LanguagePairDataset,
     ImagePairDataset,
     ImageAug,
@@ -174,33 +176,38 @@ class TranslationTask(FairseqTask):
             filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
             if self.args.raw_text and IndexedRawTextDataset.exists(filename):
                 return True
-            # elif self.args.image_word_text and IndexedImageWordDataset.exists(filename):
-            elif self.args.image_type != None:
-                if self.args.image_type == 'word' and IndexedImageWordDataset.exists(filename):
-                    return True
-                elif self.args.image_type == 'line' and IndexedImageLineDataset.exists(filename):
-                    return True
             elif not self.args.raw_text and IndexedDataset.exists(filename):
                 return True
             return False
 
         def indexed_dataset(path, dictionary, is_src=False):
-            if self.args.image_type != None:
-                if is_src == True:
-                    print('Image_type %s' % (self.args.image_type))
+            if self.args.image_type is not None and is_src:
+                print('Image_type %s' % (self.args.image_type))
+                if self.args.raw_text:
+                    print('...raw image text')
                     if self.args.image_type == 'word':
                         return IndexedImageWordDataset(path, dictionary,
                                     self.args.image_verbose,
                                     self.args.image_font_path, self.args.image_font_size,
                                     self.args.image_width, self.args.image_height)
-                    elif  self.args.image_type == 'line':
+                    else:
                         return IndexedImageLineDataset(path, dictionary,
                                                        self.args.image_verbose,
                                                        self.args.image_font_path, self.args.image_font_size,
                                                        self.args.image_width, self.args.image_height)
-
                 else:
-                    return IndexedRawTextDataset(path, dictionary)
+                    print('...binary image text')
+                    if self.args.lazy_load:
+                        return IndexedImageDataset(path, dictionary,
+                                    self.args.image_verbose,
+                                    self.args.image_font_path, self.args.image_font_size,
+                                    self.args.image_width, self.args.image_height)
+                    else:
+                        return IndexedImageCachedDataset(path, dictionary,
+                                    self.args.image_verbose,
+                                    self.args.image_font_path, self.args.image_font_size,
+                                    self.args.image_width, self.args.image_height)
+
             elif self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
             elif IndexedDataset.exists(path):
@@ -210,7 +217,7 @@ class TranslationTask(FairseqTask):
                     return IndexedCachedDataset(path, fix_lua_indexing=True)
             return None
 
-        print('...load datasets')
+        print('\n...load datasets ', split)
         src_datasets = []
         tgt_datasets = []
 
@@ -230,6 +237,7 @@ class TranslationTask(FairseqTask):
                     if k > 0 or dk > 0:
                         break
                     else:
+                        print('Dataset not found: {} ({}) \n'.format(split, data_path))
                         raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
                 src_datasets.append(indexed_dataset(prefix + src, self.src_dict, is_src=True))

@@ -172,15 +172,16 @@ class IndexedRawTextDataset(torch.utils.data.Dataset):
         with open(path, 'r', encoding='utf-8') as f:
             for line_ctr, line in enumerate(f):
                 self.lines.append(line.strip('\n'))
-                tokens = Tokenizer.tokenize(
-                    line, dictionary, add_if_not_exist=False,
+#                 tokens = Tokenizer.tokenize(
+#                     line, dictionary, add_if_not_exist=False,
+#                     append_eos=self.append_eos, reverse_order=self.reverse_order,
+#                 ).long()
+                tokens = dictionary.encode_line(
+                    line, add_if_not_exist=False,
                     append_eos=self.append_eos, reverse_order=self.reverse_order,
                 ).long()
                 self.tokens_list.append(tokens)
                 self.sizes.append(len(tokens))
-
-                # if line_ctr > 5000:
-                #    break
 
         self.sizes = np.array(self.sizes)
 
@@ -190,7 +191,6 @@ class IndexedRawTextDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         self.check_index(i)
-        # print('IndexedRawTextDataset.__getitem__', i, self.tokens_list[i])
         return self.tokens_list[i]
 
     def get_original_text(self, i):

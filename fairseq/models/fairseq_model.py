@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import FairseqDecoder, FairseqEncoder
+from . import FairseqDecoder, FairseqEncoder, VisualFairseqEncoder
 from fairseq.data import Dictionary
 
 
@@ -196,20 +196,17 @@ class FairseqVisualModel(BaseFairseqModel):
         decoder (FairseqDecoder): the decoder
     """
 
-    def __init__(self, encoder, decoder, visual_encoder=None):
+    def __init__(self, encoder, decoder): #, visual_encoder=None):
         super().__init__()
 
         self.encoder = encoder
         self.decoder = decoder
-        self.visual_encoder = visual_encoder
 
-        if self.visual_encoder is not None:
-            assert isinstance(self.visual_encoder, FairseqEncoder)
-        assert isinstance(self.encoder, FairseqEncoder)
+        assert isinstance(self.encoder, VisualFairseqEncoder)
         assert isinstance(self.decoder, FairseqDecoder)
 
     def forward(self, src_tokens, src_lengths,
-                prev_output_tokens, src_images=None):
+                prev_output_tokens, src_images):
         """
         Run the forward pass for an encoder-decoder model.
 
@@ -231,16 +228,13 @@ class FairseqVisualModel(BaseFairseqModel):
             the decoder's output, typically of shape `(batch, tgt_len, vocab)`
         """
 
-        if self.visual_encoder is not None:
-            visual_encoder_out = self.visual_encoder(src_images)
-        encoder_out = self.encoder(src_tokens, src_lengths)
+        encoder_out = self.encoder(src_images, src_tokens, src_lengths)
         decoder_out = self.decoder(prev_output_tokens, encoder_out)
         return decoder_out
 
     def max_positions(self):
         """Maximum length supported by the model."""
-        return (self.encoder.max_positions(), self.decoder.max_positions())
-
+        return (1e6, 1e6)
 
 class FairseqMultiModel(BaseFairseqModel):
     """Base class for combining multiple encoder-decoder models."""

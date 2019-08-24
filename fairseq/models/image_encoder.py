@@ -1,16 +1,11 @@
-
+import math
 import torch
 import torch.nn as nn
-from PIL import Image
+import torch.nn.functional as F
+
 import numpy as np
-import math
-import logging
-
-logger = logging.getLogger('root')
-
-from . import (
-    FairseqEncoder,
-)
+import cv2
+import os
 
 '''
 
@@ -23,14 +18,15 @@ CNN output dim 512
 
 '''
 
-class ImageWordEncoder(FairseqEncoder):
+class ImageWordEncoder(nn.Module):
 
     def __init__(self, dictionary, input_channels=3, input_line_height=30, 
                  input_line_width=200, maxpool_ratio_height = 0.5, 
                  maxpool_ratio_width=0.7, kernel_size_2d=3, stride_2d=1, 
-                 padding_2d=1, output_dim=512):
-        super().__init__(dictionary)
-        
+                 padding_2d=1, output_dim=512,
+                 init_weights=True): 
+
+        super(ImageWordEncoder, self).__init__()
         self.output_dim = output_dim # 512
         self.num_in_channels = input_channels # 3
         self.input_line_height = input_line_height
@@ -40,8 +36,7 @@ class ImageWordEncoder(FairseqEncoder):
         self.padding_2d = padding_2d
         self.maxpool_ratio_height = maxpool_ratio_height
         self.maxpool_ratio_width = maxpool_ratio_width
-
-
+        
         self.encoder = nn.Sequential(
             *self.ConvBNReLU(
                 self.num_in_channels, 64, kernel_size_2d=self.kernel_size_2d,
@@ -83,15 +78,18 @@ class ImageWordEncoder(FairseqEncoder):
 
         cnn_feat_size = cnn_out_c * cnn_out_h * cnn_out_w
 
-        logger.info('CNN input c %d h %d w %d ' % (self.num_in_channels, self.input_line_height, self.input_line_width ))
-        logger.info('CNN output c %d h %d w %d' % (cnn_out_c, cnn_out_h, cnn_out_w))
-        logger.info('CNN feature size %d (c*h*w)' % (cnn_feat_size))
-        logger.info('CNN output dim %d' % (self.output_dim))
+        print('CNN input c %d h %d w %d ' % (self.num_in_channels, self.input_line_height, self.input_line_width ))
+        print('CNN output c %d h %d w %d' % (cnn_out_c, cnn_out_h, cnn_out_w))
+        print('CNN feature size %d (c*h*w)' % (cnn_feat_size))
+        print('CNN output dim %d' % (self.output_dim))
         
         self.encode_fc = nn.Sequential(
             nn.Linear(cnn_feat_size, self.output_dim),
             nn.ReLU(inplace=True)
         )
+
+        if init_weights:
+            self._initialize_weights()
 
     def ConvBNReLU(self, nInputMaps, nOutputMaps, kernel_size_2d=3,
                    stride_2d=1, padding_2d=1):
@@ -148,28 +146,29 @@ class ImageWordEncoder(FairseqEncoder):
 
         return (out_h, out_w)
 
-    def forward(self, src_images):
+
+    def forward(self, src_images):         
+        b, t, c, h, w = src_images.shape
+        src_images = src_images.view(-1, src_images.size(-3), src_images.size(-2), src_images.size(-1))
+                            
         encoded = self.encoder(src_images)
         batch, channel, height, width = encoded.size()
         encode_fc_view = encoded.view(-1, channel * height * width)
         encode_fc = self.encode_fc(encode_fc_view)
-        return {
-            'encoder_out': encode_fc,  
-            'encoder_padding_mask': None,
-        }
 
-    def reorder_encoder_out(self, encoder_out, new_order):
-        encoder_out['encoder_out'] = tuple(
-            eo.index_select(1, new_order)
-            for eo in encoder_out['encoder_out']
-        )
-        if encoder_out['encoder_padding_mask'] is not None:
-            encoder_out['encoder_padding_mask'] = \
-                encoder_out['encoder_padding_mask'].index_select(1, new_order)
-        return encoder_out
+        encode_fc = encode_fc.view(b, t, self.output_dim)
 
-    def max_positions(self):
-        """Maximum input length supported by the encoder."""
-        #return self.embed_positions.max_positions()
-        return int(1e5)  # an arbitrary large number
+        return encode_fc
 
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, 0.01)
+                nn.init.constant_(m.bias, 0)

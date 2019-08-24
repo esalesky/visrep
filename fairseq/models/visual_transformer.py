@@ -21,13 +21,17 @@ from fairseq.modules import (
 from . import (
     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, FairseqVisualModel, register_model,
     register_model_architecture, FLCEncoder, OldFLCEncoder, VisualEncoder, VisualEdgeEncoder, CharCNNEncoder,
-    MultiFeatEncoder, ImageWordEncoder
+    VisualFairseqEncoder, MultiFeatEncoder, ImageWordEncoder
 )
 
-from fairseq.models.transformer import Embedding, RobustTransformerEncoder, TransformerEncoder, TransformerDecoder
+from fairseq.models.transformer import (
+    Embedding, PositionalEmbedding, TransformerEncoderLayer, LayerNorm,
+    RobustTransformerEncoder, TransformerEncoder, TransformerDecoder
+)
 
 import numpy as np
 import cv2
+import os
 
 
 @register_model('visual_transformer')
@@ -48,9 +52,11 @@ class VisualTransformerModel(FairseqVisualModel):
         :prog:
     """
 
-    def __init__(self, args, encoder, decoder, visual_encoder):
-        super().__init__(encoder, decoder, visual_encoder)
+    def __init__(self, args, encoder, decoder):
+        super().__init__(encoder, decoder)
         self.args = args
+        if not os.path.exists(args.image_samples_path):
+            os.makedirs(args.image_samples_path)
 
     @staticmethod
     def add_args(parser):
@@ -117,9 +123,7 @@ class VisualTransformerModel(FairseqVisualModel):
     def build_model(cls, args, task):
         """Build a new model instance."""
 
-        # self.args = args
-
-        # make sure all arguments are present in older models
+       # make sure all arguments are present in older models
         base_architecture(args)
 
         if not hasattr(args, 'max_source_positions'):
@@ -160,32 +164,23 @@ class VisualTransformerModel(FairseqVisualModel):
             decoder_embed_tokens = build_embedding(
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
-        if args.num_source_feats > 1:
-            encoder = RobustTransformerEncoder(args, src_dict, encoder_embed_tokens,
-                                               num_source_feats=args.num_source_feats,
-                                               robust_embedder_type=args.robust_embedder_type,
-                                               robust_embedder_resource=args.robust_embedder_resource,
-                                               edge_threshold=args.edge_threshold)
-        else:
-            encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens)
 
-        visual_encoder = None
-        if args.image_type is not None:
-            visual_encoder = ImageWordEncoder(
-                dictionary=task.source_dictionary,
-                input_channels=args.image_channels,
-                input_line_height=args.image_height,
-                input_line_width=args.image_width,
-                maxpool_ratio_height=args.image_maxpool_height,
-                maxpool_ratio_width=args.image_maxpool_width,
-                kernel_size_2d=args.image_kernel,
-                stride_2d=args.image_stride,
-                padding_2d=args.image_pad,
-                output_dim=args.image_embed_dim)
-            
+        encoder = VisualWordTransformerEncoder(
+            args, src_dict, encoder_embed_tokens,
+            input_channels=args.image_channels,
+            input_line_height=args.image_height,
+            input_line_width=args.image_width,
+            maxpool_ratio_height=args.image_maxpool_height,
+            maxpool_ratio_width=args.image_maxpool_width,
+            kernel_size_2d=args.image_kernel,
+            stride_2d=args.image_stride,
+            padding_2d=args.image_pad,
+            output_dim=args.image_embed_dim
+            )
+
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens)
 
-        return VisualTransformerModel(args, encoder, decoder, visual_encoder)
+        return VisualTransformerModel(args, encoder, decoder)
 
     def forward(self, src_tokens, src_lengths, prev_output_tokens, src_images=None):
         """
@@ -198,7 +193,7 @@ class VisualTransformerModel(FairseqVisualModel):
             encoder_out = self.encoder(src_tokens, src_lengths)
             return self.decoder(prev_output_tokens, encoder_out)
 
-        Args:
+        Asrgs:
             src_tokens (LongTensor): tokens in the source language of shape
                 `(batch, src_len)`
             src_lengths (LongTensor): source sentence lengths of shape `(batch)`
@@ -209,41 +204,152 @@ class VisualTransformerModel(FairseqVisualModel):
             the decoder's output, typically of shape `(batch, tgt_len, vocab)`
         """
 
-        # print('...visual_transformer forward')
         if self.args.image_verbose:
-            # print('...visual_transformer forward', src_images.shape)
-            # print('......first image', src_images[0][0].shape, len(src_images[0]))
-
             b, t, c, h, w = src_images.shape
-            # print(b, t, c, h, w)
             for ctr in range(len(src_images[0])):
                 token_id = src_tokens[0][ctr].cpu()
-                # print(int(token_id))
                 word = self.encoder.dictionary.__getitem__(int(token_id))
-                # print(int(token_id), word)
                 image = np.uint8(src_images[0][ctr].cpu().squeeze()).transpose((1, 2, 0)) * 255
                 outimage = self.args.image_samples_path + '/word_' + str(int(token_id)) + '_' + str(word) + '.png'
-                # print('write image ...', outimage)
                 cv2.imwrite(outimage, image)
 
-            # src_images = src_images.contiguous().view(-1, src_images.size(-3), src_images.size(-2), src_images.size(-1))
-            # print('...image shape', src_images.shape)
-            src_images = src_images.view(-1, src_images.size(-3), src_images.size(-2), src_images.size(-1))
-            # print('...image reshape', src_images.shape)
-            # src_images = src_images.view(b, t, c, h, w)
-            # print('...image back', src_images.shape)
+        visual_encoder_out = self.encoder(src_images, src_tokens, src_lengths)
+        decoder_out = self.decoder(prev_output_tokens, visual_encoder_out)
 
-        if src_images is not None:
-            visual_encoder_out = self.visual_encoder(src_images)
-            # print('visual encoder out shape', visual_encoder_out['encoder_out'].shape)
-            visual_encoder_out['encoder_out'] = visual_encoder_out['encoder_out'].view(b, t, self.args.image_embed_dim)
-            # print('visual encoder out RESHAPE', visual_encoder_out['encoder_out'].shape)
-
-        # cv2.imwrite(self.image_samples_path + '/word_' + src_word[idx] + '_' + str(index) + '_' + str(idx) + '.png', img)
-        encoder_out = self.encoder(src_tokens, src_lengths)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out)
-        # decoder_out['source_embedding_out'] = encoder_out['embedding_out']
         return decoder_out
+
+
+
+class VisualWordTransformerEncoder(VisualFairseqEncoder):
+    """
+    Transformer encoder consisting of *args.encoder_layers* layers. Each layer
+    is a :class:`VisualWordTransformerEncoderLayer`.
+
+    Args:
+        args (argparse.Namespace): parsed command-line arguments
+        dictionary (~fairseq.data.Dictionary): encoding dictionary
+        embed_tokens (torch.nn.Embedding): input embedding
+        left_pad (bool, optional): whether the input is left-padded
+            (default: True).
+    """
+
+    def __init__(self, args, dictionary, embed_tokens, 
+                 input_channels=3, input_line_height=30,
+                 input_line_width=200, maxpool_ratio_height=0.5,
+                 maxpool_ratio_width=0.7, kernel_size_2d=3, stride_2d=1,
+                 padding_2d=1, output_dim=512,      
+                 left_pad=False):
+        super().__init__(dictionary)
+        assert not left_pad
+        self.dropout = args.dropout
+
+        embed_dim = embed_tokens.embedding_dim
+        self.padding_idx = embed_tokens.padding_idx
+        self.max_source_positions = args.max_source_positions
+
+        self.embed_tokens = embed_tokens
+        self.embed_scale = math.sqrt(embed_dim)
+        self.embed_positions = PositionalEmbedding(
+            args.max_source_positions, embed_dim, self.padding_idx,
+            left_pad=left_pad,
+            learned=args.encoder_learned_pos,
+        ) if not args.no_token_positional_embeddings else None
+
+        self.visual_encoder = ImageWordEncoder(
+            dictionary=dictionary,
+            input_channels=input_channels,
+            input_line_height=input_line_height,
+            input_line_width=input_line_width,
+            maxpool_ratio_height=maxpool_ratio_height,
+            maxpool_ratio_width=maxpool_ratio_width,
+            kernel_size_2d=kernel_size_2d,
+            stride_2d=stride_2d,
+            padding_2d=padding_2d,
+            output_dim=output_dim
+            )
+
+    def forward(self, src_images, src_tokens, src_lengths):
+        """
+        Args:
+            src_tokens (LongTensor): tokens in the source language of shape
+                `(batch, src_len)`
+            src_lengths (torch.LongTensor): lengths of each source sentence of
+                shape `(batch)`
+
+        Returns:
+            dict:
+                - **encoder_out** (Tensor): the last encoder layer's output of
+                  shape `(src_len, batch, embed_dim)`
+                - **encoder_padding_mask** (ByteTensor): the positions of
+                  padding elements of shape `(batch, src_len)`
+        """
+        # embed tokens and positions
+        if src_tokens.dim() == 3:
+            assert src_tokens.size(2) == 1
+            src_tokens = src_tokens.squeeze(2)
+        x = self.embed_scale * self.embed_tokens(src_tokens)
+        if self.embed_positions is not None:
+            x += self.embed_positions(src_tokens)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+
+        # B x T x C -> T x B x C
+        x = x.transpose(0, 1)
+
+        # compute padding mask
+        encoder_padding_mask = src_tokens.eq(self.padding_idx)
+        if not encoder_padding_mask.any():
+            encoder_padding_mask = None
+
+        
+        b, t, c, h, w = src_images.shape
+        encode_fc = self.visual_encoder(src_images) # B X T X C
+         # B x T x C -> T x B x C
+        encode_fc = encode_fc.transpose(0, 1)
+        
+        return {
+            'encoder_out': encode_fc,  # T x B x C
+            'encoder_padding_mask': encoder_padding_mask,  # B x T
+        }
+
+    def reorder_encoder_out(self, encoder_out, new_order):
+        """
+        Reorder encoder output according to *new_order*.
+
+        Args:
+            encoder_out: output from the ``forward()`` method
+            new_order (LongTensor): desired order
+
+        Returns:
+            *encoder_out* rearranged according to *new_order*
+        """
+        if encoder_out['encoder_out'] is not None:
+            encoder_out['encoder_out'] = \
+                encoder_out['encoder_out'].index_select(1, new_order)
+        if encoder_out['encoder_padding_mask'] is not None:
+            encoder_out['encoder_padding_mask'] = \
+                encoder_out['encoder_padding_mask'].index_select(0, new_order)
+        return encoder_out
+
+    def max_positions(self):
+        """Maximum input length supported by the encoder."""
+        if self.embed_positions is None:
+            return self.max_source_positions
+        return min(self.max_source_positions, self.embed_positions.max_positions())
+
+    def upgrade_state_dict_named(self, state_dict, name):
+        """Upgrade a (possibly old) state dict for new versions of fairseq."""
+        if isinstance(self.embed_positions, SinusoidalPositionalEmbedding):
+            weights_key = '{}.embed_positions.weights'.format(name)
+            if weights_key in state_dict:
+                del state_dict[weights_key]
+            state_dict['{}.embed_positions._float_tensor'.format(name)] = torch.FloatTensor(1)
+        version_key = '{}.version'.format(name)
+        if utils.item(state_dict.get(version_key, torch.Tensor([1]))[0]) < 2:
+            # earlier checkpoints did not normalize after the stack of layers
+            self.layer_norm = None
+            self.normalize = False
+            state_dict[version_key] = torch.Tensor([1])
+        return state_dict
 
 
 @register_model_architecture('visual_transformer', 'visual_transformer')

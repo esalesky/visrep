@@ -9,6 +9,7 @@ from collections import Counter
 import os
 
 import torch
+from fairseq.tokenizer import tokenize_line
 
 
 class Dictionary(object):
@@ -186,7 +187,7 @@ class Dictionary(object):
             if idx == -1:
                 raise ValueError("Incorrect dictionary format, expected '<token> <cnt>'")
             word = line[:idx]
-            count = int(line[idx+1:])
+            count = int(line[idx + 1:])
             d.indices[word] = len(d.symbols)
             d.symbols.append(word)
             d.count.append(count)
@@ -205,6 +206,26 @@ class Dictionary(object):
         t = torch.Tensor(length).uniform_(self.nspecial + 1, len(self)).long()
         t[-1] = self.eos()
         return t
+
+    def encode_line(self, line, line_tokenizer=tokenize_line, add_if_not_exist=True,
+                    consumer=None, append_eos=True, reverse_order=False):
+        words = line_tokenizer(line)
+        if reverse_order:
+            words = list(reversed(words))
+        nwords = len(words)
+        ids = torch.IntTensor(nwords + 1 if append_eos else nwords)
+
+        for i, word in enumerate(words):
+            if add_if_not_exist:
+                idx = self.add_symbol(word)
+            else:
+                idx = self.index(word)
+            if consumer is not None:
+                consumer(word, idx)
+            ids[i] = idx
+        if append_eos:
+            ids[nwords] = self.eos_index
+        return ids
 
 
 class TruncatedDictionary(object):

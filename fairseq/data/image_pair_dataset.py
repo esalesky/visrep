@@ -159,23 +159,14 @@ class ImagePairDataset(FairseqDataset):
     def __getitem__(self, index):
         # This is a list of words
         tgt_item = self.tgt[index] if self.tgt is not None else None
-        # src_item, src_word, src_line, src_img_list, src_img_width = self.src[index]
-        src_item, src_word, src_line, src_img_list = self.src[index]
+        src_item, src_img_list = self.src[index]
 
         src_images = []
         for src_img in src_img_list:
             src_img = np.array(src_img)
-            # print('src_image before transpose', src_img.shape)
-            # src_img = np.transpose(src_img, (2, 0, 1))  # HWC -> CHW
-            # print('src_image AFTER transpose', src_img.shape)
             if self.transform is not None:
-                # print('transform')
                 src_img = self.transform(src_img)
-            # print('src_image transform', src_img.shape)
             src_images.append(src_img)
-        # src_images = np.concatenate(src_images, axis=None)
-
-        # print('..orig source at 0 and -1', src_item[0], src_item[-1])
 
         if self.append_eos_to_target:
             eos = self.tgt_dict.eos() if self.tgt_dict else self.src_dict.eos()
@@ -187,11 +178,6 @@ class ImagePairDataset(FairseqDataset):
             if self.src[index][-1] == eos:
                 src_item = self.src[index][:-1]
 
-        # print('..id ', index)
-        # print('..source len', src_item.shape)
-        # print('..target len', tgt_item.shape)
-        # print('..src img len', len(src_images), src_images[0].shape)
-
         sample = {
             'id': index,
             'source': src_item,
@@ -199,7 +185,6 @@ class ImagePairDataset(FairseqDataset):
             'source_image': src_images,
         }
 
-        # print('sample', sample)
         return sample
 
     def __len__(self):
@@ -242,49 +227,20 @@ class ImagePairDataset(FairseqDataset):
 
     def get_dummy_batch(self, num_tokens, max_positions, src_len=128, tgt_len=128):
         """Return a dummy batch with a given number of tokens."""
-        index = 0
-        tgt_item = self.tgt[index] if self.tgt is not None else None
-        src_item, src_word, src_line, src_img_list = self.src[index]
 
-        # print('DUMMY DUMMY')
-        # print(src_item)
-        # print(src_word)
-        src_images = []
-        for src_img in src_img_list:
-            src_img = np.array(src_img)
-            # print('src_image before transpose', src_img.shape)
-            # src_img = np.transpose(src_img, (2, 0, 1))  # HWC -> CHW
-            # print('src_image AFTER transpose', src_img.shape)
-            if self.transform is not None:
-                # print('transform')
-                src_img = self.transform(src_img)
-            # print('src_image transform', src_img.shape)
-            src_images.append(src_img)
-        # print('')
-        # src_images = np.concatenate(src_images, axis=0)
+        eos = self.src_dict.eos()
 
         bsz = 16
-#         samples_batch = [
-#             {
-#                 'id': index,
-#                 'source': src_item,
-#                 'target': tgt_item,
-#                 'source_image': src_images,
-#             }
-#             for i in range(bsz)
-#         ]
-
+        src_id = 1
+        src_item = torch.cat([torch.ones(8, dtype=torch.int64), torch.LongTensor([eos])])
+        tgt_item = torch.cat([torch.ones(8, dtype=torch.int64), torch.LongTensor([eos])])
+        src_images = torch.ones(9, self.image_channel, self.image_height, self.image_width, dtype=torch.int64)
         samples_batch = {
-            'id': index,
+            'id': src_id,
             'source': src_item,
             'target': tgt_item,
             'source_image': src_images,
         }
-
-        # print('..id', index)
-        # print('..source len', src_item.shape)
-        # print('..target len', tgt_item.shape)
-        # print('..src img len', len(src_images), src_images[0].shape)
 
         return self.collater([samples_batch for i in range(bsz)])
 
