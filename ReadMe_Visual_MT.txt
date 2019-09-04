@@ -41,5 +41,3 @@ It looks like the robust branch updated preprocessing to add [num_feats] as a pa
 which is written in to the .bin files (see preprocess.py and tokenizer.py).
 Adding a parameter to indexed_dataset.py and indexed_image_dataset.py called 
 [flatten].  Parameter is passed in translation.py. 
-
-
