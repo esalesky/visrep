@@ -23,6 +23,8 @@ from fairseq.data import (
     LanguagePairDataset,
     ImagePairDataset,
     ImageAug,
+    GaussianBlurAug,
+    EdgeDetectAug,
 )
 
 from . import FairseqTask, register_task
@@ -83,6 +85,10 @@ class TranslationTask(FairseqTask):
                             help='Font path')
         parser.add_argument('--image-font-size', default=16, type=int,
                             help='Font size')
+        parser.add_argument('--image-font-color', default='black', type=str,
+                            help='Font color')
+        parser.add_argument('--image-bkg-color', default='white', type=str,
+                            help='Background color')
         parser.add_argument('--image-channels', default=3, type=int,
                             help='image channels')
         parser.add_argument('--image-width', default=30, type=int,
@@ -107,11 +113,26 @@ class TranslationTask(FairseqTask):
         parser.add_argument('--image-embed-dim', default=512, type=int,
                             help='image embedding dimension')
 
-        parser.add_argument("--augment", action='store_true',
+        parser.add_argument("--image-rand-augment", action='store_true',
                             default=False, help="Add image aug library")
         parser.add_argument('--image-verbose', action='store_true',
                             help='image verbose output')
+        parser.add_argument("--image-rand-font", action='store_true',
+                            default=False, help="Select random font from list")
+        parser.add_argument("--image-rand-style", action='store_true',
+                            default=False, help="Select random font style")
 
+        parser.add_argument("--image-use-cache", action='store_true',
+                            default=False, help="Use image caching")
+
+        parser.add_argument("--image-gaussianblur", action='store_true',
+                            default=False, help="Add GaussianBlur")
+        parser.add_argument('--image-gaussianblur-sigma', default=0.0, type=float,
+                            help='Image aug GaussianBlur sigma')
+        parser.add_argument("--image-edgedetect", action='store_true',
+                            default=False, help="Add Edge Detection")
+        parser.add_argument('--image-edgedetect-alpha', default=0.0, type=float,
+                            help='Image aug EdgeDetect alpha')
         # fmt: on
 
     @staticmethod
@@ -154,6 +175,7 @@ class TranslationTask(FairseqTask):
             raise Exception('Could not infer language pair, please provide it explicitly')
 
         # load dictionaries
+        print('....loading...', os.path.join(args.data[0], 'dict.{}.txt'.format(args.source_lang)))
         src_dict = cls.load_dictionary(os.path.join(args.data[0], 'dict.{}.txt'.format(args.source_lang)))
         tgt_dict = cls.load_dictionary(os.path.join(args.data[0], 'dict.{}.txt'.format(args.target_lang)))
         assert src_dict.pad() == tgt_dict.pad()
@@ -181,32 +203,30 @@ class TranslationTask(FairseqTask):
             return False
 
         def indexed_dataset(path, dictionary, is_src=False):
-            if self.args.image_type is not None and is_src:
-                print('Image_type %s' % (self.args.image_type))
-                if self.args.raw_text:
-                    print('...raw image text')
-                    if self.args.image_type == 'word':
-                        return IndexedImageWordDataset(path, dictionary,
-                                    self.args.image_verbose,
-                                    self.args.image_font_path, self.args.image_font_size,
-                                    self.args.image_width, self.args.image_height)
+            if self.args.image_type is not None:
+                print('Image_type %s, is src %s' % (self.args.image_type, is_src))
+                if not is_src:
+                    print('...binary image text TGT')
+                    if self.args.lazy_load:
+                        return IndexedDataset(path, fix_lua_indexing=True, flatten=True)
                     else:
-                        return IndexedImageLineDataset(path, dictionary,
-                                                       self.args.image_verbose,
-                                                       self.args.image_font_path, self.args.image_font_size,
-                                                       self.args.image_width, self.args.image_height)
+                        return IndexedCachedDataset(path, fix_lua_indexing=True, flatten=True)
                 else:
-                    print('...binary image text')
+                    print('...binary image text SRC')
                     if self.args.lazy_load:
                         return IndexedImageDataset(path, dictionary,
                                     self.args.image_verbose,
-                                    self.args.image_font_path, self.args.image_font_size,
-                                    self.args.image_width, self.args.image_height)
+                                    self.args.image_font_path, self.args.image_font_size, self.args.image_font_color, self.args.image_bkg_color,
+                                    self.args.image_width, self.args.image_height, fix_lua_indexing=True, flatten=True,
+                                    image_use_cache=self.args.image_use_cache,
+                                    image_rand_font=self.args.image_rand_font, image_rand_style=self.args.image_rand_style)
                     else:
                         return IndexedImageCachedDataset(path, dictionary,
                                     self.args.image_verbose,
-                                    self.args.image_font_path, self.args.image_font_size,
-                                    self.args.image_width, self.args.image_height)
+                                    self.args.image_font_path, self.args.image_font_size, self.args.image_font_color, self.args.image_bkg_color,
+                                    self.args.image_width, self.args.image_height, fix_lua_indexing=True, flatten=True,
+                                    image_use_cache=self.args.image_use_cache,
+                                    image_rand_font=self.args.image_rand_font, image_rand_style=self.args.image_rand_style)
 
             elif self.args.raw_text:
                 return IndexedRawTextDataset(path, dictionary)
@@ -261,7 +281,7 @@ class TranslationTask(FairseqTask):
         if self.args.image_type != None:
             print('loading ImagePairDataset', split)
 
-            transform = transforms.Compose([
+            simple_transform = transforms.Compose([
                 transforms.ToTensor(),
             ])
 
@@ -269,8 +289,29 @@ class TranslationTask(FairseqTask):
                 ImageAug(),
                 transforms.ToTensor(),
             ])
-            if self.args.augment:
+
+            blur_transform = transforms.Compose([
+                GaussianBlurAug(self.args.image_gaussianblur_sigma),
+                transforms.ToTensor(),
+            ])
+
+            edge_transform = transforms.Compose([
+                EdgeDetectAug(self.args.image_edgedetect_alpha),
+                transforms.ToTensor(),
+            ])
+
+            if self.args.image_rand_augment:
+                print('...USING random transform')
                 transform = aug_transform
+            elif self.args.image_gaussianblur:
+                print('...USING gaussian blur')
+                transform = blur_transform
+            elif self.args.image_edgedetect:
+                print('...USING edge detect')
+                transform = edge_transform
+            else:
+                print('...USING simple_transform')
+                transform = simple_transform
 
             self.datasets[split] = ImagePairDataset(
                 src_dataset, src_dataset.sizes, self.src_dict,

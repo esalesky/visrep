@@ -213,7 +213,9 @@ class VisualWordFConvEncoder(VisualFairseqEncoder):
         input_embedding = x
 
         b, t, c, h, w = src_images.shape
+        # print('VisualWordFConvEncoder forward input b {} t {} c {} h {} w {} '.format(b, t, c, h, w))
         encode_fc = self.visual_encoder(src_images)
+        # print('VisualWordFConvEncoder forward output {}'.format(encode_fc.shape))
         encode_fc_y = (encode_fc + input_embedding) * math.sqrt(0.5)
         encode_fc_y = encode_fc_y.view(b, t, self.output_dim)
 

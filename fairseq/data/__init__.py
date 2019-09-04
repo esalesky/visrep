@@ -24,7 +24,7 @@ from .token_block_dataset import TokenBlockDataset
 from .transform_eos_dataset import TransformEosDataset
 from .ocr_dataset import OCRDataset
 from .json_dictionary import JSONDictionary
-from .augment import ImageAug
+from .augment import ImageAug, GaussianBlurAug, EdgeDetectAug
 
 from .iterators import (
     CountingIterator,
@@ -60,4 +60,6 @@ __all__ = [
     'JSONDictionary',
     'OCREpochBatchIterator',
     'ImageAug',
+    'GaussianBlurAug',
+    'EdgeDetectAug',
 ]

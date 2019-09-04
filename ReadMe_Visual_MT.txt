@@ -1,39 +1,22 @@
 
-2019-08-23
+2019-09-04
 
-Example Translation FConv
-================================
-python /expscratch/detter/src/fairseq-ocr/train.py \
-/expscratch/detter/mt/iwslt14.tokenized.de-en/bin \
---source-lang=de \
---target-lang=en \
---user-dir=/expscratch/detter/src/fairseq-ocr \
---task=translation \
---arch=visual_fconv_iwslt_de_en \
---lr=0.25 \
---clip-norm=0.1 \
---dropout=0.1 \
---max-tokens=1024 \
---criterion=label_smoothed_cross_entropy \
---label-smoothing=0.1 \
---save-dir=/expscratch/detter/mt/latest/ckpt_fconv_visual_bin \
---num-workers=16 \
---image-type=word \
---image-font-path=/expscratch/detter/fonts/mt.txt \
---image-font-size=16 \
---image-embed-dim=256 \
---image-channels=3 \
---image-height=30 \
---image-width=120 \
---image-stride=1 \
---image-pad=1 \
---image-kernel=3 \
---image-maxpool-height=0.5 \
---image-maxpool-width=0.7 \
---image-verbose \
---image-samples-path=/expscratch/detter/mt/latest/samples/fconv/word
+The robust Fairseq codebase uses image representations of source text for machine translation.
+Recent updates include train-time generation of source words into images, OCR style visual word encoder,
+and a visual fully convolutional model.
+
+Main code components:
+Task      - tasks/translation.py [load_dataset] - calls IndexedImageDataset.py to load source as image
+Data load - data/indexed_image_dataset.py - loads source text and calls image_generator.py to make images
+Model     - models/visual_foncv.py and visual_transformer.py - Builds encoder/decoder model. Calls image_encoder.py to encoder word images.
 
 
+To run:  (See grid_scripts)
+
+
+Input/Output Shapes
+
+Fully convolutional
 Normal FConv input   - batch, tokens                            torch.Size([16, 29])  
                      - batch                                    tensor([29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29], 
 Visual FConv forward - batch, tokens, channels, height, width   torch.Size([16, 29, 3, 30, 120])
@@ -43,50 +26,20 @@ Reshape              - batch, tokens, features                  torch.Size([16, 
 FConv encoder output - batch, tokens, features                  torch.Size([16, 29, 256])
                      - batch, tokens, features                  torch.Size([16, 29, 256])
                      - batch, tokens                            encoder_padding_mask None
-                     
-                     
-Example Translation Transformer 
-================================
-python /expscratch/detter/src/fairseq-ocr/train.py \
-/expscratch/detter/mt/iwslt14.tokenized.de-en/bin \
---source-lang=de \
---target-lang=en \
---user-dir=/expscratch/detter/src/fairseq-ocr \
---task=translation \
---arch=visual_transformer_iwslt_de_en \
---share-decoder-input-output-embed \
---optimizer=adam \
---adam-betas='(0.9, 0.98)' \
---clip-norm=0.0 \
---lr=5e-4 \
---lr-scheduler=inverse_sqrt \
---warmup-updates=4000 \
---dropout=0.3 \
---weight-decay=0.0001 \
---criterion=label_smoothed_cross_entropy \
---label-smoothing=0.1 \
---max-tokens=1024 \
---save-dir=/expscratch/detter/mt/latest/ckpt_trans_visual \
---num-workers=16 \
---image-type=word \
---image-font-path=/expscratch/detter/fonts/mt.txt \
---image-font-size=16 \
---image-embed-dim=512 \
---image-channels=3 \
---image-height=30 \
---image-width=100 \
---image-stride=1 \
---image-pad=1 \
---image-kernel=3 \
---image-maxpool-height=0.5 \
---image-maxpool-width=0.7 \
---image-verbose \
---image-samples-path=/expscratch/detter/mt/latest/samples/fconv/word
 
+Transformer
 Normal Trans Encode input  - batch, tokens              src_tokens torch.Size([8, 84])  
                              batch                      src_lengths torch.Size([8])
 Normal Trans Encode output - tokens, batch, features    encoder_out torch.Size([84, 8, 512]) 
                              batch, tokens              encoder_padding_mask None
-                 
 
-                 
+
+
+Comments/Issues:
+
+It looks like the robust branch updated preprocessing to add [num_feats] as a parameter 
+which is written in to the .bin files (see preprocess.py and tokenizer.py).
+Adding a parameter to indexed_dataset.py and indexed_image_dataset.py called 
+[flatten].  Parameter is passed in translation.py. 
+
+

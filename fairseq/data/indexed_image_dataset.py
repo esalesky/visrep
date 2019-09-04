@@ -66,7 +66,7 @@ class IndexedImageWordDataset(torch.utils.data.Dataset):
                                               image_width, image_height)
 
     def read_data(self, path, dictionary):
-        print('IndexedImageWordDataset loading data %s' % (path))
+        # print('IndexedImageWordDataset loading data %s' % (path))
         drop_cnt = 0
         with open(path, 'r', encoding='utf-8') as f:
             for line_ctr, line in enumerate(f):
@@ -106,7 +106,7 @@ class IndexedImageWordDataset(torch.utils.data.Dataset):
             img_data_list.append(img_data)
 
         return self.tokens_list[i], img_data_list
-        
+
     def get_original_text(self, i):
         self.check_index(i)
         return self.lines[i]
@@ -126,12 +126,14 @@ class IndexedImageDataset(torch.utils.data.Dataset):
     """Loader for TorchNet IndexedDataset"""
 
     def __init__(self, path, dictionary, image_verbose=False,
-                 image_font_path=None, image_font_size=16,
-                 image_width=150, image_height=30,
-                 word_encoder=True, append_eos=True, reverse_order=False):
+                 image_font_path=None, image_font_size=16, image_font_color='white',
+                 image_bkg_color='black', image_width=150, image_height=30,
+                 word_encoder=True, append_eos=True, reverse_order=False,
+                 fix_lua_indexing=False, flatten=False, image_use_cache=True,
+                 image_rand_font=False, image_rand_style=False):
         super().__init__()
-        print('init IndexedImageDataset')
-        # self.fix_lua_indexing = fix_lua_indexing
+        self.fix_lua_indexing = fix_lua_indexing
+        self.flatten = flatten
         self.read_index(path)
         self.data_file = None
 
@@ -140,10 +142,15 @@ class IndexedImageDataset(torch.utils.data.Dataset):
         print('dict len', self.dictionary.__len__())
         self.image_verbose = image_verbose
         self.image_generator = ImageGenerator(image_font_path, image_font_size,
-                                              image_width, image_height)
+                                              image_font_color, image_bkg_color,
+                                              image_width, image_height,
+                                              image_rand_font=image_rand_font,
+                                              image_rand_style=image_rand_style)
         self.word_encoder = word_encoder
         self.append_eos = append_eos
         self.reverse_order = reverse_order
+        self.image_use_cache = image_use_cache
+        self.image_cache = {}
 
     def read_index(self, path):
         with open(index_file_path(path), 'rb') as f:
@@ -178,12 +185,27 @@ class IndexedImageDataset(torch.utils.data.Dataset):
         a = np.empty(tensor_size, dtype=self.dtype)
         self.data_file.seek(self.data_offsets[i] * self.element_size)
         self.data_file.readinto(a)
-        item = torch.from_numpy(a).long()
 
-        img_data_list = []
-        token_list = [len(a)]
+        if self.flatten:
+            a = a.flatten()
+
+        item = torch.from_numpy(a).long()
+        if self.fix_lua_indexing:
+            item -= 1  # subtract 1 for 0-based indexing
+
+        img_data_list = []  # item.size()[0], item.size()[1]]
         for idx, id in enumerate(a):
-            img_data, img_data_width = self.image_generator.get_default_image(self.dictionary[id])
+            if self.fix_lua_indexing:
+                id = id - 1
+            word = self.dictionary[id]
+            if self.image_use_cache:
+                if word in self.image_cache:
+                    img_data = self.image_cache[word]
+                else:
+                    img_data, img_data_width = self.image_generator.get_default_image(word)
+                    self.image_cache[word] = img_data
+            else:
+                img_data, img_data_width = self.image_generator.get_default_image(word)
             img_data_list.append(img_data)
 
         return item, img_data_list
@@ -206,16 +228,20 @@ class IndexedImageDataset(torch.utils.data.Dataset):
 class IndexedImageCachedDataset(IndexedImageDataset):
 
     def __init__(self, path, dictionary, image_verbose=False,
-                 image_font_path=None, image_font_size=16,
-                 image_width=150, image_height=30,
-                 word_encoder=True, append_eos=True, reverse_order=False):
+                 image_font_path=None, image_font_size=16, image_font_color='white',
+                 image_bkg_color='black', image_width=150, image_height=30,
+                 word_encoder=True, append_eos=True, reverse_order=False,
+                 fix_lua_indexing=False, flatten=False, image_use_cache=True,
+                 image_rand_font=False, image_rand_style=False):
 
         super().__init__(path, dictionary, image_verbose,
-                 image_font_path, image_font_size,
-                 image_width, image_height,
-                 word_encoder, append_eos, reverse_order)
+                 image_font_path, image_font_size, image_font_color,
+                 image_bkg_color, image_width, image_height,
+                 word_encoder, append_eos, reverse_order,
+                 fix_lua_indexing=fix_lua_indexing, flatten=flatten,
+                 image_use_cache=image_use_cache,
+                 image_rand_font=False, image_rand_style=False)
 
-        print('init IndexedImageCachedDataset')
         self.cache = None
         self.cache_index = {}
 
@@ -244,18 +270,33 @@ class IndexedImageCachedDataset(IndexedImageDataset):
             ptx += size
 
     def __getitem__(self, i):
-        # print('getitme', i)
         self.check_index(i)
         tensor_size = self.sizes[self.dim_offsets[i]:self.dim_offsets[i + 1]]
         a = np.empty(tensor_size, dtype=self.dtype)
         ptx = self.cache_index[i]
+
         np.copyto(a, self.cache[ptx: ptx + a.size].reshape(a.shape))
+        if self.flatten:
+            a = a.flatten()
         item = torch.from_numpy(a).long()
 
-        img_data_list = []
-        token_list = [len(a)]
+        if self.fix_lua_indexing:
+            item -= 1  # subtract 1 for 0-based indexing
+
+        img_data_list = []  # item.size()[0], item.size()[1]]
         for idx, id in enumerate(a):
-            img_data, img_data_width = self.image_generator.get_default_image(self.dictionary[id])
+            if self.fix_lua_indexing:
+                id = id - 1
+            word = self.dictionary[id]
+            if self.image_use_cache:
+                if word in self.image_cache:
+                    img_data = self.image_cache[word]
+                else:
+                    img_data, img_data_width = self.image_generator.get_default_image(word)
+                    self.image_cache[word] = img_data
+            else:
+                img_data, img_data_width = self.image_generator.get_default_image(word)
+
             img_data_list.append(img_data)
 
         return item, img_data_list
@@ -282,7 +323,7 @@ class IndexedImageLineDataset(torch.utils.data.Dataset):
         with open(path, 'r', encoding='utf-8') as f:
             for line in f:
                 self.lines.append(line.strip('\n'))
- 
+
                 words = tokenize_line(line)
                 self.word_list.append(words)
 
@@ -290,7 +331,7 @@ class IndexedImageLineDataset(torch.utils.data.Dataset):
                     line, dictionary, add_if_not_exist=False,
                     append_eos=self.append_eos, reverse_order=self.reverse_order,
                 ).long()
- 
+
                 self.tokens_list.append(tokens)
                 self.sizes.append(len(tokens))
         self.sizes = np.array(self.sizes)
