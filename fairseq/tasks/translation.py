@@ -218,6 +218,7 @@ class TranslationTask(FairseqTask):
                                     self.args.image_verbose,
                                     self.args.image_font_path, self.args.image_font_size, self.args.image_font_color, self.args.image_bkg_color,
                                     self.args.image_width, self.args.image_height, fix_lua_indexing=True, flatten=True,
+                                    image_samples_path=self.args.image_samples_path,
                                     image_use_cache=self.args.image_use_cache,
                                     image_rand_font=self.args.image_rand_font, image_rand_style=self.args.image_rand_style)
                     else:
@@ -225,6 +226,7 @@ class TranslationTask(FairseqTask):
                                     self.args.image_verbose,
                                     self.args.image_font_path, self.args.image_font_size, self.args.image_font_color, self.args.image_bkg_color,
                                     self.args.image_width, self.args.image_height, fix_lua_indexing=True, flatten=True,
+                                    image_samples_path=self.args.image_samples_path,
                                     image_use_cache=self.args.image_use_cache,
                                     image_rand_font=self.args.image_rand_font, image_rand_style=self.args.image_rand_style)
 

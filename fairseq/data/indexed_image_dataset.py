@@ -1,6 +1,9 @@
 
+import cv2
+
 import os
 import struct
+import sys
 
 import numpy as np
 import torch
@@ -130,7 +133,8 @@ class IndexedImageDataset(torch.utils.data.Dataset):
                  image_bkg_color='black', image_width=150, image_height=30,
                  word_encoder=True, append_eos=True, reverse_order=False,
                  fix_lua_indexing=False, flatten=False, image_use_cache=True,
-                 image_rand_font=False, image_rand_style=False):
+                 image_rand_font=False, image_rand_style=False,
+                 image_samples_path=None):
         super().__init__()
         self.fix_lua_indexing = fix_lua_indexing
         self.flatten = flatten
@@ -146,11 +150,23 @@ class IndexedImageDataset(torch.utils.data.Dataset):
                                               image_width, image_height,
                                               image_rand_font=image_rand_font,
                                               image_rand_style=image_rand_style)
+        self.image_samples_path = image_samples_path
         self.word_encoder = word_encoder
         self.append_eos = append_eos
         self.reverse_order = reverse_order
         self.image_use_cache = image_use_cache
         self.image_cache = {}
+
+        if self.image_samples_path:
+            image_dir = os.path.join(self.image_samples_path, 'dict')
+            if not os.path.exists(image_dir):
+                os.makedirs(image_dir)
+            print(f'* Dumping {len(dictionary)} word images to {image_dir}', file=sys.stderr)
+            for index in range(len(dictionary)):
+                word = dictionary[index]
+                image, image_width = self.image_generator.get_default_image(word)
+                image_path = os.path.join(image_dir, f'{index}_{word}.png')
+                cv2.imwrite(image_path, image)
 
     def read_index(self, path):
         with open(index_file_path(path), 'rb') as f:
@@ -232,7 +248,8 @@ class IndexedImageCachedDataset(IndexedImageDataset):
                  image_bkg_color='black', image_width=150, image_height=30,
                  word_encoder=True, append_eos=True, reverse_order=False,
                  fix_lua_indexing=False, flatten=False, image_use_cache=True,
-                 image_rand_font=False, image_rand_style=False):
+                 image_rand_font=False, image_rand_style=False,
+                 image_samples_path=None):
 
         super().__init__(path, dictionary, image_verbose,
                  image_font_path, image_font_size, image_font_color,
@@ -240,7 +257,8 @@ class IndexedImageCachedDataset(IndexedImageDataset):
                  word_encoder, append_eos, reverse_order,
                  fix_lua_indexing=fix_lua_indexing, flatten=flatten,
                  image_use_cache=image_use_cache,
-                 image_rand_font=False, image_rand_style=False)
+                 image_rand_font=False, image_rand_style=False,
+                 image_samples_path=image_samples_path)
 
         self.cache = None
         self.cache_index = {}
