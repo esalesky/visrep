@@ -50,6 +50,8 @@ class ImageGenerator():
         pygame.freetype.init()
         pygame.freetype.set_default_resolution(self.dpi)
 
+        self.max_width = 0
+
     def get_font_list(self, font_file_path):
         fontlist = []
         fontcnt = 0
@@ -148,13 +150,17 @@ class ImageGenerator():
         # print(img_data.shape[:2])
 
         ''' Resize or pad image '''
-        if img_width > self.image_width:
-            img_data = self.image_resize(img_data, width=self.image_width)
-        img_height, img_width = img_data.shape[:2]
+        # if img_width > self.image_width:
+        #     img_data = self.image_resize(img_data, width=self.image_width)
+        # img_height, img_width = img_data.shape[:2]
 
-        if img_height > self.image_height:
-            img_data = self.image_resize(img_data, height=self.image_height)
-        img_height, img_width = img_data.shape[:2]
+        # if img_height > self.image_height:
+        #     img_data = self.image_resize(img_data, height=self.image_height)
+        # img_height, img_width = img_data.shape[:2]
+
+        if img_width > self.max_width:
+            print(f'NEW MAX WIDTH FOR {line_text} = {img_height} x {img_width}')
+            self.max_width = img_width
 
         assert (img_height <= self.image_height), \
             ("Current height %d, must be less than %d" % (
