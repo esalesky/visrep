@@ -159,14 +159,16 @@ class IndexedImageDataset(torch.utils.data.Dataset):
 
         if self.image_samples_path:
             image_dir = os.path.join(self.image_samples_path, 'dict')
-            if not os.path.exists(image_dir):
+            if os.path.exists('dict'):
+                print(f'* Not Dumping dictionary since {image_dir} exists', file=sys.stderr)
+            else:
                 os.makedirs(image_dir)
-            print(f'* Dumping {len(dictionary)} word images to {image_dir}', file=sys.stderr)
-            for index in range(len(dictionary)):
-                word = dictionary[index]
-                image, image_width = self.image_generator.get_default_image(word)
-                image_path = os.path.join(image_dir, f'{index}_{word}.png')
-                cv2.imwrite(image_path, image)
+                print(f'* Dumping {len(dictionary)} word images to {image_dir}', file=sys.stderr)
+                for index in range(len(dictionary)):
+                    word = dictionary[index]
+                    image, image_width = self.image_generator.get_default_image(word)
+                    image_path = os.path.join(image_dir, f'{index}_{word}.png')
+                    cv2.imwrite(image_path, image)
 
     def read_index(self, path):
         with open(index_file_path(path), 'rb') as f:
