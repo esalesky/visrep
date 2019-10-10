@@ -57,7 +57,8 @@ class VisualFConvModel(FairseqVisualModel):
         self.args = args
         if not os.path.exists(args.image_samples_path):
             os.makedirs(args.image_samples_path)
-        self.encoder.num_attention_layers = sum(layer is not None for layer in decoder.attention)
+        self.encoder.num_attention_layers = sum(
+            layer is not None for layer in decoder.attention)
 
     @staticmethod
     def add_args(parser):
@@ -96,12 +97,14 @@ class VisualFConvModel(FairseqVisualModel):
         encoder_embed_dict = None
         if args.encoder_embed_path:
             encoder_embed_dict = utils.parse_embedding(args.encoder_embed_path)
-            utils.print_embed_overlap(encoder_embed_dict, task.source_dictionary)
+            utils.print_embed_overlap(
+                encoder_embed_dict, task.source_dictionary)
 
         decoder_embed_dict = None
         if args.decoder_embed_path:
             decoder_embed_dict = utils.parse_embedding(args.decoder_embed_path)
-            utils.print_embed_overlap(decoder_embed_dict, task.target_dictionary)
+            utils.print_embed_overlap(
+                decoder_embed_dict, task.target_dictionary)
 
         encoder = VisualWordFConvEncoder(
             dictionary=task.source_dictionary,
@@ -153,14 +156,14 @@ class VisualFConvModel(FairseqVisualModel):
             the decoder's output, typically of shape `(batch, tgt_len, vocab)`
         """
 
-        if self.args.image_verbose:
-            b, t, c, h, w = src_images.shape
-            for ctr in range(len(src_images[0])):
-                token_id = src_tokens[0][ctr].cpu()
-                word = self.encoder.dictionary.__getitem__(int(token_id))
-                image = np.uint8(src_images[0][ctr].cpu().squeeze()).transpose((1, 2, 0)) * 255
-                outimage = self.args.image_samples_path + '/word_' + str(int(token_id)) + '_' + str(word) + '.png'
-                cv2.imwrite(outimage, image)
+        # if self.args.image_verbose:
+        #     b, t, c, h, w = src_images.shape
+        #     for ctr in range(len(src_images[0])):
+        #         token_id = src_tokens[0][ctr].cpu()
+        #         word = self.encoder.dictionary.__getitem__(int(token_id))
+        #         image = np.uint8(src_images[0][ctr].cpu().squeeze()).transpose((1, 2, 0)) * 255
+        #         outimage = self.args.image_samples_path + '/word_' + str(int(token_id)) + '_' + str(word) + '.png'
+        #         cv2.imwrite(outimage, image)
 
         visual_encoder_out = self.encoder(src_images, src_tokens, src_lengths)
         decoder_out = self.decoder(prev_output_tokens, visual_encoder_out)
@@ -183,9 +186,11 @@ class VisualWordFConvEncoder(VisualFairseqEncoder):
 
         num_embeddings = len(dictionary)
         self.padding_idx = dictionary.pad()
-        self.embed_tokens = Embedding(num_embeddings, output_dim, self.padding_idx)
+        self.embed_tokens = Embedding(
+            num_embeddings, output_dim, self.padding_idx)
         if embed_dict:
-            self.embed_tokens = utils.load_embedding(embed_dict, dictionary, self.embed_tokens)
+            self.embed_tokens = utils.load_embedding(
+                embed_dict, dictionary, self.embed_tokens)
 
         self.embed_positions = PositionalEmbedding(
             max_positions,
@@ -205,7 +210,7 @@ class VisualWordFConvEncoder(VisualFairseqEncoder):
             stride_2d=stride_2d,
             padding_2d=padding_2d,
             output_dim=output_dim
-            )
+        )
 
     def forward(self, src_images, src_tokens, src_lengths):
         x = self.embed_tokens(src_tokens) + self.embed_positions(src_tokens)
@@ -246,7 +251,8 @@ def base_architecture(args):
     args.decoder_layers = getattr(args, 'decoder_layers', '[(512, 3)] * 20')
     args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 256)
     args.decoder_attention = getattr(args, 'decoder_attention', 'True')
-    args.share_input_output_embed = getattr(args, 'share_input_output_embed', False)
+    args.share_input_output_embed = getattr(
+        args, 'share_input_output_embed', False)
 
 
 @register_model_architecture('visual_fconv', 'visual_fconv_iwslt_de_en')
@@ -257,4 +263,3 @@ def fconv_iwslt_de_en(args):
     args.decoder_layers = getattr(args, 'decoder_layers', '[(256, 3)] * 3')
     args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 256)
     base_architecture(args)
-
