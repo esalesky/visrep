@@ -28,7 +28,7 @@ class ImageDataset(Dataset):
         self.pad_bottom = [0, 2, 4, 6, 8]
         self.pad_left = [0, 2, 4, 6, 8]
         self.pad_right = [0, 2, 4, 6, 8]
-        self.font_size = [6, 8, 10, 14, 18, 24, 32]
+        self.font_size = [10, 14, 18, 24, 32]
         self.font_color = ['black']
         self.bkg_color = ['white']
 
