@@ -42,7 +42,7 @@ def parse_arguments(argv):
         default=128)
     parser.add_argument(
         "--epochs", type=int, help="Nbr epochs",
-        default=500)
+        default=1000)
     parser.add_argument(
         "--num_workers", type=int, help="Nbr dataset workers",
         default=16)
@@ -93,8 +93,8 @@ def main(args):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     train_transform = transforms.Compose([
-        transforms.ToPILImage(),
-        # ImageAug(),
+        # transforms.ToPILImage(),
+        ImageAug(),
         transforms.ToTensor(),
     ])
     train_dataset = ImageDataset(text_file_path=args.input, font_file_path=args.font,
@@ -109,11 +109,11 @@ def main(args):
     ])
     valid_dataset = ImageDataset(text_file_path=args.input, font_file_path=args.valid_font,
                                  image_height=args.image_height, image_width=args.image_width,
-                                 transform=valid_transform,
+                                 default_image=True, transform=valid_transform,
                                  label_dict=train_dataset.label_dict,
                                  rev_label_dict=train_dataset.rev_label_dict)
     validloader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size,
-                                              shuffle=True, num_workers=4)
+                                              shuffle=False, num_workers=0)
 
     model = ResNet(dim=512, nbr_classes=len(
         train_dataset.label_dict), extract='avgpool').to(device)
@@ -149,11 +149,11 @@ def main(args):
 
             if i % 10 == 0 and i > 0:
                 print("Epoch: %d (%d/%d), Batch Size: %d, Loss: %f, LR: %f, ex/sec: %.1f, sec/batch: %.2f" % (
-                    epoch + 1, i + 1 % len(trainloader),
+                    epoch, i + 1 % len(trainloader),
                     len(trainloader), len(inputs), loss.item(),
                     get_lr(optimizer), examples_per_sec, sec_per_batch))
 
-            if epoch == 0 and i < 3:
+            if epoch == 0 and i < 10:
                 image_list = inputs.cpu().numpy()
                 label_list = labels.cpu().numpy()
                 for img_idx, img in enumerate(inputs):
@@ -161,9 +161,14 @@ def main(args):
                         image_list[img_idx, :].squeeze().transpose((1, 2, 0)) * 255)
                     label_name = str(
                         train_dataset.rev_label_dict[label_list[img_idx].squeeze()])
-                    outpath = samples_train_output + '/' + label_name + \
-                        '_' + str(i) + '_' + str(img_idx) + '.png'
-                    cv2.imwrite(outpath, image)
+
+                    #outpath = samples_train_output + '/' + label_name
+                    # if not os.path.exists(outpath):
+                    #    os.makedirs(outpath)
+                    # outpath = samples_train_output + '/' + label_name + \
+                    #    '_' + str(i) + '_' + str(img_idx) + '.png'
+                    cv2.imwrite(samples_train_output + '/' + label_name +
+                                '_' + str(epoch) + '_' + str(i) + '_' + str(img_idx) + '.png', image)
 
         if epoch % 10 == 0 and epoch > 0:
             valid_cnt += 1
@@ -191,7 +196,7 @@ def main(args):
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
 
-                    if valid_cnt == 1 and i < 3:
+                    if valid_cnt == 1 and i < 10:
                         image_list = inputs.cpu().numpy()
                         label_list = labels.cpu().numpy()
                         for img_idx, img in enumerate(inputs):

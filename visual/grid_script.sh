@@ -24,7 +24,7 @@ echo $PYTHONPATH
 echo $CUDA_VISIBLE_DEVICES
 nvidia-smi
 
-EXP_DIR=/expscratch/detter/mt/visual
+EXP_DIR=/expscratch/detter/mt/visual3
 DICT=/exp/mpost/mtocr19/data/mttt/de-en/fairseq_binary/dict.de.txt
 TRAIN_FONT=/expscratch/detter/fonts/mt/train_font.txt
 VALID_FONT=/expscratch/detter/fonts/mt/valid_font.txt

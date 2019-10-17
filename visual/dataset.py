@@ -11,7 +11,7 @@ class ImageDataset(Dataset):
                  surf_width=1500, surf_height=250,
                  start_x=50, start_y=50, dpi=120,
                  image_height=128, image_width=32,
-                 use_cache=False, mod_cache=2,
+                 use_cache=False, mod_cache=2, default_image=False,
                  transform=None, label_dict=None, rev_label_dict=None):
 
         pygame.freetype.init()
@@ -44,6 +44,7 @@ class ImageDataset(Dataset):
             self.label_dict, self.rev_label_dict = self.build_dictionary()
 
         self.counter = 0
+        self.default_image = default_image
         # self.image_cache = {}
         # self.use_cache = use_cache
         # self.mod_cache = mod_cache
@@ -196,9 +197,10 @@ class ImageDataset(Dataset):
         if font_rotate:
             font.rotation = font_rotate
         else:
-            font_rotate = random.choice(self.font_rotation)
             if font_rotate != 0:
-                font.rotation = font_rotate
+                font_rotate_val = random.choice(self.font_rotation)
+                if font_rotate != 0:
+                    font.rotation = font_rotate_val
 
         if bkg_color:
             surf.fill(pygame.color.THECOLORS[bkg_color])
@@ -263,8 +265,15 @@ class ImageDataset(Dataset):
         #        cv_resize_image = self.image_cache[idx]
         # else:
         #print(seed_text, seed_id)
-        cv_image = self.get_image(seed_text,
-                                  font_color='black', bkg_color='white')
+        if self.default_image:
+            cv_image = self.get_image(seed_text,
+                                      font_name=self.font_list[0], font_size=16, font_style=1,
+                                      font_color='black', bkg_color='white', font_rotate=0,
+                                      pad_top=5, pad_bottom=5, pad_left=5, pad_right=5)
+        else:
+            cv_image = self.get_image(seed_text,
+                                      font_color='black', bkg_color='white')
+
         cv_resize_image = self.resize_or_pad(
             cv_image, self.image_width, self.image_height)
         # print(cv_resize_image.shape) # (32, 128, 3) H, W, C
