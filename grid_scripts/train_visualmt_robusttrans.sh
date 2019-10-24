@@ -6,7 +6,7 @@
 # qsub -v PATH -S /bin/bash -b y -q gpu.q@@1080 -cwd -j y -N transedge1 -l num_proc=16,mem_free=32G,h_rt=48:00:00,gpu=1 /expscratch/detter/src/fairseq-ocr/grid_scripts/train_visualmt_robusttrans.sh
 #
 #
-# Train Robust Transformer model
+# Train Robust Transformer model (character-aware model)
 #
 
 module load cuda10.0/toolkit/10.0.130
@@ -70,6 +70,7 @@ $DATA_DIR \
 --robust-embedder-resource=$ROBUST_EMB \
 --edge-threshold=0.075 \
 --save-dir=$CKPT_DIR \
+--share-all-embeddings \
 --num-workers 0
                
                

@@ -39,6 +39,7 @@ python $FAIRSEQ_PATH/preprocess.py \
 --validpref=$DATA_DIR/ted_dev_en-zh.sp \
 --testpref=$DATA_DIR/ted_test1_en-zh.sp \
 --destdir=$RESULT_DIR \
---workers=$NBR_WORKERS
+--workers=$NBR_WORKERS \
+--joined-dictionary
 
 #--output-format=$OUT_FORMAT

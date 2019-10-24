@@ -6,7 +6,7 @@
 # qsub -v PATH -S /bin/bash -b y -q gpu.q@@1080 -cwd -j y -N fconv1 -l num_proc=16,mem_free=32G,h_rt=48:00:00,gpu=1 /expscratch/detter/src/fairseq-ocr/grid_scripts/train_visualmt_fconv.sh
 #
 #
-# Train Visual Fully Convolutional Model
+# Train Visual Fully Convolutional Model (the OCR model)
 #
 
 module load cuda10.0/toolkit/10.0.130
@@ -83,6 +83,7 @@ $DATA_DIR \
 --image-use-cache \
 --image-font-color='black' \
 --image-bkg-color='white' \
+--share-all-embeddings \
 --num-workers=4
 
 #--image-rand-augment \
