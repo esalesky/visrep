@@ -1,15 +1,13 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
+import numpy as np
 import torch
 
 from fairseq import tokenizer
 from fairseq.data import data_utils, FairseqDataset, iterators, Dictionary
-from fairseq.tokenizer import Tokenizer
 
 
 class FairseqTask(object):
@@ -26,6 +24,7 @@ class FairseqTask(object):
     def __init__(self, args):
         self.args = args
         self.datasets = {}
+        self.dataset_to_epoch_iter = {}
 
     @classmethod
     def load_dictionary(cls, filename):
@@ -52,7 +51,7 @@ class FairseqTask(object):
         """
         d = Dictionary()
         for filename in filenames:
-            Tokenizer.add_file_to_dictionary(filename, d, tokenizer.tokenize_line, workers)
+            Dictionary.add_file_to_dictionary(filename, d, tokenizer.tokenize_line, workers)
         d.finalize(threshold=threshold, nwords=nwords, padding_factor=padding_factor)
         return d
 
@@ -63,7 +62,7 @@ class FairseqTask(object):
         Args:
             args (argparse.Namespace): parsed command-line arguments
         """
-        return cls(args)
+        return cls(args, **kwargs)
 
     def load_dataset(self, split, combine=False, **kwargs):
         """Load a given dataset split.
@@ -91,9 +90,9 @@ class FairseqTask(object):
         return self.datasets[split]
 
     def get_batch_iterator(
-            self, dataset, max_tokens=None, max_sentences=None, max_positions=None,
-            ignore_invalid_inputs=False, required_batch_size_multiple=1,
-            seed=1, num_shards=1, shard_id=0, num_workers=0,
+        self, dataset, max_tokens=None, max_sentences=None, max_positions=None,
+        ignore_invalid_inputs=False, required_batch_size_multiple=1,
+        seed=1, num_shards=1, shard_id=0, num_workers=0, epoch=0,
     ):
         """
         Get an iterator that yields batches of data from the given dataset.
@@ -119,21 +118,32 @@ class FairseqTask(object):
             num_workers (int, optional): how many subprocesses to use for data
                 loading. 0 means the data will be loaded in the main process
                 (default: 0).
-
+            epoch (int, optional): the epoch to start the iterator from
+                (default: 0).
         Returns:
             ~fairseq.iterators.EpochBatchIterator: a batched iterator over the
                 given dataset split
         """
+        # For default fairseq task, return same iterator across epochs
+        # as datasets are not dynamic, can be overridden in task specific
+        # setting.
+        if dataset in self.dataset_to_epoch_iter:
+            return self.dataset_to_epoch_iter[dataset]
+
         assert isinstance(dataset, FairseqDataset)
+
+        # initialize the dataset with the correct starting epoch
+        dataset.set_epoch(epoch)
 
         # get indices ordered by example size
         with data_utils.numpy_seed(seed):
             indices = dataset.ordered_indices()
 
         # filter examples that are too large
-        indices = data_utils.filter_by_size(
-            indices, dataset.size, max_positions, raise_exception=(not ignore_invalid_inputs),
-        )
+        if max_positions is not None:
+            indices = data_utils.filter_by_size(
+                indices, dataset, max_positions, raise_exception=(not ignore_invalid_inputs),
+            )
 
         # create mini-batches with given size constraints
         batch_sampler = data_utils.batch_by_size(
@@ -142,7 +152,7 @@ class FairseqTask(object):
         )
 
         # return a reusable, sharded iterator
-        return iterators.EpochBatchIterator(
+        epoch_iter = iterators.EpochBatchIterator(
             dataset=dataset,
             collate_fn=dataset.collater,
             batch_sampler=batch_sampler,
@@ -150,7 +160,10 @@ class FairseqTask(object):
             num_shards=num_shards,
             shard_id=shard_id,
             num_workers=num_workers,
+            epoch=epoch,
         )
+        self.dataset_to_epoch_iter[dataset] = epoch_iter
+        return epoch_iter
 
     def build_model(self, args):
         """
@@ -180,6 +193,35 @@ class FairseqTask(object):
         from fairseq import criterions
         return criterions.build_criterion(args, self)
 
+    def build_generator(self, args):
+        if getattr(args, 'score_reference', False):
+            from fairseq.sequence_scorer import SequenceScorer
+            return SequenceScorer(self.target_dictionary)
+        else:
+            from fairseq.sequence_generator import SequenceGenerator, SequenceGeneratorWithAlignment
+            if getattr(args, 'print_alignment', False):
+                seq_gen_cls = SequenceGeneratorWithAlignment
+            else:
+                seq_gen_cls = SequenceGenerator
+            return seq_gen_cls(
+                self.target_dictionary,
+                beam_size=getattr(args, 'beam', 5),
+                max_len_a=getattr(args, 'max_len_a', 0),
+                max_len_b=getattr(args, 'max_len_b', 200),
+                min_len=getattr(args, 'min_len', 1),
+                normalize_scores=(not getattr(args, 'unnormalized', False)),
+                len_penalty=getattr(args, 'lenpen', 1),
+                unk_penalty=getattr(args, 'unkpen', 0),
+                sampling=getattr(args, 'sampling', False),
+                sampling_topk=getattr(args, 'sampling_topk', -1),
+                sampling_topp=getattr(args, 'sampling_topp', -1.0),
+                temperature=getattr(args, 'temperature', 1.),
+                diverse_beam_groups=getattr(args, 'diverse_beam_groups', -1),
+                diverse_beam_strength=getattr(args, 'diverse_beam_strength', 0.5),
+                match_source_len=getattr(args, 'match_source_len', False),
+                no_repeat_ngram_size=getattr(args, 'no_repeat_ngram_size', 0),
+            )
+
     def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
         """
         Do forward and backward, and return the loss as computed by *criterion*
@@ -201,7 +243,6 @@ class FairseqTask(object):
                 - logging outputs to display while training
         """
         model.train()
-
         loss, sample_size, logging_output = criterion(model, sample)
         if ignore_grad:
             loss *= 0
@@ -214,17 +255,20 @@ class FairseqTask(object):
             loss, sample_size, logging_output = criterion(model, sample)
         return loss, sample_size, logging_output
 
-    def init_logging_output(self, sample):
-        return {
-            'ntokens': sample['ntokens'] if sample is not None else 0,
-            'nsentences': sample['target'].size(0) if sample is not None else 0,
-        }
+    def inference_step(self, generator, models, sample, prefix_tokens=None):
+        with torch.no_grad():
+            return generator.generate(models, sample, prefix_tokens=prefix_tokens)
+
+    def update_step(self, num_updates):
+        """Task level update when number of update increases. This is called after optimization step and
+           learning rate update of each step"""
+        pass
 
     def grad_denom(self, sample_sizes, criterion):
         return criterion.__class__.grad_denom(sample_sizes)
 
     def aggregate_logging_outputs(self, logging_outputs, criterion):
-        return criterion._aggregate_logging_outputs(logging_outputs)
+        return criterion.__class__.aggregate_logging_outputs(logging_outputs)
 
     def max_positions(self):
         """Return the max input length allowed by the task."""

@@ -1,24 +1,18 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import numpy as np
 import torch
-import cv2
-
-from fairseq import utils
 
 from . import data_utils, FairseqDataset
 
 
 def collate(
-    samples, pad_idx, eos_idx, left_pad_source=False, left_pad_target=False,
+    samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False,
     input_feeding=True,
 ):
-    assert not left_pad_source
     if len(samples) == 0:
         return {}
 
@@ -27,11 +21,33 @@ def collate(
             [s[key] for s in samples],
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
         )
+
+    def check_alignment(alignment, src_len, tgt_len):
+        if alignment is None or len(alignment) == 0:
+            return False
+        if alignment[:, 0].max().item() >= src_len - 1 or alignment[:, 1].max().item() >= tgt_len - 1:
+            print("| alignment size mismatch found, skipping alignment!")
+            return False
+        return True
+
+    def compute_alignment_weights(alignments):
+        """
+        Given a tensor of shape [:, 2] containing the source-target indices
+        corresponding to the alignments, a weight vector containing the
+        inverse frequency of each target index is computed.
+        For e.g. if alignments = [[5, 7], [2, 3], [1, 3], [4, 2]], then
+        a tensor containing [1., 0.5, 0.5, 1] should be returned (since target
+        index 3 is repeated twice)
+        """
+        align_tgt = alignments[:, 1]
+        _, align_tgt_i, align_tgt_c = torch.unique(align_tgt, return_inverse=True, return_counts=True)
+        align_weights = align_tgt_c[align_tgt_i[np.arange(len(align_tgt))]]
+        return 1. / align_weights.float()
+
     id = torch.LongTensor([s['id'] for s in samples])
     src_tokens = merge('source', left_pad=left_pad_source)
     # sort by descending source length
-    #src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
-    src_lengths = torch.LongTensor([s['source'].size(0) for s in samples])
+    src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
     src_lengths, sort_order = src_lengths.sort(descending=True)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
@@ -41,6 +57,7 @@ def collate(
     if samples[0].get('target', None) is not None:
         target = merge('target', left_pad=left_pad_target)
         target = target.index_select(0, sort_order)
+        tgt_lengths = torch.LongTensor([s['target'].numel() for s in samples]).index_select(0, sort_order)
         ntokens = sum(len(s['target']) for s in samples)
 
         if input_feeding:
@@ -65,10 +82,34 @@ def collate(
         },
         'target': target,
     }
-    #print('collate', batch)
-    
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
+
+    if samples[0].get('alignment', None) is not None:
+        bsz, tgt_sz = batch['target'].shape
+        src_sz = batch['net_input']['src_tokens'].shape[1]
+
+        offsets = torch.zeros((len(sort_order), 2), dtype=torch.long)
+        offsets[:, 1] += (torch.arange(len(sort_order), dtype=torch.long) * tgt_sz)
+        if left_pad_source:
+            offsets[:, 0] += (src_sz - src_lengths)
+        if left_pad_target:
+            offsets[:, 1] += (tgt_sz - tgt_lengths)
+
+        alignments = [
+            alignment + offset
+            for align_idx, offset, src_len, tgt_len in zip(sort_order, offsets, src_lengths, tgt_lengths)
+            for alignment in [samples[align_idx]['alignment'].view(-1, 2)]
+            if check_alignment(alignment, src_len, tgt_len)
+        ]
+
+        if len(alignments) > 0:
+            alignments = torch.cat(alignments, dim=0)
+            align_weights = compute_alignment_weights(alignments)
+
+            batch['alignments'] = alignments
+            batch['align_weights'] = align_weights
+
     return batch
 
 
@@ -94,20 +135,23 @@ class LanguagePairDataset(FairseqDataset):
         shuffle (bool, optional): shuffle dataset elements before batching
             (default: True).
         input_feeding (bool, optional): create a shifted version of the targets
-            to be passed into the model for input feeding/teacher forcing
-            (default: True).
+            to be passed into the model for teacher forcing (default: True).
         remove_eos_from_source (bool, optional): if set, removes eos from end
             of source if it's present (default: False).
         append_eos_to_target (bool, optional): if set, appends eos to end of
             target if it's absent (default: False).
+        align_dataset (torch.utils.data.Dataset, optional): dataset
+            containing alignments.
     """
 
     def __init__(
         self, src, src_sizes, src_dict,
         tgt=None, tgt_sizes=None, tgt_dict=None,
-        left_pad_source=False, left_pad_target=False,
+        left_pad_source=True, left_pad_target=False,
         max_source_positions=1024, max_target_positions=1024,
-        shuffle=True, input_feeding=True, remove_eos_from_source=False, append_eos_to_target=False,
+        shuffle=True, input_feeding=True,
+        remove_eos_from_source=False, append_eos_to_target=False,
+        align_dataset=None,
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
@@ -116,20 +160,7 @@ class LanguagePairDataset(FairseqDataset):
         self.src = src
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
-        src_alt = self.src_sizes[np.arange(1, len(self.src_sizes), 2)]
-        src_feat = np.all(src_alt == src_alt[0])
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
-        tgt_alt = self.tgt_sizes[np.arange(1, len(self.tgt_sizes), 2)] if tgt_sizes is not None else None
-        tgt_feat = np.all(tgt_alt == tgt_alt[0]) if tgt_sizes is not None else False
-        if src_feat:
-            #print('multiple features in src dectected...')
-            self.src_sizes = self.src_sizes[np.arange(0, len(src_sizes), 2)]
-            #print('final sizes', self.src_sizes)
-        if tgt_feat:
-            #print('multiple features in tgt dectected...')
-            self.tgt_sizes = self.tgt_sizes[np.arange(0, len(tgt_sizes), 2)]
-        ##print(len(self.src_sizes), len(self.tgt_sizes))
-
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
         self.left_pad_source = left_pad_source
@@ -140,6 +171,9 @@ class LanguagePairDataset(FairseqDataset):
         self.input_feeding = input_feeding
         self.remove_eos_from_source = remove_eos_from_source
         self.append_eos_to_target = append_eos_to_target
+        self.align_dataset = align_dataset
+        if self.align_dataset is not None:
+            assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
 
     def __getitem__(self, index):
         tgt_item = self.tgt[index] if self.tgt is not None else None
@@ -157,14 +191,15 @@ class LanguagePairDataset(FairseqDataset):
             eos = self.src_dict.eos()
             if self.src[index][-1] == eos:
                 src_item = self.src[index][:-1]
-                
-        sample = {
+
+        example = {
             'id': index,
             'source': src_item,
             'target': tgt_item,
         }
-        #print('LanguagePairDataset.__getitem__', index, sample)
-        return sample
+        if self.align_dataset is not None:
+            example['alignment'] = self.align_dataset[index]
+        return example
 
     def __len__(self):
         return len(self.src)
@@ -188,10 +223,10 @@ class LanguagePairDataset(FairseqDataset):
                   - `src_lengths` (LongTensor): 1D Tensor of the unpadded
                     lengths of each source sentence of shape `(bsz)`
                   - `prev_output_tokens` (LongTensor): a padded 2D Tensor of
-                    tokens in the target sentence, shifted right by one position
-                    for input feeding/teacher forcing, of shape `(bsz,
-                    tgt_len)`. This key will not be present if *input_feeding*
-                    is ``False``. Padding will appear on the left if
+                    tokens in the target sentence, shifted right by one
+                    position for teacher forcing, of shape `(bsz, tgt_len)`.
+                    This key will not be present if *input_feeding* is
+                    ``False``.  Padding will appear on the left if
                     *left_pad_target* is ``True``.
 
                 - `target` (LongTensor): a padded 2D Tensor of tokens in the
@@ -204,32 +239,10 @@ class LanguagePairDataset(FairseqDataset):
             input_feeding=self.input_feeding,
         )
 
-    def get_dummy_batch(self, num_tokens, max_positions, src_len=128, tgt_len=128):
-        """Return a dummy batch with a given number of tokens."""
-        src_len, tgt_len = utils.resolve_max_positions(
-            (src_len, tgt_len),
-            max_positions,
-            (self.max_source_positions, self.max_target_positions),
-        )
-        bsz = max(num_tokens // max(src_len, tgt_len), 1)
-        return self.collater([
-            {
-                'id': i,
-                'source': self.src_dict.dummy_sentence(src_len),
-                'target': self.tgt_dict.dummy_sentence(tgt_len) if self.tgt_dict is not None else None,
-            }
-            for i in range(bsz)
-        ])
-
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
-        #print(index, 'src size', self.src_sizes[index], 'tgt size', self.tgt_sizes[index])
-        #return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
-        if self.tgt_sizes is None:
-            return self.src_sizes[index]
-        else:
-            return self.tgt_sizes[index]
+        return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
@@ -251,10 +264,12 @@ class LanguagePairDataset(FairseqDataset):
     def supports_prefetch(self):
         return (
             getattr(self.src, 'supports_prefetch', False)
-            and getattr(self.tgt, 'supports_prefetch', False)
+            and (getattr(self.tgt, 'supports_prefetch', False) or self.tgt is None)
         )
 
     def prefetch(self, indices):
         self.src.prefetch(indices)
-        self.tgt.prefetch(indices)
-
+        if self.tgt is not None:
+            self.tgt.prefetch(indices)
+        if self.align_dataset is not None:
+            self.align_dataset.prefetch(indices)

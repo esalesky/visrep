@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 """
 BLEU scoring of generated translations against reference translations.
 """
@@ -13,7 +11,7 @@ import argparse
 import os
 import sys
 
-from fairseq import bleu, tokenizer
+from fairseq import bleu
 from fairseq.data import dictionary
 
 
@@ -28,6 +26,8 @@ def get_parser():
                         help='case-insensitive scoring')
     parser.add_argument('--sacrebleu', action='store_true',
                         help='score with sacrebleu')
+    parser.add_argument('--sentence-bleu', action='store_true',
+                        help='report sentence-level BLEUs (i.e., with +1 smoothing)')
     # fmt: on
     return parser
 
@@ -57,13 +57,23 @@ def main():
         def score(fdsys):
             with open(args.ref) as fdref:
                 print(sacrebleu.corpus_bleu(fdsys, [fdref]))
+    elif args.sentence_bleu:
+        def score(fdsys):
+            with open(args.ref) as fdref:
+                scorer = bleu.Scorer(dict.pad(), dict.eos(), dict.unk())
+                for i, (sys_tok, ref_tok) in enumerate(zip(readlines(fdsys), readlines(fdref))):
+                    scorer.reset(one_init=True)
+                    sys_tok = dict.encode_line(sys_tok)
+                    ref_tok = dict.encode_line(ref_tok)
+                    scorer.add(ref_tok, sys_tok)
+                    print(i, scorer.result_string(args.order))
     else:
         def score(fdsys):
             with open(args.ref) as fdref:
                 scorer = bleu.Scorer(dict.pad(), dict.eos(), dict.unk())
                 for sys_tok, ref_tok in zip(readlines(fdsys), readlines(fdref)):
-                    sys_tok = tokenizer.Tokenizer.tokenize(sys_tok, dict)
-                    ref_tok = tokenizer.Tokenizer.tokenize(ref_tok, dict)
+                    sys_tok = dict.encode_line(sys_tok)
+                    ref_tok = dict.encode_line(ref_tok)
                     scorer.add(ref_tok, sys_tok)
                 print(scorer.result_string(args.order))
 

@@ -1,20 +1,20 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 """
 A modified version of the legacy DistributedDataParallel module that uses c10d
-communication primitives. This is necessary for models that have conditional
-computation (e.g., AdaptiveSoftmax) and which therefore do not work with the
-c10d version of DDP.
+communication primitives. This version is simpler than the latest PyTorch
+version and is useful for debugging. Notably it does not overlap gradient
+communication with the backward pass, which makes it slower but more robust
+than the PyTorch version.
 
-This version also supports the *accumulate_grads* feature, which allows faster
+This version also supports the *no_sync* context manager, which allows faster
 training with `--update-freq`.
 """
 
+from contextlib import contextmanager
 import copy
 
 import torch
@@ -74,8 +74,15 @@ class LegacyDistributedDataParallel(nn.Module):
         super().__setstate__(state)
         self._register_grad_hook()
 
+    @contextmanager
+    def no_sync(self):
+        """A context manager to disable gradient synchronization."""
+        old_accumulate_grads = self.accumulate_grads
+        self.accumulate_grads = True
+        yield
+        self.accumulate_grads = old_accumulate_grads
+
     def forward(self, *inputs, **kwargs):
-        self.need_reduction = True
         return self.module(*inputs, **kwargs)
 
     def _register_grad_hook(self):
@@ -166,6 +173,7 @@ class LegacyDistributedDataParallel(nn.Module):
         for p in self.module.parameters():
 
             def allreduce_hook(*unused):
+                self.need_reduction = True
                 Variable._execution_engine.queue_callback(reduction_fn)
 
             if p.requires_grad:

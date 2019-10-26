@@ -1,17 +1,20 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+"""
+Base classes for various fairseq models.
+"""
+
 from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import FairseqDecoder, FairseqEncoder, VisualFairseqEncoder
+from fairseq import utils
 from fairseq.data import Dictionary
+from fairseq.models import FairseqDecoder, FairseqEncoder
 
 
 class BaseFairseqModel(nn.Module):
@@ -29,10 +32,8 @@ class BaseFairseqModel(nn.Module):
     @classmethod
     def build_model(cls, args, task):
         """Build a new model instance."""
-        raise NotImplementedError('FairseqModels must implement the build_model method')
-
-    def get_sources(self, sample):
-        return sample['source']
+        raise NotImplementedError(
+            'Model must implement the build_model method')
 
     def get_targets(self, sample, net_output):
         """Get targets from either the sample or the net's output."""
@@ -50,13 +51,13 @@ class BaseFairseqModel(nn.Module):
                 return F.softmax(logits, dim=-1)
         raise NotImplementedError
 
+    def extract_features(self, *args, **kwargs):
+        """Similar to *forward* but only return features."""
+        return self(*args, **kwargs)
+
     def max_positions(self):
         """Maximum length supported by the model."""
         return None
-
-    def max_decoder_positions(self):
-        """Maximum length supported by the decoder."""
-        return self.decoder.max_positions()
 
     def load_state_dict(self, state_dict, strict=True):
         """Copies parameters and buffers from *state_dict* into this module and
@@ -66,7 +67,7 @@ class BaseFairseqModel(nn.Module):
         this additionally "upgrades" *state_dicts* from old checkpoints.
         """
         self.upgrade_state_dict(state_dict)
-        super().load_state_dict(state_dict, strict)
+        return super().load_state_dict(state_dict, strict)
 
     def upgrade_state_dict(self, state_dict):
         """Upgrade old state dicts to work with newer code."""
@@ -140,8 +141,46 @@ class BaseFairseqModel(nn.Module):
 
         self.apply(apply_prepare_for_onnx_export_)
 
+    @classmethod
+    def from_pretrained(cls, model_name_or_path, checkpoint_file='model.pt', data_name_or_path='.', **kwargs):
+        """
+        Load a :class:`~fairseq.models.FairseqModel` from a pre-trained model
+        file. Downloads and caches the pre-trained model file if needed.
 
-class FairseqModel(BaseFairseqModel):
+        The base implementation returns a
+        :class:`~fairseq.hub_utils.GeneratorHubInterface`, which can be used to
+        generate translations or sample from language models. The underlying
+        :class:`~fairseq.models.FairseqModel` can be accessed via the
+        *generator.models* attribute.
+
+        Other models may override this to implement custom hub interfaces.
+
+        Args:
+            model_name_or_path (str): either the name of a pre-trained model to
+                load or a path/URL to a pre-trained model state dict
+            checkpoint_file (str, optional): colon-separated list of checkpoint
+                files in the model archive to ensemble (default: 'model.pt')
+            data_name_or_path (str, optional): point args.data to the archive
+                at the given path/URL. Can start with '.' or './' to reuse the
+                model archive path.
+        """
+        from fairseq import hub_utils
+        x = hub_utils.from_pretrained(
+            model_name_or_path,
+            checkpoint_file,
+            data_name_or_path,
+            archive_map=cls.hub_models(),
+            **kwargs,
+        )
+        print(x['args'])
+        return hub_utils.GeneratorHubInterface(x['args'], x['task'], x['models'])
+
+    @classmethod
+    def hub_models(cls):
+        return {}
+
+
+class FairseqEncoderDecoderModel(BaseFairseqModel):
     """Base class for encoder-decoder models.
 
     Args:
@@ -157,13 +196,13 @@ class FairseqModel(BaseFairseqModel):
         assert isinstance(self.encoder, FairseqEncoder)
         assert isinstance(self.decoder, FairseqDecoder)
 
-    def forward(self, src_tokens, src_lengths, prev_output_tokens):
+    def forward(self, src_tokens, src_lengths, prev_output_tokens, **kwargs):
         """
         Run the forward pass for an encoder-decoder model.
 
         First feed a batch of source tokens through the encoder. Then, feed the
-        encoder output and previous decoder outputs (i.e., input feeding/teacher
-        forcing) to the decoder to produce the next outputs::
+        encoder output and previous decoder outputs (i.e., teacher forcing) to
+        the decoder to produce the next outputs::
 
             encoder_out = self.encoder(src_tokens, src_lengths)
             return self.decoder(prev_output_tokens, encoder_out)
@@ -173,71 +212,64 @@ class FairseqModel(BaseFairseqModel):
                 `(batch, src_len)`
             src_lengths (LongTensor): source sentence lengths of shape `(batch)`
             prev_output_tokens (LongTensor): previous decoder outputs of shape
-                `(batch, tgt_len)`, for input feeding/teacher forcing
+                `(batch, tgt_len)`, for teacher forcing
 
         Returns:
-            the decoder's output, typically of shape `(batch, tgt_len, vocab)`
+            tuple:
+                - the decoder's output of shape `(batch, tgt_len, vocab)`
+                - a dictionary with any model-specific outputs
         """
-        encoder_out = self.encoder(src_tokens, src_lengths)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out)
-        #decoder_out['source_embedding_out'] = encoder_out['embedding_out']
+        encoder_out = self.encoder(
+            src_tokens, src_lengths=src_lengths, **kwargs)
+        decoder_out = self.decoder(
+            prev_output_tokens, encoder_out=encoder_out, **kwargs)
         return decoder_out
+
+    def forward_decoder(self, prev_output_tokens, **kwargs):
+        return self.decoder(prev_output_tokens, **kwargs)
+
+    def extract_features(self, src_tokens, src_lengths, prev_output_tokens, **kwargs):
+        """
+        Similar to *forward* but only return features.
+
+        Returns:
+            tuple:
+                - the decoder's features of shape `(batch, tgt_len, embed_dim)`
+                - a dictionary with any model-specific outputs
+        """
+        encoder_out = self.encoder(
+            src_tokens, src_lengths=src_lengths, **kwargs)
+        features = self.decoder.extract_features(
+            prev_output_tokens, encoder_out=encoder_out, **kwargs)
+        return features
+
+    def output_layer(self, features, **kwargs):
+        """Project features to the default output size (typically vocabulary size)."""
+        return self.decoder.output_layer(features, **kwargs)
 
     def max_positions(self):
         """Maximum length supported by the model."""
         return (self.encoder.max_positions(), self.decoder.max_positions())
 
+    def max_decoder_positions(self):
+        """Maximum length supported by the decoder."""
+        return self.decoder.max_positions()
 
-class FairseqVisualModel(BaseFairseqModel):
-    """Base class for encoder-decoder models.
 
-    Args:
-        encoder (FairseqEncoder): the encoder
-        decoder (FairseqDecoder): the decoder
-    """
+class FairseqModel(FairseqEncoderDecoderModel):
 
-    def __init__(self, encoder, decoder): #, visual_encoder=None):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        utils.deprecation_warning(
+            'FairseqModel is deprecated, please use FairseqEncoderDecoderModel '
+            'or BaseFairseqModel instead',
+            stacklevel=4,
+        )
 
-        self.encoder = encoder
-        self.decoder = decoder
-
-        assert isinstance(self.encoder, VisualFairseqEncoder)
-        assert isinstance(self.decoder, FairseqDecoder)
-
-    def forward(self, src_tokens, src_lengths,
-                prev_output_tokens, src_images):
-        """
-        Run the forward pass for an encoder-decoder model.
-
-        First feed a batch of source tokens through the encoder. Then, feed the
-        encoder output and previous decoder outputs (i.e., input feeding/teacher
-        forcing) to the decoder to produce the next outputs::
-
-            encoder_out = self.encoder(src_tokens, src_lengths)
-            return self.decoder(prev_output_tokens, encoder_out)
-
-        Args:
-            src_tokens (LongTensor): tokens in the source language of shape
-                `(batch, src_len)`
-            src_lengths (LongTensor): source sentence lengths of shape `(batch)`
-            prev_output_tokens (LongTensor): previous decoder outputs of shape
-                `(batch, tgt_len)`, for input feeding/teacher forcing
-
-        Returns:
-            the decoder's output, typically of shape `(batch, tgt_len, vocab)`
-        """
-
-        encoder_out = self.encoder(src_images, src_tokens, src_lengths)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out)
-        return decoder_out
-
-    def max_positions(self):
-        """Maximum length supported by the model."""
-        return (1e6, 1e6)
 
 class FairseqMultiModel(BaseFairseqModel):
     """Base class for combining multiple encoder-decoder models."""
+
     def __init__(self, encoders, decoders):
         super().__init__()
         assert encoders.keys() == decoders.keys()
@@ -283,17 +315,21 @@ class FairseqMultiModel(BaseFairseqModel):
             shared_dict, embed_dim, pretrained_embed_path
         )
 
-    def forward(self, src_tokens, src_lengths, prev_output_tokens):
+    def forward(self, src_tokens, src_lengths, prev_output_tokens, **kwargs):
         decoder_outs = {}
         for key in self.keys:
-            encoder_out = self.models[key].encoder(src_tokens, src_lengths)
-            decoder_outs[key] = self.models[key].decoder(prev_output_tokens, encoder_out)
+            encoder_out = self.models[key].encoder(
+                src_tokens, src_lengths, **kwargs)
+            decoder_outs[key] = self.models[key].decoder(
+                prev_output_tokens, encoder_out, **kwargs,
+            )
         return decoder_outs
 
     def max_positions(self):
         """Maximum length supported by the model."""
         return {
-            key: (self.models[key].encoder.max_positions(), self.models[key].decoder.max_positions())
+            key: (self.models[key].encoder.max_positions(),
+                  self.models[key].decoder.max_positions())
             for key in self.keys
         }
 
@@ -322,7 +358,7 @@ class FairseqLanguageModel(BaseFairseqModel):
         self.decoder = decoder
         assert isinstance(self.decoder, FairseqDecoder)
 
-    def forward(self, src_tokens, src_lengths):
+    def forward(self, src_tokens, **kwargs):
         """
         Run the forward pass for a decoder-only model.
 
@@ -334,18 +370,81 @@ class FairseqLanguageModel(BaseFairseqModel):
             src_lengths (LongTensor): source sentence lengths of shape `(batch)`
 
         Returns:
-            the decoder's output, typically of shape `(batch, seq_len, vocab)`
+            tuple:
+                - the decoder's output of shape `(batch, seq_len, vocab)`
+                - a dictionary with any model-specific outputs
         """
-        return self.decoder(src_tokens)
+        return self.decoder(src_tokens, **kwargs)
+
+    def forward_decoder(self, prev_output_tokens, **kwargs):
+        return self.decoder(prev_output_tokens, **kwargs)
+
+    def extract_features(self, src_tokens, **kwargs):
+        """
+        Similar to *forward* but only return features.
+
+        Returns:
+            tuple:
+                - the decoder's features of shape `(batch, seq_len, embed_dim)`
+                - a dictionary with any model-specific outputs
+        """
+        return self.decoder.extract_features(src_tokens, **kwargs)
+
+    def output_layer(self, features, **kwargs):
+        """Project features to the default output size (typically vocabulary size)."""
+        return self.decoder.output_layer(features, **kwargs)
 
     def max_positions(self):
         """Maximum length supported by the model."""
+        return self.decoder.max_positions()
+
+    def max_decoder_positions(self):
+        """Maximum length supported by the decoder."""
         return self.decoder.max_positions()
 
     @property
     def supported_targets(self):
         return {'future'}
 
-    def remove_head(self):
-        """Removes the head of the model (e.g. the softmax layer) to conserve space when it is not needed"""
-        raise NotImplementedError()
+
+class FairseqEncoderModel(BaseFairseqModel):
+    """Base class for encoder-only models.
+
+    Args:
+        encoder (FairseqEncoder): the encoder
+    """
+
+    def __init__(self, encoder):
+        super().__init__()
+        self.encoder = encoder
+        assert isinstance(self.encoder, FairseqEncoder)
+
+    def forward(self, src_tokens, src_lengths, **kwargs):
+        """
+        Run the forward pass for a encoder-only model.
+
+        Feeds a batch of tokens through the encoder to generate features.
+
+        Args:
+            src_tokens (LongTensor): input tokens of shape `(batch, src_len)`
+            src_lengths (LongTensor): source sentence lengths of shape `(batch)`
+
+        Returns:
+            the encoder's output, typically of shape `(batch, src_len, features)`
+        """
+        return self.encoder(src_tokens, src_lengths, **kwargs)
+
+    def get_normalized_probs(self, net_output, log_probs, sample=None):
+        """Get normalized probabilities (or log probs) from a net's output."""
+        encoder_out = net_output['encoder_out']
+        if torch.is_tensor(encoder_out):
+            logits = encoder_out.float()
+            if log_probs:
+                return F.log_softmax(logits, dim=-1)
+            else:
+                return F.softmax(logits, dim=-1)
+        raise NotImplementedError
+
+    def max_positions(self):
+        """Maximum length supported by the model."""
+        return self.encoder.max_positions()

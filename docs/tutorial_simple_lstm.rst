@@ -2,9 +2,9 @@ Tutorial: Simple LSTM
 =====================
 
 In this tutorial we will extend fairseq by adding a new
-:class:`~fairseq.models.FairseqModel` that encodes a source sentence with an
-LSTM and then passes the final hidden state to a second LSTM that decodes the
-target sentence (without attention).
+:class:`~fairseq.models.FairseqEncoderDecoderModel` that encodes a source
+sentence with an LSTM and then passes the final hidden state to a second LSTM
+that decodes the target sentence (without attention).
 
 This tutorial covers:
 
@@ -125,9 +125,9 @@ Decoder
 
 Our Decoder will predict the next word, conditioned on the Encoder's final
 hidden state and an embedded representation of the previous target word -- which
-is sometimes called *input feeding* or *teacher forcing*. More specifically,
-we'll use a :class:`torch.nn.LSTM` to produce a sequence of hidden states that
-we'll project to the size of the output vocabulary to predict each target word.
+is sometimes called *teacher forcing*. More specifically, we'll use a
+:class:`torch.nn.LSTM` to produce a sequence of hidden states that we'll project
+to the size of the output vocabulary to predict each target word.
 
 ::
 
@@ -171,7 +171,7 @@ we'll project to the size of the output vocabulary to predict each target word.
           """
           Args:
               prev_output_tokens (LongTensor): previous decoder outputs of shape
-                  `(batch, tgt_len)`, for input feeding/teacher forcing
+                  `(batch, tgt_len)`, for teacher forcing
               encoder_out (Tensor, optional): output from the encoder, used for
                   encoder-side attention
 
@@ -233,18 +233,18 @@ Once the model is registered we'll be able to use it with the existing
 All registered models must implement the
 :class:`~fairseq.models.BaseFairseqModel` interface. For sequence-to-sequence
 models (i.e., any model with a single Encoder and Decoder), we can instead
-implement the :class:`~fairseq.models.FairseqModel` interface.
+implement the :class:`~fairseq.models.FairseqEncoderDecoderModel` interface.
 
 Create a small wrapper class in the same file and register it in fairseq with
 the name ``'simple_lstm'``::
 
-  from fairseq.models import FairseqModel, register_model
+  from fairseq.models import FairseqEncoderDecoderModel, register_model
 
   # Note: the register_model "decorator" should immediately precede the
   # definition of the Model class.
 
   @register_model('simple_lstm')
-  class SimpleLSTMModel(FairseqModel):
+  class SimpleLSTMModel(FairseqEncoderDecoderModel):
 
       @staticmethod
       def add_args(parser):
@@ -308,7 +308,7 @@ the name ``'simple_lstm'``::
       # We could override the ``forward()`` if we wanted more control over how
       # the encoder and decoder interact, but it's not necessary for this
       # tutorial since we can inherit the default implementation provided by
-      # the FairseqModel base class, which looks like:
+      # the FairseqEncoderDecoderModel base class, which looks like:
       #
       # def forward(self, src_tokens, src_lengths, prev_output_tokens):
       #     encoder_out = self.encoder(src_tokens, src_lengths)
@@ -387,8 +387,8 @@ previous hidden states.
 
 In fairseq this is called :ref:`Incremental decoding`. Incremental decoding is a
 special mode at inference time where the Model only receives a single timestep
-of input corresponding to the immediately previous output token (for input
-feeding) and must produce the next output incrementally. Thus the model must
+of input corresponding to the immediately previous output token (for teacher
+forcing) and must produce the next output incrementally. Thus the model must
 cache any long-term state that is needed about the sequence, e.g., hidden
 states, convolutional states, etc.
 

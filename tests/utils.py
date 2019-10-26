@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import argparse
 import torch
@@ -13,8 +11,8 @@ from fairseq.data import Dictionary
 from fairseq.data.language_pair_dataset import collate
 from fairseq.models import (
     FairseqEncoder,
+    FairseqEncoderDecoderModel,
     FairseqIncrementalDecoder,
-    FairseqModel,
 )
 from fairseq.tasks import FairseqTask
 
@@ -154,7 +152,7 @@ class TestTranslationTask(FairseqTask):
         return self.tgt_dict
 
 
-class TestModel(FairseqModel):
+class TestModel(FairseqEncoderDecoderModel):
     def __init__(self, encoder, decoder):
         super().__init__(encoder, decoder)
 
@@ -170,7 +168,7 @@ class TestEncoder(FairseqEncoder):
         super().__init__(dictionary)
         self.args = args
 
-    def forward(self, src_tokens, src_lengths):
+    def forward(self, src_tokens, src_lengths=None, **kwargs):
         return src_tokens
 
     def reorder_encoder_out(self, encoder_out, new_order):
@@ -184,7 +182,7 @@ class TestIncrementalDecoder(FairseqIncrementalDecoder):
         args.max_decoder_positions = getattr(args, 'max_decoder_positions', 100)
         self.args = args
 
-    def forward(self, prev_output_tokens, encoder_out, incremental_state=None):
+    def forward(self, prev_output_tokens, encoder_out=None, incremental_state=None):
         if incremental_state is not None:
             prev_output_tokens = prev_output_tokens[:, -1:]
         bbsz = prev_output_tokens.size(0)

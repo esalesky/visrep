@@ -1,0 +1,96 @@
+
+
+2019-10-20
+
+/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/exp/fairseq/pretrain
+visual embedding load  2019-10-24
+| epoch 077 | loss 3.122 | nll_loss 1.531 | ppl 2.89 | wps 20444 | ups 6 | wpb 3435.131 | bsz 142.224 | num_updates 82621 | lr 0.000110016 | gnorm 1.177 | clip 0.000 | oom 0.000 | wall 14584 | train_wall 13742
+| epoch 077 | valid on 'valid' subset | loss 4.367 | nll_loss 2.833 | ppl 7.12 | num_updates 82621 | best_loss 4.28621
+Generate test with beam=5: BLEU4 = 37.33  visual
+
+/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/exp/fairseq/visualtrans
+
+
+
+de  (Kevin 32.74)
+Transformer - fairseq
+
+/expscratch/detter/mt/multitarget-ted/en-de/10000/raw
+/expscratch/detter/mt/multitarge
+
+| [de] dictionary: 10080 types
+| [en] dictionary: 10072 typest-ted/en-de/10000/exp/fairseq/trans
+| loaded 152606 examples from: /expscratch/detter/mt/multitarget-ted/en-de/10000/raw/train.de-en.de
+
+| epoch 190 | loss 2.787 | nll_loss 1.147 | ppl 2.21 | wps 15855 | ups 4 | wpb 3517.076 | bsz 145.616 | num_updates 199120 | lr 7.08668e-05 | gnorm 1.434 | clip 0.000 | oom 0.000 | wall 44932 | train_wall 43393
+| epoch 190 | valid on 'valid' subset | loss 4.580 | nll_loss 3.072 | ppl 8.41 | num_updates 199120 | best_loss 4.33716
+
+| Translated 1982 sentences (42768 tokens) in 24.2s (81.99 sentences/s, 1769.12 tokens/s)                                                              
+| Generate test with beam=5: BLEU4 = 37.23, 66.7/43.9/31.1/22.3 (BP=0.986, ratio=0.986, syslen=40786, reflen=41351)
+
+...
+
+| epoch 364 | loss 2.579 | nll_loss 0.914 | ppl 1.88 | wps 16079 | ups 5 | wpb 3517.076 | bsz 145.616 | num_updates 381472 | lr 5.11998e-05 | gnorm 1.717 | clip 0.000 | oom 0.000 | wall 85727 | train_wall 82950
+| epoch 364 | valid on 'valid' subset | loss 4.775 | nll_loss 3.298 | ppl 9.84 | num_updates 381472 | best_loss 4.33716
+
+| Translated 1982 sentences (42768 tokens) in 24.4s (81.11 sentences/s, 1750.20 tokens/s)                                                                             
+| Generate test with beam=5: BLEU4 = 37.23, 66.7/43.9/31.1/22.3 (BP=0.986, ratio=0.986, syslen=40786, reflen=41351)
+
+...
+
+| epoch 728 | loss 2.422 | nll_loss 0.740 | ppl 1.67 | wps 15926 | ups 4 | wpb 3517.076 | bsz 145.616 | num_updates 762944 | lr 3.62038e-05 | gnorm 2.199 | clip 0.000 | oom 0.000 | wall 171243 | train_wall 165771
+| epoch 728 | valid on 'valid' subset | loss 4.956 | nll_loss 3.507 | ppl 11.37 | num_updates 762944 | best_loss 4.33716
+
+| Translated 1982 sentences (42768 tokens) in 28.0s (70.82 sentences/s, 1528.17 tokens/s)                                                                      
+| Generate test with beam=5: BLEU4 = 37.23, 66.7/43.9/31.1/22.3 (BP=0.986, ratio=0.986, syslen=40786, reflen=41351)
+
+---------
+
+/expscratch/detter/mt/multitarget-ted/en-de/kevin/tok/raw
+/expscratch/detter/mt/multitarget-ted/en-de/kevin/tok/exp/fairseq/trans
+
+| [de] dictionary: 107072 types
+| [en] dictionary: 50232 types
+| loaded 151627 examples from: /expscratch/detter/mt/multitarget-ted/en-de/kevin/tok/raw/train.de-en.de
+
+| epoch 174 | loss 2.766 | nll_loss 0.907 | ppl 1.87 | wps 12432 | ups 3 | wpb 3712.685 | bsz 176.516 | num_updates 149466 | lr 8.17954e-05 | gnorm 1.343 | clip 0.000 | oom 0.000 | wall 45793 | train_wall 44076
+| epoch 174 | valid on 'valid' subset | loss 6.207 | nll_loss 4.702 | ppl 26.03 | num_updates 149466 | best_loss 5.09071
+
+| Translated 1982 sentences (37520 tokens) in 24.8s (79.88 sentences/s, 1512.08 tokens/s)                                                              
+| Generate test with beam=5: BLEU4 = 32.91, 65.9/40.5/26.9/18.2 (BP=0.973, ratio=0.974, syslen=35538, reflen=36499)
+
+===========================
+
+zh (Kevin 16.63) 
+
+/expscratch/detter/mt/multitarget-ted/en-zh/10000/raw
+/expscratch/detter/mt/multitarget-ted/en-zh/10000/exp/fairseq/trans
+
+| [zh] dictionary: 11152 types
+| [en] dictionary: 10080 types
+loaded 170341 examples from: /expscratch/detter/mt/multitarget-ted/en-zh/10000/raw/train.zh-en.zh
+
+| epoch 002 | loss 7.954 | nll_loss 7.083 | ppl 135.62 | wps 16600 | ups 4 | wpb 3629.815 | bsz 149.685 | num_updates 2276 | lr 0.0002845 | gnorm 1.174 | clip 0.000 | oom 0.000 | wall 565 | train_wall 484
+| epoch 002 | valid on 'valid' subset | loss 7.524 | nll_loss 6.533 | ppl 92.59 | num_updates 2276 | best_loss 7.52426
+
+| Translated 1982 sentences (79735 tokens) in 134.8s (14.70 sentences/s, 591.52 tokens/s)                                                              
+| Generate test with beam=5: BLEU4 = 1.19, 9.3/1.8/0.6/0.2 (BP=1.000, ratio=1.880, syslen=77753, reflen=41347)
+
+...
+
+| epoch 160 | loss 4.660 | nll_loss 3.248 | ppl 9.50 | wps 16326 | ups 4 | wpb 3629.815 | bsz 149.685 | num_updates 182080 | lr 7.41086e-05 | gnorm 1.847 | clip 0.000 | oom 0.000 | wall 39942 | train_wall 38631
+| epoch 160 | valid on 'valid' subset | loss 6.454 | nll_loss 5.219 | ppl 37.25 | num_updates 182080 | best_loss 6.16695
+
+| Translated 1982 sentences (55685 tokens) in 57.2s (34.66 sentences/s, 973.90 tokens/s)                                                                              
+| Generate test with beam=5: BLEU4 = 4.07, 23.3/5.8/2.3/0.9 (BP=1.000, ratio=1.299, syslen=53703, reflen=41347)
+
+...
+
+| epoch 501 | loss 3.999 | nll_loss 2.477 | ppl 5.57 | wps 16518 | ups 5 | wpb 3629.815 | bsz 149.685 | num_updates 570138 | lr 4.18803e-05 | gnorm 3.401 | clip 0.000 | oom 0.000 | wall 125243 | train_wall 121290
+| epoch 501 | valid on 'valid' subset | loss 6.698 | nll_loss 5.487 | ppl 44.84 | num_updates 570138 | best_loss 6.16695
+
+| Translated 1982 sentences (55685 tokens) in 56.2s (35.29 sentences/s, 991.37 tokens/s)                                                                       
+| Generate test with beam=5: BLEU4 = 4.07, 23.3/5.8/2.3/0.9 (BP=1.000, ratio=1.299, syslen=53703, reflen=41347)
+
+
+===========================

@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import math
 
@@ -18,7 +16,7 @@ class CosineSchedule(FairseqLRScheduler):
 
     We also support a warmup phase where we linearly increase the learning rate
     from some initial learning rate (``--warmup-init-lr``) until the configured
-    learning rate (``--lr``).
+    max learning rate (``--max-lr``).
 
     During warmup::
 
@@ -54,6 +52,10 @@ class CosineSchedule(FairseqLRScheduler):
         self.t_mult = args.t_mult
         self.period = args.lr_period_updates
 
+        if self.period <= 0:
+            assert args.max_update >= 0, 'Either --max_update or --lr-period-updates must be set'
+            self.period = args.max_update - args.warmup_updates
+
         if args.warmup_updates > 0:
             # linearly warmup for the first args.warmup_updates
             self.lr_step = (warmup_end_lr - args.warmup_init_lr) / args.warmup_updates
@@ -75,12 +77,14 @@ class CosineSchedule(FairseqLRScheduler):
                             help='warmup the learning rate linearly for the first N updates')
         parser.add_argument('--warmup-init-lr', default=-1, type=float, metavar='LR',
                             help='initial learning rate during warmup phase; default is args.lr')
-        parser.add_argument('--max-lr', required=True, type=float, metavar='LR',
+        parser.add_argument('--max-lr', type=float, metavar='LR',
                             help='max learning rate, must be more than args.lr')
         parser.add_argument('--t-mult', default=1, type=float, metavar='LR',
                             help='factor to grow the length of each period')
-        parser.add_argument('--lr-period-updates', default=5000, type=float, metavar='LR',
+        parser.add_argument('--lr-period-updates', default=-1, type=float, metavar='LR',
                             help='initial number of updates per period')
+        parser.add_argument('--lr-shrink', default=0.1, type=float, metavar='LS',
+                            help='shrink factor for annealing')
         # fmt: on
 
     def step(self, epoch, val_loss=None):

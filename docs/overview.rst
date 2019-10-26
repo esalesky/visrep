@@ -28,11 +28,12 @@ fairseq implements the following high-level training flow::
           lr_scheduler.step_update(num_updates)
       lr_scheduler.step(epoch)
 
-where the default implementation for ``train.train_step`` is roughly::
+where the default implementation for ``task.train_step`` is roughly::
 
   def train_step(self, batch, model, criterion, optimizer):
       loss = criterion(model, batch)
       optimizer.backward(loss)
+      return loss
 
 **Registering new plug-ins**
 
@@ -40,7 +41,7 @@ New plug-ins are *registered* through a set of ``@register`` function
 decorators, for example::
 
   @register_model('my_lstm')
-  class MyLSTM(FairseqModel):
+  class MyLSTM(FairseqEncoderDecoderModel):
       (...)
 
 Once registered, new plug-ins can be used with the existing :ref:`Command-line

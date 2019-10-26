@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import argparse
 import collections
@@ -21,6 +25,8 @@ def average_checkpoints(inputs):
     params_dict = collections.OrderedDict()
     params_keys = None
     new_state = None
+    num_models = len(inputs)
+
     for f in inputs:
         state = torch.load(
             f,
@@ -44,20 +50,19 @@ def average_checkpoints(inputs):
             )
 
         for k in params_keys:
-            if k not in params_dict:
-                params_dict[k] = []
             p = model_params[k]
             if isinstance(p, torch.HalfTensor):
                 p = p.float()
-            params_dict[k].append(p)
+            if k not in params_dict:
+                params_dict[k] = p.clone()
+                # NOTE: clone() is needed in case of p is a shared parameter
+            else:
+                params_dict[k] += p
 
     averaged_params = collections.OrderedDict()
-    # v should be a list of torch Tensor.
     for k, v in params_dict.items():
-        summed_v = None
-        for x in v:
-            summed_v = summed_v + x if summed_v is not None else x
-        averaged_params[k] = summed_v / len(v)
+        averaged_params[k] = v
+        averaged_params[k].div_(num_models)
     new_state['model'] = averaged_params
     return new_state
 
@@ -116,9 +121,9 @@ def main():
         num = args.num_epoch_checkpoints
 
     assert args.checkpoint_upper_bound is None or args.num_epoch_checkpoints is not None, \
-            '--checkpoint-upper-bound requires --num-epoch-checkpoints'
+        '--checkpoint-upper-bound requires --num-epoch-checkpoints'
     assert args.num_epoch_checkpoints is None or args.num_update_checkpoints is None, \
-            'Cannot combine --num-epoch-checkpoints and --num-update-checkpoints'
+        'Cannot combine --num-epoch-checkpoints and --num-update-checkpoints'
 
     if num is not None:
         args.inputs = last_n_checkpoints(

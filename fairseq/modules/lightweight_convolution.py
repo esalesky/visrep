@@ -1,17 +1,31 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from fairseq import utils
-from fairseq.modules import unfold1d
+from fairseq.modules.unfold import unfold1d
+
+
+def LightweightConv(input_size, kernel_size=1, padding_l=None, num_heads=1,
+                    weight_dropout=0., weight_softmax=False, bias=False):
+    if torch.cuda.is_available():
+        try:
+            from fairseq.modules.lightconv_layer import LightconvLayer
+            return LightconvLayer(input_size, kernel_size=kernel_size,
+                                  padding_l=padding_l, num_heads=num_heads,
+                                  weight_dropout=weight_dropout,
+                                  weight_softmax=weight_softmax, bias=bias)
+        except ImportError as e:
+            print(e)
+    return LightweightConv1dTBC(input_size, kernel_size=kernel_size,
+                                padding_l=padding_l, num_heads=num_heads,
+                                weight_dropout=weight_dropout,
+                                weight_softmax=weight_softmax, bias=bias)
 
 
 class LightweightConv1d(nn.Module):
@@ -20,19 +34,21 @@ class LightweightConv1d(nn.Module):
     We don't use this module in the model.
 
     Args:
-    input_size: # of channels of the input and output
-    kernel_size: convolution channels
-    padding: padding
-    num_heads: number of heads used. The weight is of shape (num_heads, 1, kernel_size)
-    weight_softmax: normalize the weight with softmax before the convolution
+        input_size: # of channels of the input and output
+        kernel_size: convolution channels
+        padding: padding
+        num_heads: number of heads used. The weight is of shape
+            `(num_heads, 1, kernel_size)`
+        weight_softmax: normalize the weight with softmax before the convolution
+
     Shape:
-    Input: BxCxT, i.e. (batch_size, input_size, timesteps)
-    Output: BxCxT, i.e. (batch_size, input_size, timesteps)
+        Input: BxCxT, i.e. (batch_size, input_size, timesteps)
+        Output: BxCxT, i.e. (batch_size, input_size, timesteps)
 
     Attributes:
-    weight: the learnable weights of the module of shape
-    `(num_heads, 1, kernel_size)`
-    bias:   the learnable bias of the module of shape `(input_size)`
+        weight: the learnable weights of the module of shape
+            `(num_heads, 1, kernel_size)`
+        bias: the learnable bias of the module of shape `(input_size)`
     '''
 
     def __init__(self, input_size, kernel_size=1, padding=0, num_heads=1,
@@ -121,6 +137,8 @@ class LightweightConv1dTBC(nn.Module):
 
         self.reset_parameters()
 
+        self.onnx_trace = False
+
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.weight)
         if self.bias is not None:
@@ -143,6 +161,9 @@ class LightweightConv1dTBC(nn.Module):
         if self.bias is not None:
             output = output + self.bias.view(1, 1, -1)
         return output
+
+    def prepare_for_onnx_export_(self):
+        self.onnx_trace = True
 
     def _forward_unfolded(self, x, incremental_state):
         '''The conventional implementation of convolutions.
@@ -167,7 +188,7 @@ class LightweightConv1dTBC(nn.Module):
             x_unfold = x_unfold.view(T*B*H, R, K)
 
         if self.weight_softmax:
-            weight = F.softmax(weight.float(), dim=1).type_as(weight)
+            weight = utils.softmax(weight, dim=1, onnx_trace=self.onnx_trace).type_as(weight)
 
         if incremental_state is not None:
             weight = weight[:, -x_unfold.size(2):]
@@ -176,7 +197,7 @@ class LightweightConv1dTBC(nn.Module):
         weight = weight.view(1, H, K).expand(T*B, H, K).contiguous().view(T*B*H, K, 1)
 
         weight = F.dropout(weight, self.weight_dropout, training=self.training)
-        output = torch.bmm(x_unfold, weight) # T*B*H x R x 1
+        output = torch.bmm(x_unfold, weight)  # T*B*H x R x 1
         output = output.view(T, B, C)
         return output
 
@@ -192,7 +213,7 @@ class LightweightConv1dTBC(nn.Module):
 
         weight = self.weight.view(H, K)
         if self.weight_softmax:
-            weight = F.softmax(weight.float(), dim=1).type_as(weight)
+            weight = utils.softmax(weight, dim=1, onnx_trace=self.onnx_trace).type_as(weight)
         weight = weight.view(1, H, K).expand(T*B, H, K).contiguous()
         weight = weight.view(T, B*H, K).transpose(0, 1)
 

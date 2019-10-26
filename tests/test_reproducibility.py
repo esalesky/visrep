@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import contextlib
 from io import StringIO
@@ -38,7 +36,7 @@ class TestReproducibility(unittest.TestCase):
                     ] + extra_flags,
                 )
             stdout = stdout.getvalue()
-            train_log, valid_log = map(json.loads, stdout.split('\n')[-4:-2])
+            train_log, valid_log = map(json.loads, stdout.split('\n')[-5:-3])
 
             # train epoch 2, resuming from previous checkpoint 1
             os.rename(
@@ -56,14 +54,14 @@ class TestReproducibility(unittest.TestCase):
                     ] + extra_flags,
                 )
             stdout = stdout.getvalue()
-            train_res_log, valid_res_log = map(json.loads, stdout.split('\n')[-4:-2])
+            train_res_log, valid_res_log = map(json.loads, stdout.split('\n')[-5:-3])
 
             def cast(s):
                 return round(float(s), 3)
 
-            for k in ['loss', 'ppl', 'num_updates', 'gnorm']:
+            for k in ['train_loss', 'train_ppl', 'train_num_updates', 'train_gnorm']:
                 self.assertEqual(cast(train_log[k]), cast(train_res_log[k]))
-            for k in ['valid_loss', 'valid_ppl', 'num_updates', 'best']:
+            for k in ['valid_loss', 'valid_ppl', 'valid_num_updates', 'valid_best_loss']:
                 self.assertEqual(cast(valid_log[k]), cast(valid_res_log[k]))
 
     def test_reproducibility(self):

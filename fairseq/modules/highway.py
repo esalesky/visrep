@@ -1,12 +1,9 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import torch
-import torch.nn.functional as F
 
 from torch import nn
 
@@ -50,6 +47,6 @@ class Highway(torch.nn.Module):
             projection = layer(x)
             proj_x, gate = projection.chunk(2, dim=-1)
             proj_x = self.activation(proj_x)
-            gate = F.sigmoid(gate)
+            gate = torch.sigmoid(gate)
             x = gate * x + (gate.new_tensor([1]) - gate) * proj_x
         return x

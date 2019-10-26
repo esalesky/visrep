@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import argparse
 import importlib
@@ -15,8 +13,8 @@ TASK_REGISTRY = {}
 TASK_CLASS_NAMES = set()
 
 
-def setup_task(args):
-    return TASK_REGISTRY[args.task].setup_task(args)
+def setup_task(args, **kwargs):
+    return TASK_REGISTRY[args.task].setup_task(args, **kwargs)
 
 
 def register_task(name):

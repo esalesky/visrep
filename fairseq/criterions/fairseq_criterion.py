@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 from torch.nn.modules.loss import _Loss
 
@@ -13,12 +11,17 @@ class FairseqCriterion(_Loss):
     def __init__(self, args, task):
         super().__init__()
         self.args = args
-        self.padding_idx = task.target_dictionary.pad()
+        self.task = task
+        self.padding_idx = task.target_dictionary.pad() if task.target_dictionary is not None else -100
 
     @staticmethod
     def add_args(parser):
         """Add criterion-specific arguments to the parser."""
         pass
+
+    @classmethod
+    def build_criterion(cls, args, task):
+        return cls(args, task)
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -34,15 +37,6 @@ class FairseqCriterion(_Loss):
     def aggregate_logging_outputs(logging_outputs):
         """Aggregate logging outputs from data parallel training."""
         raise NotImplementedError
-
-    def _aggregate_logging_outputs(self, logging_outputs):
-        """An instance method version of :func:`aggregate_logging_outputs`.
-
-        This can be overridden if needed, but please be careful not to rely
-        on shared state when aggregating logging outputs otherwise you may
-        get incorrect results.
-        """
-        return self.__class__.aggregate_logging_outputs(logging_outputs)
 
     @staticmethod
     def grad_denom(sample_sizes):

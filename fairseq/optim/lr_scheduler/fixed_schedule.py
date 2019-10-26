@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 from . import FairseqLRScheduler, register_lr_scheduler
 
@@ -30,6 +28,8 @@ class FixedSchedule(FairseqLRScheduler):
         # fmt: off
         parser.add_argument('--force-anneal', '--fa', type=int, metavar='N',
                             help='force annealing at specified epoch')
+        parser.add_argument('--lr-shrink', default=0.1, type=float, metavar='LS',
+                            help='shrink factor for annealing, lr_new = (lr * lr_shrink)')
         parser.add_argument('--warmup-updates', default=0, type=int, metavar='N',
                             help='warmup the learning rate linearly for the first N updates')
         # fmt: on

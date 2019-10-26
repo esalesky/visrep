@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import math
 
@@ -46,6 +44,8 @@ class TriangularSchedule(FairseqLRScheduler):
                             help='max learning rate, must be more than args.lr')
         parser.add_argument('--lr-period-updates', default=5000, type=float, metavar='LR',
                             help='initial number of updates per period (cycle length)')
+        parser.add_argument('--lr-shrink', default=0.1, type=float, metavar='LS',
+                            help='shrink factor for annealing')
         parser.add_argument('--shrink-min', action='store_true',
                             help='if set, also shrinks min lr')
         # fmt: on

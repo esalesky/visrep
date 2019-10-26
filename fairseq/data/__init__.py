@@ -1,65 +1,101 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 from .dictionary import Dictionary, TruncatedDictionary
+
 from .fairseq_dataset import FairseqDataset
+
+from .base_wrapper_dataset import BaseWrapperDataset
+
+from .audio.raw_audio_dataset import FileAudioDataset
 from .backtranslation_dataset import BacktranslationDataset
+from .colorize_dataset import ColorizeDataset
 from .concat_dataset import ConcatDataset
-from .indexed_dataset import (
-    IndexedCachedDataset, IndexedDataset, IndexedRawTextDataset,
-)
-from .indexed_image_dataset import (
-    IndexedImageWordDataset, IndexedImageLineDataset,
-    IndexedImageDataset, IndexedImageCachedDataset
-)
+from .concat_sentences_dataset import ConcatSentencesDataset
+from .id_dataset import IdDataset
+from .indexed_dataset import IndexedCachedDataset, IndexedDataset, IndexedRawTextDataset, MMapIndexedDataset
 from .language_pair_dataset import LanguagePairDataset
-from .image_pair_dataset import ImagePairDataset
+from .list_dataset import ListDataset
+from .lm_context_window_dataset import LMContextWindowDataset
+from .lru_cache_dataset import LRUCacheDataset
+from .mask_tokens_dataset import MaskTokensDataset
 from .monolingual_dataset import MonolingualDataset
+from .nested_dictionary_dataset import NestedDictionaryDataset
+from .noising import NoisingDataset
+from .numel_dataset import NumelDataset
+from .num_samples_dataset import NumSamplesDataset
+from .offset_tokens_dataset import OffsetTokensDataset
+from .pad_dataset import LeftPadDataset, PadDataset, RightPadDataset
+from .prepend_dataset import PrependDataset
+from .prepend_token_dataset import PrependTokenDataset
+from .raw_label_dataset import RawLabelDataset
+from .replace_dataset import ReplaceDataset
+from .resampling_dataset import ResamplingDataset
 from .round_robin_zip_datasets import RoundRobinZipDatasets
+from .sharded_dataset import ShardedDataset
+from .sort_dataset import SortDataset
+from .strip_token_dataset import StripTokenDataset
+from .subsample_dataset import SubsampleDataset
 from .token_block_dataset import TokenBlockDataset
 from .transform_eos_dataset import TransformEosDataset
-from .ocr_dataset import OCRDataset
-from .json_dictionary import JSONDictionary
-from .augment import ImageAug, GaussianBlurAug, EdgeDetectAug
+from .transform_eos_lang_pair_dataset import TransformEosLangPairDataset
+from .truncate_dataset import TruncateDataset
+from .resampling_dataset import ResamplingDataset
 
 from .iterators import (
     CountingIterator,
     EpochBatchIterator,
     GroupedIterator,
     ShardedIterator,
-    OCREpochBatchIterator
 )
 
 __all__ = [
     'BacktranslationDataset',
+    'BaseWrapperDataset',
+    'ColorizeDataset',
     'ConcatDataset',
+    'ConcatSentencesDataset',
     'CountingIterator',
     'Dictionary',
     'EpochBatchIterator',
     'FairseqDataset',
     'GroupedIterator',
+    'IdDataset',
     'IndexedCachedDataset',
     'IndexedDataset',
     'IndexedRawTextDataset',
-    'IndexedImageWordDataset',
-    'IndexedImageDatset',
-    'IndexedImageCachedDataset',
-    'IndexedImageLineDataset',
     'LanguagePairDataset',
-    'ImagePairDataset',
+    'LeftPadDataset',
+    'ListDataset',
+    'LMContextWindowDataset',
+    'LRUCacheDataset',
+    'MaskTokensDataset',
+    'MMapIndexedDataset',
     'MonolingualDataset',
+    'NestedDictionaryDataset',
+    'NoisingDataset',
+    'NumelDataset',
+    'NumSamplesDataset',
+    'OffsetTokensDataset',
+    'PadDataset',
+    'PrependDataset',
+    'PrependTokenDataset',
+    'ReplaceDataset',
+    'FileAudioDataset',
+    'RawLabelDataset',
+    'ResamplingDataset'
+    'RightPadDataset',
     'RoundRobinZipDatasets',
+    'ShardedDataset',
     'ShardedIterator',
+    'SortDataset',
+    'StripTokenDataset',
+    'SubsampleDataset',
     'TokenBlockDataset',
     'TransformEosDataset',
-    'OCRDataset',
-    'JSONDictionary',
-    'OCREpochBatchIterator',
-    'ImageAug',
-    'GaussianBlurAug',
-    'EdgeDetectAug',
+    'TransformEosLangPairDataset',
+    'TruncateDataset',
+    'TruncatedDictionary',
 ]

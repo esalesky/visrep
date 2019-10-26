@@ -1,36 +1,47 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import argparse
 import importlib
 import os
 
-from .fairseq_decoder import FairseqDecoder  # noqa: F401
-from .fairseq_encoder import FairseqEncoder  # noqa: F401
-from .fairseq_encoder import VisualFairseqEncoder  # noqa: F401
-from .fairseq_incremental_decoder import FairseqIncrementalDecoder  # noqa: F401
+from .fairseq_decoder import FairseqDecoder
+from .fairseq_encoder import FairseqEncoder
+from .fairseq_incremental_decoder import FairseqIncrementalDecoder
 from .fairseq_model import (
     BaseFairseqModel,
-    FairseqModel,  # noqa: F401
-    FairseqVisualModel,
-    FairseqMultiModel,  # noqa: F401
-    FairseqLanguageModel,  # noqa: F401
+    FairseqEncoderModel,
+    FairseqEncoderDecoderModel,
+    FairseqLanguageModel,
+    FairseqModel,
+    FairseqMultiModel,
 )
 
-from .composite_encoder import CompositeEncoder  # noqa: F401
-from .distributed_fairseq_model import DistributedFairseqModel  # noqa: F401
+from .composite_encoder import CompositeEncoder
+from .distributed_fairseq_model import DistributedFairseqModel
 
-from .robust_encoders import MultiFeatEncoder, OldFLCEncoder, FLCEncoder, VisualEncoder, CharCNNEncoder, VisualEdgeEncoder
-from .image_encoder import ImageWordEncoder
 
 MODEL_REGISTRY = {}
 ARCH_MODEL_REGISTRY = {}
 ARCH_MODEL_INV_REGISTRY = {}
 ARCH_CONFIG_REGISTRY = {}
+
+
+__all__ = [
+    'BaseFairseqModel',
+    'CompositeEncoder',
+    'DistributedFairseqModel',
+    'FairseqDecoder',
+    'FairseqEncoder',
+    'FairseqEncoderDecoderModel',
+    'FairseqEncoderModel',
+    'FairseqIncrementalDecoder',
+    'FairseqLanguageModel',
+    'FairseqModel',
+    'FairseqMultiModel',
+]
 
 
 def build_model(args, task):
@@ -45,12 +56,13 @@ def register_model(name):
     For example::
 
         @register_model('lstm')
-        class LSTM(FairseqModel):
+        class LSTM(FairseqEncoderDecoderModel):
             (...)
 
     .. note:: All models must implement the :class:`BaseFairseqModel` interface.
-        Typically you will extend :class:`FairseqModel` for sequence-to-sequence
-        tasks or :class:`FairseqLanguageModel` for language modeling tasks.
+        Typically you will extend :class:`FairseqEncoderDecoderModel` for
+        sequence-to-sequence tasks or :class:`FairseqLanguageModel` for
+        language modeling tasks.
 
     Args:
         name (str): the name of the model
@@ -108,9 +120,11 @@ def register_model_architecture(model_name, arch_name):
 
 
 # automatically import any Python files in the models/ directory
-for file in os.listdir(os.path.dirname(__file__)):
-    if file.endswith('.py') and not file.startswith('_'):
-        model_name = file[:file.find('.py')]
+models_dir = os.path.dirname(__file__)
+for file in os.listdir(models_dir):
+    path = os.path.join(models_dir, file)
+    if not file.startswith('_') and not file.startswith('.') and (file.endswith('.py') or os.path.isdir(path)):
+        model_name = file[:file.find('.py')] if file.endswith('.py') else file
         module = importlib.import_module('fairseq.models.' + model_name)
 
         # extra `model_parser` for sphinx

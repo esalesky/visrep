@@ -1,9 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import torch.optim.lr_scheduler
 
@@ -22,7 +20,19 @@ class ReduceLROnPlateau(FairseqLRScheduler):
                 ' Consider --lr-scheduler=fixed instead.'
             )
         self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer.optimizer, patience=0, factor=args.lr_shrink)
+            self.optimizer.optimizer, patience=0, factor=args.lr_shrink,
+            threshold=args.lr_threshold)
+
+    @staticmethod
+    def add_args(parser):
+        """Add arguments to the parser for this LR scheduler."""
+        # fmt: off
+        parser.add_argument('--lr-shrink', default=0.1, type=float, metavar='LS',
+                            help='shrink factor for annealing, lr_new = (lr * lr_shrink)')
+        parser.add_argument('--lr-threshold', default=1e-4, type=float, metavar='LT',
+                            help='Threshold for measuring the new optimum, \
+                            to only focus on significant changes')
+        # fmt: on
 
     def state_dict(self):
         """Return the LR scheduler state dict."""

@@ -1,10 +1,7 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
-#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import math
 
@@ -12,20 +9,35 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from fairseq.modules import (
-    DownsampledMultiHeadAttention, GradMultiply, LearnedPositionalEmbedding,
-    LinearizedConvolution,
+from fairseq import checkpoint_utils
+from fairseq.models import (
+    CompositeEncoder,
+    FairseqDecoder,
+    FairseqEncoder,
+    FairseqEncoderDecoderModel,
+    register_model,
+    register_model_architecture,
 )
-from fairseq import utils
-
-from . import (
-    FairseqEncoder, CompositeEncoder, FairseqDecoder, FairseqModel,
-    register_model, register_model_architecture,
+from fairseq.modules import (
+    DownsampledMultiHeadAttention,
+    GradMultiply,
+    LayerNorm,
+    LearnedPositionalEmbedding,
+    LinearizedConvolution,
 )
 
 
 @register_model('fconv_self_att')
-class FConvModelSelfAtt(FairseqModel):
+class FConvModelSelfAtt(FairseqEncoderDecoderModel):
+
+    @classmethod
+    def hub_models(cls):
+        return {
+            'conv.stories': 'https://dl.fbaipublicfiles.com/fairseq/models/stories_checkpoint.tar.bz2',
+            # Test set containing dictionaries
+            'data.stories': 'https://dl.fbaipublicfiles.com/fairseq/data/stories_test.tar.bz2',
+        }
+
     def __init__(self, encoder, decoder, pretrained_encoder=None):
         super().__init__(encoder, decoder)
         self.encoder.num_attention_layers = sum(layer is not None for layer in decoder.attention)
@@ -80,12 +92,12 @@ class FConvModelSelfAtt(FairseqModel):
 
     @classmethod
     def build_model(cls, args, task):
+        """Build a new model instance."""
         trained_encoder, trained_decoder = None, None
         pretrained = eval(args.pretrained)
         if pretrained:
             print("| loading pretrained model")
-            trained_model = utils.load_ensemble_for_inference(
-                # not actually for inference, but loads pretrained model parameters
+            trained_model = checkpoint_utils.load_model_ensemble(
                 filenames=[args.pretrained_checkpoint],
                 task=task,
             )[0][0]
@@ -98,7 +110,6 @@ class FConvModelSelfAtt(FairseqModel):
             for param in trained_encoder.parameters():
                 param.requires_grad = False
 
-        """Build a new model instance."""
         encoder = FConvEncoder(
             task.source_dictionary,
             embed_dim=args.encoder_embed_dim,
@@ -140,12 +151,11 @@ class FConvEncoder(FairseqEncoder):
     def __init__(
         self, dictionary, embed_dim=512, max_positions=1024,
         convolutions=((512, 3),) * 20, dropout=0.1, attention=False,
-        attention_nheads=1, left_pad=True,
+        attention_nheads=1,
     ):
         super().__init__(dictionary)
         self.dropout = dropout
         self.num_attention_layers = None
-        self.left_pad = left_pad
 
         num_embeddings = len(dictionary)
         self.padding_idx = dictionary.pad()
@@ -154,7 +164,6 @@ class FConvEncoder(FairseqEncoder):
             max_positions,
             embed_dim,
             self.padding_idx,
-            left_pad=self.left_pad,
         )
 
         def expand_bool_array(val):
@@ -269,14 +278,13 @@ class FConvDecoder(FairseqDecoder):
         convolutions=((512, 3),) * 8, attention=True, dropout=0.1,
         selfattention=False, attention_nheads=1, selfattention_nheads=1,
         project_input=False, gated_attention=False, downsample=False,
-        pretrained=False, trained_decoder=None, left_pad=False,
+        pretrained=False, trained_decoder=None,
     ):
         super().__init__(dictionary)
         self.register_buffer('version', torch.Tensor([2]))
         self.pretrained = pretrained
         self.pretrained_decoder = trained_decoder
         self.dropout = dropout
-        self.left_pad = left_pad
         self.need_attn = True
         in_channels = convolutions[0][0]
 
@@ -301,7 +309,6 @@ class FConvDecoder(FairseqDecoder):
             max_positions,
             embed_dim,
             padding_idx,
-            left_pad=self.left_pad,
         )
 
         self.fc1 = Linear(embed_dim, in_channels, dropout=dropout)
@@ -351,13 +358,13 @@ class FConvDecoder(FairseqDecoder):
             # pretrained and trained models are joined
             self.joining = nn.Sequential(
                 Linear(out_embed_dim*2, out_embed_dim*2),
-                nn.LayerNorm(out_embed_dim*2),
+                LayerNorm(out_embed_dim*2),
                 nn.GLU(),
                 Linear(out_embed_dim, out_embed_dim*2),
-                nn.LayerNorm(out_embed_dim*2),
+                LayerNorm(out_embed_dim*2),
                 nn.GLU(),
                 Linear(out_embed_dim, out_embed_dim),
-                nn.LayerNorm(out_embed_dim)
+                LayerNorm(out_embed_dim)
             )
             # pretrained model contains an output layer that is nhid -> vocab size
             # but the models are combined in their hidden state
@@ -371,9 +378,9 @@ class FConvDecoder(FairseqDecoder):
 
             self.pretrained_decoder.fc2.register_forward_hook(save_output())
 
-    def forward(self, prev_output_tokens, encoder_out_dict):
-        encoder_out = encoder_out_dict['encoder']['encoder_out']
-        trained_encoder_out = encoder_out_dict['pretrained'] if self.pretrained else None
+    def forward(self, prev_output_tokens, encoder_out):
+        trained_encoder_out = encoder_out['pretrained'] if self.pretrained else None
+        encoder_out = encoder_out['encoder']['encoder_out']
 
         encoder_a, encoder_b = self._split_encoder_out(encoder_out)
 
@@ -470,7 +477,7 @@ class SelfAttention(nn.Module):
         self.in_proj_q = Linear(out_channels, embed_dim)
         self.in_proj_k = Linear(out_channels, embed_dim)
         self.in_proj_v = Linear(out_channels, embed_dim)
-        self.ln = nn.LayerNorm(out_channels)
+        self.ln = LayerNorm(out_channels)
 
     def forward(self, x):
         residual = x
@@ -487,8 +494,8 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
     return m
 
 
-def PositionalEmbedding(num_embeddings, embedding_dim, padding_idx, left_pad):
-    m = LearnedPositionalEmbedding(num_embeddings, embedding_dim, padding_idx, left_pad)
+def PositionalEmbedding(num_embeddings, embedding_dim, padding_idx):
+    m = LearnedPositionalEmbedding(num_embeddings, embedding_dim, padding_idx)
     m.weight.data.normal_(0, 0.1)
     return m
 

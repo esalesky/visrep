@@ -1,203 +1,62 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+from collections import defaultdict
+import contextlib
+import copy
 import importlib.util
-import logging
+import math
 import os
-import re
 import sys
-import traceback
-from collections import defaultdict, OrderedDict
+from typing import Callable, List
+import warnings
 
 import torch
-from torch.serialization import default_restore_location
+import torch.nn.functional as F
 
-
-def torch_persistent_save(*args, **kwargs):
-    for i in range(3):
-        try:
-            return torch.save(*args, **kwargs)
-        except Exception:
-            if i == 2:
-                logging.error(traceback.format_exc())
-
-
-def convert_state_dict_type(state_dict, ttype=torch.FloatTensor):
-    if isinstance(state_dict, dict):
-        cpu_dict = OrderedDict()
-        for k, v in state_dict.items():
-            cpu_dict[k] = convert_state_dict_type(v)
-        return cpu_dict
-    elif isinstance(state_dict, list):
-        return [convert_state_dict_type(v) for v in state_dict]
-    elif torch.is_tensor(state_dict):
-        return state_dict.type(ttype)
-    else:
-        return state_dict
-
-
-def save_state(filename, args, model_state_dict, criterion, optimizer, lr_scheduler,
-               num_updates, optim_history=None, extra_state=None):
-    if optim_history is None:
-        optim_history = []
-    if extra_state is None:
-        extra_state = {}
-    state_dict = {
-        'args': args,
-        'model': model_state_dict if model_state_dict else {},
-        'optimizer_history': optim_history + [
-            {
-                'criterion_name': criterion.__class__.__name__,
-                'optimizer_name': optimizer.__class__.__name__,
-                'lr_scheduler_state': lr_scheduler.state_dict(),
-                'num_updates': num_updates,
-            }
-        ],
-        'last_optimizer_state': convert_state_dict_type(optimizer.state_dict()),
-        'extra_state': extra_state,
-    }
-    torch_persistent_save(state_dict, filename)
-
-
-def load_model_state(filename, model):
-    if not os.path.exists(filename):
-        return None, [], None
-    state = torch.load(filename, map_location=lambda s, l: default_restore_location(s, 'cpu'))
-    state = _upgrade_state_dict(state)
-    model.upgrade_state_dict(state['model'])
-
-    # load model parameters
-    try:
-        model.load_state_dict(state['model'], strict=True)
-    except Exception:
-        raise Exception('Cannot load model parameters from checkpoint, '
-                        'please ensure that the architectures match')
-
-    return state['extra_state'], state['optimizer_history'], state['last_optimizer_state']
-
-
-def _upgrade_state_dict(state):
-    """Helper for upgrading old model checkpoints."""
-    # add optimizer_history
-    if 'optimizer_history' not in state:
-        state['optimizer_history'] = [
-            {
-                'criterion_name': 'CrossEntropyCriterion',
-                'best_loss': state['best_loss'],
-            },
-        ]
-        state['last_optimizer_state'] = state['optimizer']
-        del state['optimizer']
-        del state['best_loss']
-    # move extra_state into sub-dictionary
-    if 'epoch' in state and 'extra_state' not in state:
-        state['extra_state'] = {
-            'epoch': state['epoch'],
-            'batch_offset': state['batch_offset'],
-            'val_loss': state['val_loss'],
-        }
-        del state['epoch']
-        del state['batch_offset']
-        del state['val_loss']
-    # reduce optimizer history's memory usage (only keep the last state)
-    if 'optimizer' in state['optimizer_history'][-1]:
-        state['last_optimizer_state'] = state['optimizer_history'][-1]['optimizer']
-        for optim_hist in state['optimizer_history']:
-            del optim_hist['optimizer']
-    # record the optimizer class name
-    if 'optimizer_name' not in state['optimizer_history'][-1]:
-        state['optimizer_history'][-1]['optimizer_name'] = 'FairseqNAG'
-    # move best_loss into lr_scheduler_state
-    if 'lr_scheduler_state' not in state['optimizer_history'][-1]:
-        state['optimizer_history'][-1]['lr_scheduler_state'] = {
-            'best': state['optimizer_history'][-1]['best_loss'],
-        }
-        del state['optimizer_history'][-1]['best_loss']
-    # keep track of number of updates
-    if 'num_updates' not in state['optimizer_history'][-1]:
-        state['optimizer_history'][-1]['num_updates'] = 0
-    # old model checkpoints may not have separate source/target positions
-    if hasattr(state['args'], 'max_positions') and not hasattr(state['args'], 'max_source_positions'):
-        state['args'].max_source_positions = state['args'].max_positions
-        state['args'].max_target_positions = state['args'].max_positions
-    # use stateful training data iterator
-    if 'train_iterator' not in state['extra_state']:
-        state['extra_state']['train_iterator'] = {
-            'epoch': state['extra_state']['epoch'],
-            'iterations_in_epoch': state['extra_state'].get('batch_offset', 0),
-        }
-    return state
-
-
-def load_checkpoint_to_cpu(path):
-    state = torch.load(path, map_location=lambda s, l: default_restore_location(s, 'cpu'))
-    state = _upgrade_state_dict(state)
-    return state
+from itertools import accumulate
+from fairseq.modules import gelu, gelu_accurate
 
 
 def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
-    """Load an ensemble of models for inference.
-
-    model_arg_overrides allows you to pass a dictionary model_arg_overrides --
-    {'arg_name': arg} -- to override model args that were used during model
-    training
-    """
-    # load model architectures and weights
-    states = []
-    for filename in filenames:
-        if not os.path.exists(filename):
-            raise IOError('Model file not found: {}'.format(filename))
-        state = load_checkpoint_to_cpu(filename)
-        states.append(state)
-
-    ensemble = []
-    for state in states:
-        args = state['args']
-
-        if model_arg_overrides is not None:
-            args = override_model_args(args, model_arg_overrides)
-
-        # build model for ensemble
-        model = task.build_model(args)
-        model.upgrade_state_dict(state['model'])
-        model.load_state_dict(state['model'], strict=True)
-        ensemble.append(model)
-
-        # some args (e.g., tokens_per_sample) might have been updated while building the model
-        if model_arg_overrides is not None:
-            args = override_model_args(args, model_arg_overrides)
-
-    return ensemble, args
+    from fairseq import checkpoint_utils
+    deprecation_warning(
+        'utils.load_ensemble_for_inference is deprecated. '
+        'Please use checkpoint_utils.load_model_ensemble instead.'
+    )
+    return checkpoint_utils.load_model_ensemble(
+        filenames, arg_overrides=model_arg_overrides, task=task,
+    )
 
 
-def override_model_args(args, model_arg_overrides):
-    # Uses model_arg_overrides {'arg_name': arg} to override model args
-    for arg_name, arg_val in model_arg_overrides.items():
-        setattr(args, arg_name, arg_val)
-    return args
-
-
-def move_to_cuda(sample):
+def apply_to_sample(f, sample):
     if len(sample) == 0:
         return {}
 
-    def _move_to_cuda(maybe_tensor):
-        if torch.is_tensor(maybe_tensor):
-            return maybe_tensor.cuda()
-        elif isinstance(maybe_tensor, dict):
+    def _apply(x):
+        if torch.is_tensor(x):
+            return f(x)
+        elif isinstance(x, dict):
             return {
-                key: _move_to_cuda(value)
-                for key, value in maybe_tensor.items()
+                key: _apply(value)
+                for key, value in x.items()
             }
-        elif isinstance(maybe_tensor, list):
-            return [_move_to_cuda(x) for x in maybe_tensor]
+        elif isinstance(x, list):
+            return [_apply(x) for x in x]
         else:
-            return maybe_tensor
+            return x
 
-    return _move_to_cuda(sample)
+    return _apply(sample)
+
+
+def move_to_cuda(sample):
+
+    def _move_to_cuda(tensor):
+        return tensor.cuda()
+
+    return apply_to_sample(_move_to_cuda, sample)
 
 
 INCREMENTAL_STATE_INSTANCE_ID = defaultdict(lambda: 0)
@@ -233,7 +92,7 @@ def set_incremental_state(module, incremental_state, key, value):
 def load_align_dict(replace_unk):
     if replace_unk is None:
         align_dict = None
-    elif isinstance(replace_unk, str):
+    elif isinstance(replace_unk, str) and len(replace_unk) > 0:
         # Load alignment dictionary for unknown word replacement if it was passed as an argument.
         align_dict = {}
         with open(replace_unk, 'r') as f:
@@ -296,61 +155,34 @@ def replace_unk(hypo_str, src_str, alignment, align_dict, unk):
     return ' '.join(hypo_tokens)
 
 
-def post_process_prediction(hypo_tokens, src_str, alignment, align_dict, tgt_dict, remove_bpe):
-    from fairseq import tokenizer
+def post_process_prediction(hypo_tokens, src_str, alignment, align_dict, tgt_dict, remove_bpe=None):
     hypo_str = tgt_dict.string(hypo_tokens, remove_bpe)
     if align_dict is not None:
         hypo_str = replace_unk(hypo_str, src_str, alignment, align_dict, tgt_dict.unk_string())
     if align_dict is not None or remove_bpe is not None:
         # Convert back to tokens for evaluating with unk replacement or without BPE
         # Note that the dictionary can be modified inside the method.
-        hypo_tokens = tokenizer.Tokenizer.tokenize(hypo_str, tgt_dict, add_if_not_exist=True)
+        hypo_tokens = tgt_dict.encode_line(hypo_str, add_if_not_exist=True)
     return hypo_tokens, hypo_str, alignment
 
 
-def make_positions(tensor, padding_idx, left_pad, onnx_trace=False):
+def make_positions(tensor, padding_idx, onnx_trace=False):
     """Replace non-padding symbols with their position numbers.
 
-    Position numbers begin at padding_idx+1.
-
-    Padding symbols are ignored, but it is necessary to specify whether padding
-    is added on the left side (left_pad=True) or right side (left_pad=False).
+    Position numbers begin at padding_idx+1. Padding symbols are ignored.
     """
-#     if onnx_trace:
-#         range_buf = torch._dim_arange(like=tensor, dim=1) + padding_idx + 1
-#         mask = tensor.ne(padding_idx)
-#         positions = range_buf.expand_as(tensor)
-#         if left_pad:
-#             positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
-#         return positions * mask.long() + padding_idx * (1 - mask.long())
-#
-#     max_pos = padding_idx + 1 + tensor.size(1)
-#     if not hasattr(make_positions, 'range_buf'):
-#         make_positions.range_buf = tensor.new()
-#     make_positions.range_buf = make_positions.range_buf.type_as(tensor)
-#     if make_positions.range_buf.numel() < max_pos:
-#         torch.arange(padding_idx + 1, max_pos, out=make_positions.range_buf)
-#     mask = tensor.ne(padding_idx)
-#     positions = make_positions.range_buf[:tensor.size(1)].expand_as(tensor)
-#     if left_pad:
-#         positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
-#     positions = tensor.clone().masked_scatter_(mask, positions[mask])
-#     if positions.min() < 0:
-#         raise BaseException("positions should not be less than 0")
-#     return positions
-
-    mask = tensor.ne(padding_idx).long()
-    return torch.cumsum(mask, dim=1) * mask + padding_idx
+    # The series of casts and type-conversions here are carefully
+    # balanced to both work with ONNX export and XLA. In particular XLA
+    # prefers ints, cumsum defaults to output longs, and ONNX doesn't know
+    # how to handle the dtype kwarg in cumsum.
+    mask = tensor.ne(padding_idx).int()
+    return (
+        torch.cumsum(mask, dim=1).type_as(mask) * mask
+    ).long() + padding_idx
 
 
 def strip_pad(tensor, pad):
-    if tensor.dim() == 1:
-        return tensor[tensor.ne(pad)]
-    elif tensor.dim() == 2:
-        keep_rows = (tensor[:, 0] != pad).nonzero().squeeze()
-        return tensor[keep_rows, :]
-    else:
-        raise NotImplementedError("cant handle more than 2 dim tensor")
+    return tensor[tensor.ne(pad)]
 
 
 def buffered_arange(max):
@@ -404,27 +236,17 @@ def fill_with_neg_inf(t):
     return t.float().fill_(float('-inf')).type_as(t)
 
 
-def checkpoint_paths(path, pattern=r'checkpoint(\d+)\.pt'):
-    """Retrieves all checkpoints found in `path` directory.
-
-    Checkpoints are identified by matching filename to the specified pattern. If
-    the pattern contains groups, the result will be sorted by the first group in
-    descending order.
-    """
-    pt_regexp = re.compile(pattern)
-    files = os.listdir(path)
-
-    entries = []
-    for i, f in enumerate(files):
-        m = pt_regexp.fullmatch(f)
-        if m is not None:
-            idx = int(m.group(1)) if len(m.groups()) > 0 else i
-            entries.append((idx, m.group(0)))
-    return [os.path.join(path, x[1]) for x in sorted(entries, reverse=True)]
-
-
 def resolve_max_positions(*args):
     """Resolve max position constraints from multiple sources."""
+
+    def map_value_update(d1, d2):
+        updated_value = copy.deepcopy(d1)
+        for key in d2:
+            if key not in updated_value:
+                updated_value[key] = d2[key]
+            else:
+                updated_value[key] = min(d1[key], d2[key])
+        return updated_value
 
     def nullsafe_min(l):
         minim = None
@@ -442,10 +264,13 @@ def resolve_max_positions(*args):
         elif arg is not None:
             if isinstance(arg, float) or isinstance(arg, int):
                 max_positions = min(max_positions, arg)
+            elif isinstance(arg, dict):
+                max_positions = map_value_update(max_positions, arg)
             else:
                 max_positions = tuple(
                     map(nullsafe_min, zip(max_positions, arg))
                 )
+
     return max_positions
 
 
@@ -453,9 +278,147 @@ def import_user_module(args):
     module_path = getattr(args, 'user_dir', None)
     if module_path is not None:
         module_path = os.path.abspath(args.user_dir)
+        if not os.path.exists(module_path):
+            fairseq_rel_path = os.path.join(os.path.dirname(__file__), '..', args.user_dir)
+            if os.path.exists(fairseq_rel_path):
+                module_path = fairseq_rel_path
         module_parent, module_name = os.path.split(module_path)
 
         if module_name not in sys.modules:
             sys.path.insert(0, module_parent)
             importlib.import_module(module_name)
             sys.path.pop(0)
+
+
+def softmax(x, dim, onnx_trace=False):
+    if onnx_trace:
+        return F.softmax(x.float(), dim=dim)
+    else:
+        return F.softmax(x, dim=dim, dtype=torch.float32)
+
+
+def log_softmax(x, dim, onnx_trace=False):
+    if onnx_trace:
+        return F.log_softmax(x.float(), dim=dim)
+    else:
+        return F.log_softmax(x, dim=dim, dtype=torch.float32)
+
+
+def get_perplexity(loss):
+    try:
+        return '{:.2f}'.format(math.pow(2, loss))
+    except OverflowError:
+        return float('inf')
+
+
+def deprecation_warning(message, stacklevel=3):
+    # don't use DeprecationWarning, since it's ignored by default
+    warnings.warn(message, stacklevel=stacklevel)
+
+
+def get_activation_fn(activation: str) -> Callable:
+    """ Returns the activation function corresponding to `activation` """
+    if activation == 'relu':
+        return F.relu
+    elif activation == 'gelu':
+        return gelu
+    elif activation == 'gelu_fast':
+        deprecation_warning('--activation-fn=gelu_fast has been renamed to gelu_accurate')
+        return gelu_accurate
+    elif activation == 'gelu_accurate':
+        return gelu_accurate
+    elif activation == 'tanh':
+        return torch.tanh
+    elif activation == 'linear':
+        return lambda x: x
+    else:
+        raise RuntimeError("--activation-fn {} not supported".format(activation))
+
+
+def get_available_activation_fns() -> List:
+    return [
+        'relu',
+        'gelu',
+        'gelu_fast',  # deprecated
+        'gelu_accurate',
+        'tanh',
+        'linear',
+    ]
+
+
+@contextlib.contextmanager
+def eval(model):
+    is_training = model.training
+    model.eval()
+    yield
+    model.train(is_training)
+
+
+def has_parameters(module):
+    try:
+        next(module.parameters())
+        return True
+    except StopIteration:
+        return False
+
+
+def set_torch_seed(seed):
+    # Set seed based on args.seed and the update number so that we get
+    # reproducible results when resuming from checkpoints
+    assert isinstance(seed, int)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+
+def parse_alignment(line):
+    """
+    Parses a single line from the alingment file.
+
+    Args:
+        line (str): String containing the alignment of the format:
+            <src_idx_1>-<tgt_idx_1> <src_idx_2>-<tgt_idx_2> ..
+            <src_idx_m>-<tgt_idx_m>. All indices are 0 indexed.
+
+    Returns:
+        torch.IntTensor: packed alignments of shape (2 * m).
+    """
+    alignments = line.strip().split()
+    parsed_alignment = torch.IntTensor(2 * len(alignments))
+    for idx, alignment in enumerate(alignments):
+        src_idx, tgt_idx = alignment.split('-')
+        parsed_alignment[2 * idx] = int(src_idx)
+        parsed_alignment[2 * idx + 1] = int(tgt_idx)
+    return parsed_alignment
+
+
+def get_token_to_word_mapping(tokens, exclude_list):
+    n = len(tokens)
+    word_start = [int(token not in exclude_list) for token in tokens]
+    word_idx = list(accumulate(word_start))
+    token_to_word = {i: word_idx[i] for i in range(n)}
+    return token_to_word
+
+
+def extract_hard_alignment(attn, src_sent, tgt_sent, pad, eos):
+    tgt_valid = ((tgt_sent != pad) & (tgt_sent != eos)).nonzero().squeeze(dim=-1)
+    src_invalid = ((src_sent == pad) | (src_sent == eos)).nonzero().squeeze(dim=-1)
+    src_token_to_word = get_token_to_word_mapping(src_sent, [eos, pad])
+    tgt_token_to_word = get_token_to_word_mapping(tgt_sent, [eos, pad])
+    alignment = []
+    if len(tgt_valid) != 0 and len(src_invalid) < len(src_sent):
+        attn_valid = attn[tgt_valid]
+        attn_valid[:, src_invalid] = float('-inf')
+        _, src_indices = attn_valid.max(dim=1)
+        for tgt_idx, src_idx in zip(tgt_valid, src_indices):
+            alignment.append((src_token_to_word[src_idx.item()] - 1, tgt_token_to_word[tgt_idx.item()] - 1))
+    return alignment
+
+
+def new_arange(x, *size):
+    """
+    Return a Tensor of `size` filled with a range function on the device of x.
+    If size is empty, using the size of the variable x.
+    """
+    if len(size) == 0:
+        size = x.size()
+    return torch.arange(size[-1], device=x.device).expand(*size).contiguous()

@@ -1,20 +1,17 @@
-# Copyright (c) 2017-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the license found in the LICENSE file in
-# the root directory of this source tree. An additional grant of patent rights
-# can be found in the PATENTS file in the same directory.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 import itertools
 import math
-import queue
-import threading
+import os
 
 import numpy as np
 import torch
 
 from . import data_utils
-from .ocr_dataset import OCRGroupedSampler 
+
 
 class CountingIterator(object):
     """Wrapper around an iterable that maintains the iteration count.
@@ -26,16 +23,19 @@ class CountingIterator(object):
         count (int): number of elements consumed from this iterator
     """
 
-    def __init__(self, iterable):
+    def __init__(self, iterable, start=0):
         self.iterable = iterable
-        self.count = 0
+        self.count = start
         self.itr = iter(self)
+        self.len = start + len(iterable)
 
     def __len__(self):
-        return len(self.iterable)
+        return self.len
 
     def __iter__(self):
         for x in self.iterable:
+            if self.count >= self.len:
+                return
             self.count += 1
             yield x
 
@@ -51,8 +51,76 @@ class CountingIterator(object):
         next(itertools.islice(self.itr, num_to_skip, num_to_skip), None)
         return self
 
+    def take(self, n):
+        """
+        Truncates the iterator to n elements at most.
+        """
+        self.len = min(self.len, n)
 
-class EpochBatchIterator(object):
+
+class EpochBatchIterating(object):
+    def __len__(self) -> int:
+        raise NotImplementedError
+
+    def next_epoch_itr(self, shuffle=True, fix_batches_to_gpus=False):
+        raise NotImplementedError
+
+    def end_of_epoch(self) -> bool:
+        """Returns whether the most recent epoch iterator has been exhausted"""
+        raise NotImplementedError
+
+    @property
+    def iterations_in_epoch(self) -> int:
+        raise NotImplementedError
+
+    def state_dict(self):
+        raise NotImplementedError
+
+    def load_state_dict(self, state_dict):
+        raise NotImplementedError
+
+
+class StreamingEpochBatchIterator(EpochBatchIterating):
+    def __init__(
+        self, dataset, epoch=0, num_shards=1, shard_id=0,
+    ):
+        # assert isinstance(dataset, torch.utils.data.Dataset)
+        self.dataset = dataset
+        self.epoch = epoch
+        self._current_epoch_iterator = None
+        self.num_shards = num_shards
+        self.shard_id = shard_id
+
+    def next_epoch_itr(self, shuffle=True, fix_batches_to_gpus=False):
+        self.epoch += 1
+        self._current_epoch_iterator = CountingIterator(
+            iterable=ShardedIterator(
+                iterable=self.dataset,
+                num_shards=self.num_shards,
+                shard_id=self.shard_id,
+            ),
+        )
+        return self._current_epoch_iterator
+
+    def end_of_epoch(self) -> bool:
+        return not self._current_epoch_iterator.has_next()
+
+    @property
+    def iterations_in_epoch(self) -> int:
+        if self._current_epoch_iterator is not None:
+            return self._current_epoch_iterator.count
+        return 0
+
+    def state_dict(self):
+        return {
+            'epoch': self.epoch,
+        }
+
+    def load_state_dict(self, state_dict):
+        self.epoch = state_dict['epoch']
+
+
+class EpochBatchIterator(EpochBatchIterating):
     """A multi-epoch iterator over a :class:`torch.utils.data.Dataset`.
 
     Compared to :class:`torch.utils.data.DataLoader`, this iterator:
@@ -77,11 +145,13 @@ class EpochBatchIterator(object):
         num_workers (int, optional): how many subprocesses to use for data
             loading. 0 means the data will be loaded in the main process
             (default: 0).
+        epoch (int, optional): the epoch to start the iterator from
+            (default: 0).
     """
 
     def __init__(
         self, dataset, collate_fn, batch_sampler, seed=1, num_shards=1, shard_id=0,
-        num_workers=0,
+        num_workers=0, epoch=0,
     ):
         assert isinstance(dataset, torch.utils.data.Dataset)
         self.dataset = dataset
@@ -92,7 +162,7 @@ class EpochBatchIterator(object):
         self.shard_id = shard_id
         self.num_workers = num_workers
 
-        self.epoch = 0
+        self.epoch = epoch
         self._cur_epoch_itr = None
         self._next_epoch_itr = None
         self._supports_prefetch = getattr(dataset, 'supports_prefetch', False)
@@ -118,9 +188,10 @@ class EpochBatchIterator(object):
             self._cur_epoch_itr = self._get_iterator_for_epoch(
                 self.epoch, shuffle, fix_batches_to_gpus=fix_batches_to_gpus,
             )
+        self.dataset.set_epoch(self.epoch)
         return self._cur_epoch_itr
 
-    def end_of_epoch(self):
+    def end_of_epoch(self) -> bool:
         """Returns whether the most recent epoch iterator has been exhausted"""
         return not self._cur_epoch_itr.has_next()
 
@@ -146,11 +217,13 @@ class EpochBatchIterator(object):
         itr_pos = state_dict.get('iterations_in_epoch', 0)
         if itr_pos > 0:
             # fast-forward epoch iterator
-            itr = self._get_iterator_for_epoch(self.epoch, state_dict.get('shuffle', True))
-            if itr_pos < len(itr):
-                self._next_epoch_itr = itr.skip(itr_pos)
+            self._next_epoch_itr = self._get_iterator_for_epoch(
+                self.epoch,
+                shuffle=state_dict.get('shuffle', True),
+                offset=itr_pos,
+            )
 
-    def _get_iterator_for_epoch(self, epoch, shuffle, fix_batches_to_gpus=False):
+    def _get_iterator_for_epoch(self, epoch, shuffle, fix_batches_to_gpus=False, offset=0):
 
         def shuffle_batches(batches, seed):
             # set seed based on the seed and epoch number so that we get
@@ -166,25 +239,36 @@ class EpochBatchIterator(object):
                 batches = shuffle_batches(list(batches), self.seed + epoch)
 
             batches = list(ShardedIterator(
-                batches, self.num_shards, self.shard_id, fill_value=[]))
+                batches, self.num_shards, self.shard_id, fill_value=[]
+            ))
             self.dataset.prefetch([i for s in batches for i in s])
 
             if shuffle and fix_batches_to_gpus:
                 batches = shuffle_batches(batches, self.seed + epoch + self.shard_id)
-
         else:
             if shuffle:
                 batches = shuffle_batches(list(self.frozen_batches), self.seed + epoch)
             else:
                 batches = self.frozen_batches
-            batches = ShardedIterator(batches, self.num_shards, self.shard_id, fill_value=[])
+            batches = list(ShardedIterator(
+                batches, self.num_shards, self.shard_id, fill_value=[]
+            ))
 
-        return CountingIterator(torch.utils.data.DataLoader(
-            self.dataset,
-            collate_fn=self.collate_fn,
-            batch_sampler=batches,
-            num_workers=self.num_workers,
-        ))
+        if offset > 0 and offset >= len(batches):
+            return None
+
+        if self.num_workers > 0:
+            os.environ['PYTHONWARNINGS'] = 'ignore:semaphore_tracker:UserWarning'
+
+        return CountingIterator(
+            torch.utils.data.DataLoader(
+                self.dataset,
+                collate_fn=self.collate_fn,
+                batch_sampler=batches[offset:],
+                num_workers=self.num_workers,
+            ),
+            start=offset,
+        )
 
 
 class GroupedIterator(object):
@@ -197,6 +281,7 @@ class GroupedIterator(object):
 
     def __init__(self, iterable, chunk_size):
         self._len = int(math.ceil(len(iterable) / float(chunk_size)))
+        self.offset = int(math.ceil(getattr(iterable, 'count', 0) / float(chunk_size)))
         self.itr = iterable
         self.chunk_size = chunk_size
 
@@ -250,115 +335,3 @@ class ShardedIterator(object):
 
     def __next__(self):
         return next(self.itr)[1]
-
-
-class OCREpochBatchIterator(object):
-    def __init__(
-        self, dataset, batch_size, collate_fn, seed=1, num_shards=1, shard_id=0, num_workers=0, epoch=0, eval=False
-    ):
-        assert isinstance(dataset, torch.utils.data.Dataset)
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.collate_fn = collate_fn
-        #self.frozen_batches = tuple(batch_sampler)
-        self.seed = seed
-        self.num_shards = num_shards
-        self.shard_id = shard_id
-        self.num_workers = num_workers
-        
-        self.eval = eval
-
-        self.epoch = epoch
-        self._cur_epoch_itr = None
-        self._next_epoch_itr = None
-        self._supports_prefetch = getattr(dataset, 'supports_prefetch', False)
-
-    def __len__(self):
-        return self.batch_size
-        #return len(self.frozen_batches)
-
-    def next_epoch_itr(self, shuffle=True, fix_batches_to_gpus=False):
-        """Return a new iterator over the dataset.
-
-        Args:
-            shuffle (bool, optional): shuffle batches before returning the
-                iterator (default: True).
-            fix_batches_to_gpus: ensure that batches are always
-                allocated to the same shards across epochs. Requires
-                that :attr:`dataset` supports prefetching (default: False).
-        """
-        if self._next_epoch_itr is not None:
-            self._cur_epoch_itr = self._next_epoch_itr
-            self._next_epoch_itr = None
-        else:
-            self.epoch += 1
-            self._cur_epoch_itr = self._get_iterator_for_epoch(
-                self.epoch, shuffle, fix_batches_to_gpus=fix_batches_to_gpus,
-            )
-        return self._cur_epoch_itr
-
-    def end_of_epoch(self):
-        """Returns whether the most recent epoch iterator has been exhausted"""
-        return not self._cur_epoch_itr.has_next()
-
-    @property
-    def iterations_in_epoch(self):
-        """The number of consumed batches in the current epoch."""
-        if self._cur_epoch_itr is not None:
-            return self._cur_epoch_itr.count
-        elif self._next_epoch_itr is not None:
-            return self._next_epoch_itr.count
-        return 0
-
-    def state_dict(self):
-        """Returns a dictionary containing a whole state of the iterator."""
-        return {
-            'epoch': self.epoch,
-            'iterations_in_epoch': self.iterations_in_epoch,
-        }
-
-    def load_state_dict(self, state_dict):
-        """Copies the state of the iterator from the given *state_dict*."""
-        self.epoch = state_dict['epoch']
-        itr_pos = state_dict.get('iterations_in_epoch', 0)
-        if itr_pos > 0:
-            # fast-forward epoch iterator
-            self._next_epoch_itr = self._get_iterator_for_epoch(
-                self.epoch,
-                shuffle=state_dict.get('shuffle', True),
-                offset=itr_pos,
-            )
-
-
-    def _get_iterator_for_epoch(self, epoch, shuffle, fix_batches_to_gpus=False, offset=0):
-        if self.eval:
-            #print('_get_iterator_for_epoch: Eval')            
-            return CountingIterator(
-                torch.utils.data.DataLoader(
-                    self.dataset,
-                    self.batch_size,
-                    sampler=OCRGroupedSampler(self.dataset, rand=False),
-                    collate_fn=self.collate_fn,
-                    #batch_sampler=batches[offset:],
-                    num_workers=self.num_workers,
-                    pin_memory=True, 
-                    drop_last=False,
-                ),
-                #start=offset,
-            )
-        else:
-            #print('_get_iterator_for_epoch: Train')
-            return CountingIterator(
-                torch.utils.data.DataLoader(
-                    self.dataset,
-                    self.batch_size,
-                    sampler=OCRGroupedSampler(self.dataset, rand=True),
-                    collate_fn=self.collate_fn,
-                    #batch_sampler=batches[offset:],
-                    num_workers=self.num_workers,
-                    pin_memory=True, 
-                    drop_last=True,
-                ),
-                #start=offset,
-            )
-

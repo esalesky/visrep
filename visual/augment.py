@@ -4,13 +4,24 @@ from imgaug import augmenters as iaa
 class ImageAug(object):
 
     def __init__(self):
-        def sometimes(aug): return iaa.Sometimes(.25, aug)
+        def sometimes(aug): return iaa.Sometimes(.50, aug)
         seq = iaa.Sequential(
             [
                 iaa.OneOf([
                     iaa.GaussianBlur((0.25, 1.0)),  # blur images with a sigma
                     # randomly remove up to n% of the pixels
                     iaa.Dropout((0.01, 0.05), per_channel=0.5),
+                    iaa.CropAndPad(
+                        percent=(-0.05, 0.05),
+                        pad_mode=["constant"],
+                        pad_cval=255
+                    ),
+                    iaa.Affine(
+                        shear=(-3, 3),  # shear by -16 to +16 degrees
+                    ),
+                    iaa.Affine(
+                        rotate=(-4, 4),  # rotate by -45 to +45 degrees
+                    )
                 ]),
 
             ],
