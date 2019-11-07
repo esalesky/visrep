@@ -265,7 +265,7 @@ class VisualMTTask(FairseqTask):
                             help='use word or line image dataset (None | word | line)')
         parser.add_argument('--image-font-path', default=None, type=str,
                             help='Font path')
-        parser.add_argument('--image-width', default=128, type=int,
+        parser.add_argument('--image-width', default=64, type=int,
                             help='Image width')
         parser.add_argument('--image-height', default=32, type=int,
                             help='Image height')

@@ -4,3 +4,4 @@ Grid scripts to train visual mt models.
 
 Scripts
 train_trans_pre.sh - Train transformer with pre calc visual embeddings.
+train_trans_pre_freeze.sh - Train transformer with pre calc visual embeddings (freeze embeddings).
