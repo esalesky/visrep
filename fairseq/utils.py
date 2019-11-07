@@ -19,6 +19,8 @@ import torch.nn.functional as F
 from itertools import accumulate
 from fairseq.modules import gelu, gelu_accurate
 
+import numpy as np
+
 
 def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
     from fairseq import checkpoint_utils
@@ -129,15 +131,26 @@ def parse_embedding(embed_path):
         next(f_embed)  # skip header
         for line in f_embed:
             pieces = line.rstrip().split(" ")
-            embed_dict[pieces[0]] = torch.Tensor([float(weight) for weight in pieces[1:]])
+            embed_dict[pieces[0]] = torch.Tensor(
+                [float(weight) for weight in pieces[1:]])
     return embed_dict
 
 
 def load_embedding(embed_dict, vocab, embedding):
     for idx in range(len(vocab)):
         token = vocab[idx]
+
+        # if idx < 100:
+        #    print(idx, token)
         if token in embed_dict:
             embedding.weight.data[idx] = embed_dict[token]
+
+            if idx < 25:
+                np.set_printoptions(precision=6, linewidth=120)
+                print('%s, %s, %s' %
+                      (idx, token, embed_dict[token].numpy()[0:10]))
+        else:
+            print('...NOT FOUND %s' % token)
     return embedding
 
 
@@ -158,7 +171,8 @@ def replace_unk(hypo_str, src_str, alignment, align_dict, unk):
 def post_process_prediction(hypo_tokens, src_str, alignment, align_dict, tgt_dict, remove_bpe=None):
     hypo_str = tgt_dict.string(hypo_tokens, remove_bpe)
     if align_dict is not None:
-        hypo_str = replace_unk(hypo_str, src_str, alignment, align_dict, tgt_dict.unk_string())
+        hypo_str = replace_unk(hypo_str, src_str, alignment,
+                               align_dict, tgt_dict.unk_string())
     if align_dict is not None or remove_bpe is not None:
         # Convert back to tokens for evaluating with unk replacement or without BPE
         # Note that the dictionary can be modified inside the method.
@@ -279,7 +293,8 @@ def import_user_module(args):
     if module_path is not None:
         module_path = os.path.abspath(args.user_dir)
         if not os.path.exists(module_path):
-            fairseq_rel_path = os.path.join(os.path.dirname(__file__), '..', args.user_dir)
+            fairseq_rel_path = os.path.join(
+                os.path.dirname(__file__), '..', args.user_dir)
             if os.path.exists(fairseq_rel_path):
                 module_path = fairseq_rel_path
         module_parent, module_name = os.path.split(module_path)
@@ -323,7 +338,8 @@ def get_activation_fn(activation: str) -> Callable:
     elif activation == 'gelu':
         return gelu
     elif activation == 'gelu_fast':
-        deprecation_warning('--activation-fn=gelu_fast has been renamed to gelu_accurate')
+        deprecation_warning(
+            '--activation-fn=gelu_fast has been renamed to gelu_accurate')
         return gelu_accurate
     elif activation == 'gelu_accurate':
         return gelu_accurate
@@ -332,7 +348,8 @@ def get_activation_fn(activation: str) -> Callable:
     elif activation == 'linear':
         return lambda x: x
     else:
-        raise RuntimeError("--activation-fn {} not supported".format(activation))
+        raise RuntimeError(
+            "--activation-fn {} not supported".format(activation))
 
 
 def get_available_activation_fns() -> List:
@@ -400,8 +417,10 @@ def get_token_to_word_mapping(tokens, exclude_list):
 
 
 def extract_hard_alignment(attn, src_sent, tgt_sent, pad, eos):
-    tgt_valid = ((tgt_sent != pad) & (tgt_sent != eos)).nonzero().squeeze(dim=-1)
-    src_invalid = ((src_sent == pad) | (src_sent == eos)).nonzero().squeeze(dim=-1)
+    tgt_valid = ((tgt_sent != pad) & (tgt_sent != eos)
+                 ).nonzero().squeeze(dim=-1)
+    src_invalid = ((src_sent == pad) | (src_sent == eos)
+                   ).nonzero().squeeze(dim=-1)
     src_token_to_word = get_token_to_word_mapping(src_sent, [eos, pad])
     tgt_token_to_word = get_token_to_word_mapping(tgt_sent, [eos, pad])
     alignment = []
@@ -410,7 +429,8 @@ def extract_hard_alignment(attn, src_sent, tgt_sent, pad, eos):
         attn_valid[:, src_invalid] = float('-inf')
         _, src_indices = attn_valid.max(dim=1)
         for tgt_idx, src_idx in zip(tgt_valid, src_indices):
-            alignment.append((src_token_to_word[src_idx.item()] - 1, tgt_token_to_word[tgt_idx.item()] - 1))
+            alignment.append(
+                (src_token_to_word[src_idx.item()] - 1, tgt_token_to_word[tgt_idx.item()] - 1))
     return alignment
 
 

@@ -23,7 +23,7 @@ source activate /expscratch/detter/tools/py36
 export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 
 
-SRC_LANG=${1} # ko zh ja de fr
+SRC_LANG=ko #${1} # ko zh ja de fr
 TGT_LANG=en
 FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
 
@@ -42,15 +42,18 @@ function list_include_item {
 
 if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
     SIZE=2.5k
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 elif `list_include_item "de" "${SRC_LANG}"` ; then
     SIZE=2.5k
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}
 elif `list_include_item "zh" "${SRC_LANG}"` ; then
     SIZE=5k
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}
 else
     SIZE=2.5k
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 fi
 
-DATA_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/word_embeddings.npz
 CKPT_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/trans_pre
 PRE_TRAIN=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/norm_word_embeddings.txt
 
