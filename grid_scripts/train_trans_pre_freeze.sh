@@ -95,6 +95,7 @@ $DATA_DIR \
 --save-dir=$CKPT_DIR \
 --raw-text \
 --encoder-embed-path=$PRE_TRAIN \
+--freeze-enocder-embed \
 --no-epoch-checkpoints 
 
 #--encoder-embed-path=$PRE_TRAIN \
