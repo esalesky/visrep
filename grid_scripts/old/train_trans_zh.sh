@@ -5,7 +5,7 @@
 #
 # qsub -v PATH -S /bin/bash -b y -q gpu.q@@1080 -cwd -j y -N zhtrans \
 # -l num_proc=16,mem_free=32G,h_rt=48:00:00,gpu=2 \
-# /expscratch/detter/src/fairseq/fairseq/grid_scripts/train_trans_zh.sh
+# /expscratch/detter/src/fairseq/fairseq-ocr/grid_scripts/train_trans_zh.sh
 #
 #
 # Train de Transformer model
@@ -32,7 +32,7 @@ nvidia-smi
 
 SRC_LANG=zh
 TGT_LANG=en
-FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq
+FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
 DATA_DIR=/expscratch/detter/mt/multitarget-ted/en-zh/matt/spm.20000.10k/raw
 CKPT_DIR=/expscratch/detter/mt/multitarget-ted/en-zh/matt/spm.20000.10k/raw/exp/trans
 #PRE_TRAIN=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/exp/fairseq/visual_embedding/word_embeddings.txt

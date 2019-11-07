@@ -10,6 +10,11 @@
 #
 #  Score translation model
 #
+#  2019-10-29
+#  spm.20000.10k/raw/exp/trans 
+#  spm.20000.10k/raw/exp/trans_pre
+#  spm.20000.10k/raw/exp/trans_pre_freeze
+# 
 
 module load cuda10.0/toolkit/10.0.130
 module load cudnn/7.5.0_cuda10.0
@@ -27,11 +32,11 @@ echo $PYTHONPATH
 echo $CUDA_VISIBLE_DEVICES
 nvidia-smi
 
-SRC_LANG=de
+SRC_LANG=zh
 TGT_LANG=en
-FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq
-DATA_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/raw
-CKPT_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/exp/fairseq/visualtrans
+FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
+DATA_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/matt/spm.20000.10k/raw
+CKPT_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/matt/spm.20000.10k/raw/exp/trans
 
 echo $DATA_DIR
 echo $FAIRSEQ_PATH

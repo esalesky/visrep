@@ -127,6 +127,8 @@ def main(args):
     norm_file = open(args.output + "/norm_word_embeddings.txt", "w")
     print(str(len(checkpoint['vocab'])) + ' ' + '512',
           file=text_file)  # vocab size and dimension
+    print(str(len(checkpoint['vocab'])) + ' ' + '512',
+          file=norm_file)  # vocab size and dimension
 
     #print_format = ['%.18e'] * 513
     #print_format[0] = '%s'

@@ -1,15 +1,19 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
-# 2019-10-16
+# 2019-10-29
 #
 # qsub -v PATH -S /bin/bash -b y -q gpu.q@@1080 -cwd -j y -N score \
-#   -l num_proc=16,mem_free=32G,h_rt=48:00:00,gpu=1 \
-#   /expscratch/detter/src/fairseq/fairseq_scripts/10000/score_ted.sh
+# -l num_proc=16,mem_free=32G,h_rt=48:00:00,gpu=1 \
+# /expscratch/detter/src/fairseq/fairseq-ocr/grid_scripts/score_ted.sh
 #
 #
-#  Score translation model
-#
+#  update 2019-10-29
+# 
+#  BLEU4 = 17.96, spm.20000.10k/raw/exp/trans 
+#  BLEU4 = 13.71, spm.20000.10k/raw/exp/trans_pre
+#  BLEU4 = 13.71, spm.20000.10k/raw/exp/trans_pre_freeze
+# 
 
 module load cuda10.0/toolkit/10.0.130
 module load cudnn/7.5.0_cuda10.0
@@ -27,11 +31,11 @@ echo $PYTHONPATH
 echo $CUDA_VISIBLE_DEVICES
 nvidia-smi
 
-SRC_LANG=de
+SRC_LANG=zh
 TGT_LANG=en
-FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq
-DATA_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/raw
-CKPT_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/10000/exp/fairseq/visualtrans
+FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
+DATA_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/matt/spm.20000.10k/raw
+CKPT_DIR=/expscratch/detter/mt/multitarget-ted/$TGT_LANG-$SRC_LANG/matt/spm.20000.10k/raw/exp/trans_pre_freeze
 
 echo $DATA_DIR
 echo $FAIRSEQ_PATH

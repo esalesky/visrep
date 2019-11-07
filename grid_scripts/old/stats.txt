@@ -63,6 +63,21 @@ Transformer - fairseq
 
 zh (Kevin 16.63) 
 
+zh - 16.63
+BLEU4 = 14.90 fully conv
+BLEU4 = 15.34 transformer
+BLEU4 = 16.43 transformer latest
+BLEU4 = 17.64 transformer with just characters (no tokenization)
+
+/expscratch/detter/mt/multitarget-ted/en-zh/matt/spm.20000.10k/raw/exp/fullyconv
+| Translated 1982 sentences (41692 tokens) in 11.8s (168.39 sentences/s, 3542.11 tokens/s)                                                                     
+| Generate test with beam=5: BLEU4 = 16.03, 47.4/21.7/11.8/6.7 (BP=0.950, ratio=0.951, syslen=39710, reflen=41753)
+
+/expscratch/detter/mt/multitarget-ted/en-zh/matt/spm.20000.10k/raw/exp/trans
+| Translated 1982 sentences (41850 tokens) in 26.5s (74.68 sentences/s, 1576.81 tokens/s)                                                                      
+| Generate test with beam=5: BLEU4 = 17.96, 50.1/23.8/13.5/7.8 (BP=0.954, ratio=0.955, syslen=39868, reflen=41753)
+
+
 /expscratch/detter/mt/multitarget-ted/en-zh/10000/raw
 /expscratch/detter/mt/multitarget-ted/en-zh/10000/exp/fairseq/trans
 
