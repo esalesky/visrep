@@ -60,10 +60,7 @@ class ImageDataset(Dataset):
                 line_cnt += 1
                 orig_line = orig_line.strip()
                 line = orig_line.split()
-                # Replace Unicode Character 'LOWER ONE EIGHTH BLOCK' (U+2581)
-                # many of the fonts can not render this code
-                word = line[0].replace('▁', '_')
-                text_list.append(word)
+                text_list.append(line[0])
 
         print('Total from {}, read {}, included {}'.format(
             input_text, line_cnt, len(text_list)))
@@ -86,6 +83,7 @@ class ImageDataset(Dataset):
         rev_label_dict = {}
         dict_id = 0
         for text_item in self.text_list:
+            # print(text_item)
             if text_item not in label_dict:
                 label_dict[text_item] = dict_id
                 rev_label_dict[dict_id] = text_item
@@ -162,6 +160,10 @@ class ImageDataset(Dataset):
         ''' Create pygame surface '''
 
         surf = pygame.Surface((self.surface_width, self.surface_height))
+
+        # Replace Unicode Character 'LOWER ONE EIGHTH BLOCK' (U+2581)
+        # many of the fonts can not render this code
+        line_text = line_text.replace('▁', '_')
 
         if font_name:
             font_name = font_name
@@ -274,6 +276,7 @@ class ImageDataset(Dataset):
             cv_image = self.get_image(seed_text,
                                       font_color='black', bkg_color='white')
 
+        # print(cv_image.shape)  # (32, 128, 3) H, W, C
         cv_resize_image = self.resize_or_pad(
             cv_image, self.image_width, self.image_height)
         # print(cv_resize_image.shape) # (32, 128, 3) H, W, C
@@ -281,4 +284,4 @@ class ImageDataset(Dataset):
         img_tensor = self.transform(cv_resize_image)
         # Resnet expects shape (3 x H x W)
         # print(img_tensor.shape) # torch.Size([3, 32, 128])
-        return img_tensor, seed_id
+        return img_tensor, seed_id, seed_text

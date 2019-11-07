@@ -12,7 +12,7 @@ from torchvision.utils import save_image
 from torchsummary import summary
 from augment import ImageAug
 from dataset import ImageDataset
-from models import ResNet
+from models import ResNet, Softmax, Trainer
 
 
 def parse_arguments(argv):
@@ -30,7 +30,13 @@ def parse_arguments(argv):
     parser.add_argument(
         '--output', type=str, help='Output directory',
         default='')
+    parser.add_argument(
+        '--layer', type=str, help='ResNet layer [avgpool, layer4, fc]',
+        default='avgpool')
 
+    parser.add_argument(
+        '--augment', action='store_true',
+        help='train with augmentation')
     parser.add_argument(
         "--image-height", type=int, help="Image height",
         default=32)
@@ -42,10 +48,10 @@ def parse_arguments(argv):
         default=128)
     parser.add_argument(
         "--epochs", type=int, help="Nbr epochs",
-        default=1000)
+        default=150)
     parser.add_argument(
         "--num_workers", type=int, help="Nbr dataset workers",
-        default=16)
+        default=8)
     parser.add_argument(
         "--lr", type=float, help="learning rate",
         default=1e-3)
@@ -90,16 +96,23 @@ def main(args):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    train_transform = transforms.Compose([
-        # transforms.ToPILImage(),
-        ImageAug(),
-        transforms.ToTensor(),
-    ])
+    if args.augment:
+        train_transform = transforms.Compose([
+            ImageAug(),
+            transforms.ToTensor(),
+        ])
+    else:
+        train_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.ToTensor(),
+        ])
+
     train_dataset = ImageDataset(text_file_path=args.input, font_file_path=args.font,
                                  image_height=args.image_height, image_width=args.image_width,
                                  transform=train_transform)
     trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size,
-                                              shuffle=True, num_workers=args.num_workers)
+                                              shuffle=True, num_workers=args.num_workers,
+                                              pin_memory=True)
 
     valid_transform = transforms.Compose([
         transforms.ToPILImage(),
@@ -111,22 +124,39 @@ def main(args):
                                  label_dict=train_dataset.label_dict,
                                  rev_label_dict=train_dataset.rev_label_dict)
     validloader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size,
-                                              shuffle=False, num_workers=0)
+                                              shuffle=False, num_workers=0,
+                                              pin_memory=True)
 
-    model = ResNet(dim=512, nbr_classes=len(
-        train_dataset.label_dict), extract='avgpool').to(device)
-    summary(model, input_size=(3, args.image_height, args.image_width))
+    backbone = ResNet(dim=512, input_shape=(args.image_height, args.image_width), model_name='resnet18',
+                      extract=args.layer)
+    head = Softmax(dim=512, classes=len(
+        train_dataset.label_dict), log_softmax=True)
+    model = Trainer(backbone, head)
+    model.to(device)
+
+    last_checkpoint = os.path.join(args.output, 'checkpoints/model.pth')
+    print('...searching for ', last_checkpoint)
+    if os.path.isfile(last_checkpoint):
+        checkpoint = torch.load(last_checkpoint)
+        print('Loading checkpoint...')
+        print(' epoch %d' % checkpoint['epoch'])
+        print(' loss %f' % checkpoint['loss'])
+        print(' len vocab %s' % len(checkpoint['vocab']))
+        print(' len rev_vocab %s' % len(checkpoint['rev_vocab']))
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
+
+    summary(backbone, input_size=(3, args.image_height, args.image_width))
     criterion = nn.NLLLoss()  # nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(
         model.parameters(), lr=args.lr)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', patience=5, min_lr=args.min_lr)
+        optimizer, mode='max', patience=2, min_lr=args.min_lr, verbose=True)
 
     model.train()
     valid_cnt = 0
     for epoch in range(args.epochs):
-        for i, (inputs, labels) in enumerate(trainloader):
+        for i, (inputs, labels, text) in enumerate(trainloader):
 
             iteration_start = time.time()
 
@@ -135,8 +165,10 @@ def main(args):
 
             optimizer.zero_grad()
 
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            # outputs = model(inputs)
+            logits, embed = model(inputs, labels)
+
+            loss = criterion(logits, labels)
 
             loss.backward()
             optimizer.step()
@@ -146,7 +178,7 @@ def main(args):
             sec_per_batch = float(duration)
 
             if i % 10 == 0 and i > 0:
-                print("Epoch: %d (%d/%d), Batch Size: %d, Loss: %f, LR: %f, ex/sec: %.1f, sec/batch: %.2f" % (
+                print("Epoch: %d (%d/%d), Batch Size: %d, Loss: %.4f, LR: %.8f, ex/sec: %.1f, sec/batch: %.2f" % (
                     epoch, i + 1 % len(trainloader),
                     len(trainloader), len(inputs), loss.item(),
                     get_lr(optimizer), examples_per_sec, sec_per_batch))
@@ -160,7 +192,7 @@ def main(args):
                     label_name = str(
                         train_dataset.rev_label_dict[label_list[img_idx].squeeze()])
 
-                    #outpath = samples_train_output + '/' + label_name
+                    # outpath = samples_train_output + '/' + label_name
                     # if not os.path.exists(outpath):
                     #    os.makedirs(outpath)
                     # outpath = samples_train_output + '/' + label_name + \
@@ -168,7 +200,7 @@ def main(args):
                     cv2.imwrite(samples_train_output + '/' + label_name +
                                 '_' + str(epoch) + '_' + str(i) + '_' + str(img_idx) + '.png', image)
 
-        if epoch % 10 == 0 and epoch > 0:
+        if epoch % 10 == 0:
             valid_cnt += 1
             torch.save({'epoch': epoch,
                         'loss': loss.item(),
@@ -183,14 +215,15 @@ def main(args):
             total = 0
             model.eval()
             with torch.no_grad():
-                for i, (inputs, labels) in enumerate(validloader):
+                for i, (inputs, labels, text) in enumerate(validloader):
 
                     inputs = inputs.to(device)
                     labels = labels.to(device)
 
-                    outputs = model(inputs)
+                    # outputs = model(inputs)
+                    logits, embed = model(inputs, labels)
 
-                    _, predicted = torch.max(outputs.data, 1)
+                    _, predicted = torch.max(logits.data, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
 
@@ -206,12 +239,13 @@ def main(args):
                                 '_' + str(i) + '_' + str(img_idx) + '.png'
                             cv2.imwrite(outpath, image)
 
-            accuracy = 100 * correct / total
-            print('Epoch %d, Count %d, LRate %.4f, Accuracy %d %%' %
+            accuracy = 100 * correct / (total * 1.0)
+            print('\n\nEpoch %d, Count %d, LRate %.8f, Accuracy %.2f \n\n' %
                   (epoch, total, get_lr(optimizer), accuracy))
-            scheduler.step(accuracy)
 
             model.train()
+
+            scheduler.step(accuracy)
 
     print('...complete, time {}'.format((time.clock() - start_time)))
 
