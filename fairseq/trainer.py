@@ -80,7 +80,8 @@ class Trainer(object):
         if args.fp16:
             self.meters['loss_scale'] = AverageMeter()  # dynamic loss scale
         self.meters['wall'] = TimeMeter()      # wall time in seconds
-        self.meters['train_wall'] = StopwatchMeter()  # train wall time in seconds
+        # train wall time in seconds
+        self.meters['train_wall'] = StopwatchMeter()
 
     @property
     def criterion(self):
@@ -133,9 +134,11 @@ class Trainer(object):
                 print('| WARNING: your device does NOT support faster training with --fp16, '
                       'please switch to FP32 which is likely to be faster')
             if self.args.memory_efficient_fp16:
-                self._optimizer = optim.MemoryEfficientFP16Optimizer.build_optimizer(self.args, params)
+                self._optimizer = optim.MemoryEfficientFP16Optimizer.build_optimizer(
+                    self.args, params)
             else:
-                self._optimizer = optim.FP16Optimizer.build_optimizer(self.args, params)
+                self._optimizer = optim.FP16Optimizer.build_optimizer(
+                    self.args, params)
         else:
             if self.cuda and torch.cuda.get_device_capability(0)[0] >= 7:
                 print('| NOTICE: your device may support faster training with --fp16')
@@ -146,7 +149,8 @@ class Trainer(object):
 
         # We should initialize the learning rate scheduler immediately after
         # building the optimizer, so that the initial learning rate is set.
-        self._lr_scheduler = lr_scheduler.build_lr_scheduler(self.args, self.optimizer)
+        self._lr_scheduler = lr_scheduler.build_lr_scheduler(
+            self.args, self.optimizer)
         self._lr_scheduler.step_update(0)
 
     def save_checkpoint(self, filename, extra_state):
@@ -183,11 +187,13 @@ class Trainer(object):
             try:
                 self.get_model().load_state_dict(state['model'], strict=True)
                 if utils.has_parameters(self.get_criterion()):
-                    self.get_criterion().load_state_dict(state['criterion'], strict=True)
+                    self.get_criterion().load_state_dict(
+                        state['criterion'], strict=True)
             except Exception:
                 raise Exception(
                     'Cannot load model parameters from checkpoint {}; '
-                    'please ensure that the architectures match.'.format(filename)
+                    'please ensure that the architectures match.'.format(
+                        filename)
                 )
 
             extra_state = state['extra_state']
@@ -206,8 +212,10 @@ class Trainer(object):
                 'Optimizer does not match; please reset the optimizer (--reset-optimizer).'
 
             if not reset_lr_scheduler:
-                self.lr_scheduler.load_state_dict(last_optim['lr_scheduler_state'])
-            self.optimizer.load_state_dict(last_optim_state, optimizer_overrides)
+                self.lr_scheduler.load_state_dict(
+                    last_optim['lr_scheduler_state'])
+            self.optimizer.load_state_dict(
+                last_optim_state, optimizer_overrides)
 
             self.set_num_updates(last_optim['num_updates'])
 
@@ -312,10 +320,14 @@ class Trainer(object):
 
                     if self.fast_stat_sync:
                         self._all_reduce_list[0] += sample_size
-                        self._all_reduce_list[1] += logging_output.get('nsentences', 0.0)
-                        self._all_reduce_list[2] += logging_output.get('loss', 0.0)
-                        self._all_reduce_list[3] += logging_output.get('nll_loss', 0.0)
-                        self._all_reduce_list[4] += logging_output.get('ntokens', 0.0)
+                        self._all_reduce_list[1] += logging_output.get(
+                            'nsentences', 0.0)
+                        self._all_reduce_list[2] += logging_output.get(
+                            'loss', 0.0)
+                        self._all_reduce_list[3] += logging_output.get(
+                            'nll_loss', 0.0)
+                        self._all_reduce_list[4] += logging_output.get(
+                            'ntokens', 0.0)
             except RuntimeError as e:
                 if 'out of memory' in str(e):
                     msg = (
@@ -344,7 +356,6 @@ class Trainer(object):
             if self.fast_stat_sync:
                 self._all_reduce_list[5] += ooms
 
-
         if ooms > 0 and self._oom_batch is not None:
             self.handle_ooms(ooms)
 
@@ -354,7 +365,8 @@ class Trainer(object):
         # gather logging outputs from all replicas
         if self.fast_stat_sync:
             # rework all_gather_list
-            all_reduce_list_tensor = torch.cuda.DoubleTensor(self._all_reduce_list)
+            all_reduce_list_tensor = torch.cuda.DoubleTensor(
+                self._all_reduce_list)
             if self._sync_stats():
                 torch.distributed.all_reduce(all_reduce_list_tensor)
             # Normalize loss and nll_loss by "sample_size"
@@ -401,7 +413,8 @@ class Trainer(object):
             logging_output = self.task.aggregate_logging_outputs(
                 logging_outputs, self.get_criterion()
             )
-            sample_size = self.task.grad_denom(sample_sizes, self.get_criterion())
+            sample_size = self.task.grad_denom(
+                sample_sizes, self.get_criterion())
 
         if not all(k in logging_output for k in ['ntokens', 'nsentences']):
             raise Exception((
@@ -412,7 +425,8 @@ class Trainer(object):
         try:
             # normalize grads by sample size
             if sample_size > 0:
-                self.optimizer.multiply_grads(self.args.distributed_world_size / float(sample_size))
+                self.optimizer.multiply_grads(
+                    self.args.distributed_world_size / float(sample_size))
 
             # clip grads
             grad_norm = self.optimizer.clip_grad_norm(self.args.clip_norm)
@@ -436,13 +450,15 @@ class Trainer(object):
             self.meters['clip'].update(
                 1. if grad_norm > self.args.clip_norm and self.args.clip_norm > 0 else 0.
             )
-            self.meters['train_loss'].update(logging_output.get('loss', 0), sample_size)
+            self.meters['train_loss'].update(
+                logging_output.get('loss', 0), sample_size)
             if 'train_acc' in self.meters:
                 self.meters['train_acc'].update(
                     logging_output.get('acc', 0), sample_size)
 
             if 'nll_loss' in logging_output:
-                self.meters['train_nll_loss'].update(logging_output.get('nll_loss', 0), ntokens)
+                self.meters['train_nll_loss'].update(
+                    logging_output.get('nll_loss', 0), ntokens)
 
             # clear CUDA cache to reduce memory fragmentation
             if (self.args.empty_cache_freq > 0 and
@@ -518,13 +534,15 @@ class Trainer(object):
 
         # update meters for validation
         ntokens = logging_output.get('ntokens', 0)
-        self.meters['valid_loss'].update(logging_output.get('loss', 0), sample_size)
+        self.meters['valid_loss'].update(
+            logging_output.get('loss', 0), sample_size)
         if 'valid_acc' in self.meters:
             self.meters['valid_acc'].update(
                 logging_output.get('acc', 0), sample_size)
 
         if 'nll_loss' in logging_output:
-            self.meters['valid_nll_loss'].update(logging_output.get('nll_loss', 0), ntokens)
+            self.meters['valid_nll_loss'].update(
+                logging_output.get('nll_loss', 0), ntokens)
 
         return logging_output
 

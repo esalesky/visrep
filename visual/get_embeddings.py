@@ -12,7 +12,7 @@ from torchvision.utils import save_image
 from torchsummary import summary
 from augment import ImageAug
 from dataset import ImageDataset
-from models import ResNet, Softmax, Trainer
+from models import VisualNet, Softmax, Trainer
 import csv
 
 
@@ -111,9 +111,9 @@ def main(args):
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=0)
 
-    backbone = ResNet(dim=512, input_shape=(args.image_height, args.image_width), model_name='resnet18',
-                      extract=args.layer)
-    head = Softmax(dim=512, classes=len(
+    backbone = VisualNet(dim=512, input_shape=(args.image_height, args.image_width), model_name='resnet18',
+                         extract=args.layer)
+    head = Softmax(dim=512, dim_out=len(
         test_dataset.label_dict), log_softmax=True)
     model = Trainer(backbone, head)
     model.load_state_dict(checkpoint['state_dict'], strict=False)

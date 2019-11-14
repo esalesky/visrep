@@ -44,10 +44,10 @@ if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 elif `list_include_item "de" "${SRC_LANG}"` ; then
     SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}/dict.$SRC_LANG.txt 
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 elif `list_include_item "zh" "${SRC_LANG}"` ; then
     SIZE=5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}/dict.$SRC_LANG.txt 
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 else
     SIZE=2.5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 

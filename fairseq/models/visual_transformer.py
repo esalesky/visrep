@@ -26,6 +26,9 @@ from fairseq.models.transformer import (
 )
 
 from fairseq.modules import (
+    VisualNet,
+    Softmax,
+    VisualTrainer,
     AdaptiveSoftmax,
     LayerNorm,
     PositionalEmbedding,
@@ -38,84 +41,8 @@ DEFAULT_MAX_SOURCE_POSITIONS = 1024
 DEFAULT_MAX_TARGET_POSITIONS = 1024
 
 
-class FairseqVisualEncoderDecoderModel(BaseFairseqModel):
-    """Base class for encoder-decoder models.
-
-    Args:
-        encoder (FairseqEncoder): the encoder
-        decoder (FairseqDecoder): the decoder
-    """
-
-    def __init__(self, encoder, decoder):
-        super().__init__()
-
-        self.encoder = encoder
-        self.decoder = decoder
-        # assert isinstance(self.encoder, FairseqEncoder)
-        # assert isinstance(self.decoder, FairseqDecoder)
-
-    def forward(self, src_tokens, src_lengths, src_images, prev_output_tokens, **kwargs):
-        """
-        Run the forward pass for an encoder-decoder model.
-
-        First feed a batch of source tokens through the encoder. Then, feed the
-        encoder output and previous decoder outputs (i.e., teacher forcing) to
-        the decoder to produce the next outputs::
-
-            encoder_out = self.encoder(src_tokens, src_lengths)
-            return self.decoder(prev_output_tokens, encoder_out)
-
-        Args:
-            src_tokens (LongTensor): tokens in the source language of shape
-                `(batch, src_len)`
-            src_lengths (LongTensor): source sentence lengths of shape `(batch)`
-            prev_output_tokens (LongTensor): previous decoder outputs of shape
-                `(batch, tgt_len)`, for teacher forcing
-
-        Returns:
-            tuple:
-                - the decoder's output of shape `(batch, tgt_len, vocab)`
-                - a dictionary with any model-specific outputs
-        """
-        encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, src_images=src_images, **kwargs)
-        decoder_out = self.decoder(
-            prev_output_tokens, encoder_out=encoder_out, **kwargs)
-        return decoder_out
-
-    def forward_decoder(self, prev_output_tokens, **kwargs):
-        return self.decoder(prev_output_tokens, **kwargs)
-
-    def extract_features(self, src_tokens, src_lengths, prev_output_tokens, **kwargs):
-        """
-        Similar to *forward* but only return features.
-
-        Returns:
-            tuple:
-                - the decoder's features of shape `(batch, tgt_len, embed_dim)`
-                - a dictionary with any model-specific outputs
-        """
-        encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, **kwargs)
-        features = self.decoder.extract_features(
-            prev_output_tokens, encoder_out=encoder_out, **kwargs)
-        return features
-
-    def output_layer(self, features, **kwargs):
-        """Project features to the default output size (typically vocabulary size)."""
-        return self.decoder.output_layer(features, **kwargs)
-
-    def max_positions(self):
-        """Maximum length supported by the model."""
-        return (self.encoder.max_positions(), self.decoder.max_positions())
-
-    def max_decoder_positions(self):
-        """Maximum length supported by the decoder."""
-        return self.decoder.max_positions()
-
-
 @register_model('visualtransformer')
-class VisualTransformerModel(FairseqVisualEncoderDecoderModel):
+class VisualTransformerModel(BaseFairseqModel):
     """
     Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
     <https://arxiv.org/abs/1706.03762>`_.
@@ -132,26 +59,12 @@ class VisualTransformerModel(FairseqVisualEncoderDecoderModel):
         :prog:
     """
 
-    @classmethod
-    def hub_models(cls):
-        # fmt: off
-        return {
-            'transformer.wmt14.en-fr': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt14.en-fr.joined-dict.transformer.tar.bz2',
-            'transformer.wmt16.en-de': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt16.en-de.joined-dict.transformer.tar.bz2',
-            'transformer.wmt18.en-de': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt18.en-de.ensemble.tar.gz',
-            'transformer.wmt19.en-de': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-de.joined-dict.ensemble.tar.gz',
-            'transformer.wmt19.en-ru': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-ru.ensemble.tar.gz',
-            'transformer.wmt19.de-en': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.de-en.joined-dict.ensemble.tar.gz',
-            'transformer.wmt19.ru-en': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.ru-en.ensemble.tar.gz',
-            'transformer.wmt19.en-de.single_model': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-de.joined-dict.single_model.tar.gz',
-            'transformer.wmt19.en-ru.single_model': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-ru.single_model.tar.gz',
-            'transformer.wmt19.de-en.single_model': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.de-en.joined-dict.single_model.tar.gz',
-            'transformer.wmt19.ru-en.single_model': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt19.ru-en.single_model.tar.gz',
-        }
-        # fmt: on
-
-    def __init__(self, encoder, decoder):
-        super().__init__(encoder, decoder)
+    def __init__(self, args, visual_encoder, encoder, decoder):
+        super().__init__()
+        self.args = args
+        self.visual_encoder = visual_encoder
+        self.encoder = encoder
+        self.decoder = decoder
         self.supports_align_args = True
 
     @staticmethod
@@ -216,6 +129,146 @@ class VisualTransformerModel(FairseqVisualEncoderDecoderModel):
                             help='perform layer-wise attention (cross-attention or cross+self-attention)')
         # fmt: on
 
+    def forward(self, src_tokens, src_lengths, src_images, prev_output_tokens, **kwargs):
+        """
+        Run the forward pass for an encoder-decoder model.
+
+        First feed a batch of source tokens through the encoder. Then, feed the
+        encoder output and previous decoder outputs (i.e., teacher forcing) to
+        the decoder to produce the next outputs::
+
+            encoder_out = self.encoder(src_tokens, src_lengths)
+            return self.decoder(prev_output_tokens, encoder_out)
+
+        Args:
+            src_tokens (LongTensor): tokens in the source language of shape
+                `(batch, src_len)`
+            src_lengths (LongTensor): source sentence lengths of shape `(batch)`
+            prev_output_tokens (LongTensor): previous decoder outputs of shape
+                `(batch, tgt_len)`, for teacher forcing
+
+        Returns:
+            tuple:
+                - the decoder's output of shape `(batch, tgt_len, vocab)`
+                - a dictionary with any model-specific outputs
+        """
+
+        # if self.args.image_verbose:
+        #     print('VISUAL src_tokens %s' % (
+        #         str(src_tokens.shape)))
+        #     print('VISUAL src_lengths  %s' % (
+        #         str(src_lengths.shape)))
+        #     print('VISUAL src_images (batch, token, channel, height, width) %s' % (
+        #         str(src_images.shape)))
+        #     print('VISUAL prev_output_tokens  %s' % (
+        #         str(prev_output_tokens.shape)))
+
+        b, t, c, h, w = src_images.shape  # batch x token x channel x height x width
+
+        src_images = src_images.view(-1, src_images.size(-3),
+                                     src_images.size(-2), src_images.size(-1))
+
+        if self.args.image_verbose:
+            print('VISUAL input ((batch x token), channel, height, width) %s' % (
+                str(src_images.shape)))
+
+        visual_out, visual_prelogits = self.visual_encoder(
+            src_images)  # (B X T) X D embed_dim
+
+        if self.args.image_verbose:
+            print('VISUAL output ((batch x token), embed_dim) %s, prelogits %s' % (
+                visual_out.shape, visual_prelogits.shape))
+
+        visual_out = visual_out.view(b, t, 512)  # batch, token, embed_dim
+
+        if self.args.image_verbose:
+            print('ENCODER input src_tokens %s, src_lengths %s' % (
+                src_tokens.shape, src_lengths.shape))
+
+        encoder_out = self.encoder(
+            src_tokens, src_lengths=src_lengths, vis_encoder_out=visual_out, **kwargs)
+
+        if self.args.image_verbose:
+            print('ENCODER: output (token, batch, embed_dim) %s' %
+                  (str(encoder_out['encoder_out'].shape)))
+
+        # 'encoder_out': x,  # T x B x C
+        # 'encoder_padding_mask': encoder_padding_mask,  # B x T
+        # 'encoder_embedding': encoder_embedding,  # B x T x C
+        # 'encoder_states': encoder_states,  # List[T x B x C]
+
+        if self.args.image_verbose:
+            print('DECODER: input (encoder out) %s, prev decoder out (batch, tgt_len) %s' %
+                  (str(encoder_out['encoder_out'].shape), str(prev_output_tokens.shape)))
+
+        decoder_out = self.decoder(
+            prev_output_tokens, encoder_out=encoder_out, **kwargs)
+
+        if self.args.image_verbose:
+            print('DECODER: output (batch, tgt len, vocab) %s' %
+                  (str(decoder_out[0].shape)))
+
+        return decoder_out, visual_prelogits
+
+    def forward_decoder(self, prev_output_tokens, **kwargs):
+        return self.decoder(prev_output_tokens, **kwargs)
+
+    def get_src_targets(self, sample, net_output):
+        """Get targets from either the sample or the net's output."""
+        return sample['net_input']['src_tokens']
+
+    def get_src_normalized_probs(self, net_output, log_probs, sample=None):
+        """Get normalized probabilities (or log probs) from a net's output."""
+        logits = net_output.float()
+        if log_probs:
+            return F.log_softmax(logits, dim=-1)
+        else:
+            return F.softmax(logits, dim=-1)
+
+    def get_targets(self, sample, net_output):
+        """Get targets from either the sample or the net's output."""
+        return sample['target']
+
+    def get_normalized_probs(self, net_output, log_probs, sample=None):
+        """Get normalized probabilities (or log probs) from a net's output."""
+        if hasattr(self, 'decoder'):
+            decoder_probs = self.decoder.get_normalized_probs(
+                net_output, log_probs, sample)
+            return decoder_probs
+        elif torch.is_tensor(net_output):
+            logits = net_output.float()
+            if log_probs:
+                return F.log_softmax(logits, dim=-1)
+            else:
+                return F.softmax(logits, dim=-1)
+
+    def extract_features(self, src_tokens, src_lengths, prev_output_tokens, **kwargs):
+        """
+        Similar to *forward* but only return features.
+
+        Returns:
+            tuple:
+                - the decoder's features of shape `(batch, tgt_len, embed_dim)`
+                - a dictionary with any model-specific outputs
+        """
+        encoder_out = self.encoder(
+            src_tokens, src_lengths=src_lengths, **kwargs)
+        features = self.decoder.extract_features(
+            prev_output_tokens, encoder_out=encoder_out, **kwargs)
+        return features
+
+    def output_layer(self, features, **kwargs):
+        """Project features to the default output size (typically vocabulary size)."""
+        return self.decoder.output_layer(features, **kwargs)
+
+    def max_positions(self):
+        """Maximum length supported by the model."""
+        return (self.encoder.max_positions(), self.decoder.max_positions())
+
+    def max_decoder_positions(self):
+        """Maximum length supported by the decoder."""
+        return self.decoder.max_positions()
+
     @classmethod
     def build_model(cls, args, task):
         """Build a new model instance."""
@@ -264,18 +317,37 @@ class VisualTransformerModel(FairseqVisualEncoderDecoderModel):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
 
-        print(args)
+        # print(args)
+        if args.image_verbose:
+            print('VIS_TRANSFORMER: src_dict len %d' % (len(src_dict)))
+            print('VIS_TRANSFORMER: tgt_dict len %d' % (len(tgt_dict)))
+
+        visual_encoder = cls.build_visual_encoder(args, src_dict)
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
-        return cls(encoder, decoder)
+        return cls(args, visual_encoder, encoder, decoder)
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
+        if args.image_verbose:
+            print('VIS_TRANSFORMER: setup TransformerEncoder')
         # return TransformerEncoder(args, src_dict, embed_tokens)
         return VisualTransformerEncoder(args, src_dict, embed_tokens)
 
     @classmethod
+    def build_visual_encoder(cls, args, src_dict):
+        if args.image_verbose:
+            print('VIS_TRANSFORMER: setup VisualNet')
+        backbone = VisualNet(dim=512, input_shape=(args.image_height, args.image_width),
+                             model_name='resnet18', extract=args.image_layer, normalize=False)
+        # Get src normal prob with handle log_softmax
+        head = Softmax(dim=512, dim_out=len(src_dict), log_softmax=False)
+        return VisualTrainer(backbone, head)
+
+    @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
+        if args.image_verbose:
+            print('VIS_TRANSFORMER: setup TransformerDecoder')
         return TransformerDecoder(
             args,
             tgt_dict,
@@ -284,105 +356,7 @@ class VisualTransformerModel(FairseqVisualEncoderDecoderModel):
         )
 
 
-class ResNet(torch.nn.Module):
-    """Define a ResNet architecture for face representation."""
-
-    def __init__(self, dim=None, nbr_classes=None,  # input_shape=None,
-                 model_name='resnet18',
-                 extract='layer4', log_softmax=True):
-        super().__init__()
-        self.dim = dim
-        # self.input_shape = input_shape
-        self.model_name = model_name
-        self.log_softmax = log_softmax
-        self.model_class = getattr(torchvision.models, model_name)
-        self.model = self.model_class(num_classes=dim)
-        self.extract = extract
-        if extract == 'layer4':
-            del self.model.fc
-            out_shape = (None, 512, 4, 4)
-        elif extract == 'avgpool':
-            del self.model.fc
-            out_shape = (None, 512)
-            dim = 512
-        elif extract == 'fc':
-            out_shape = (None, dim)
-        else:
-            raise ValueError('unknown ResNet layer name given to extract')
-        if log_softmax:
-            self.linear = nn.Linear(dim, nbr_classes)
-
-    def forward(self, x):
-        x = self.model.conv1(x)
-        x = self.model.bn1(x)
-        x = self.model.relu(x)
-        x = self.model.maxpool(x)
-
-        done = self.extract == 'maxpool'
-        if not done:
-            x = self.model.layer1(x)
-            done = self.extract == 'layer1'
-        if not done:
-            x = self.model.layer2(x)
-            done = self.extract == 'layer2'
-        if not done:
-            x = self.model.layer3(x)
-            done = self.extract == 'layer3'
-        if not done:
-            x = self.model.layer4(x)
-            done = self.extract == 'layer4'
-        if not done:
-            x = self.model.avgpool(x)
-            x = x.reshape(x.size(0), -1)
-            done = self.extract == 'avgpool'
-        if not done:
-            x = self.model.fc(x)
-        if self.log_softmax:
-            x = self.linear(x)
-            x = F.log_softmax(x, dim=-1)
-        return x
-
-
-class VisualFairseqEncoder(nn.Module):
-    """Base class for encoders."""
-
-    def __init__(self, dictionary):
-        super().__init__()
-        self.dictionary = dictionary
-
-    def forward(self, src_tokens, src_lengths=None, src_images=None, **kwargs):
-        """
-        Args:
-            src_tokens (LongTensor): tokens in the source language of shape
-                `(batch, src_len)`
-            src_lengths (LongTensor): lengths of each source sentence of shape
-                `(batch)`
-        """
-        raise NotImplementedError
-
-    def reorder_encoder_out(self, encoder_out, new_order):
-        """
-        Reorder encoder output according to `new_order`.
-
-        Args:
-            encoder_out: output from the ``forward()`` method
-            new_order (LongTensor): desired order
-
-        Returns:
-            `encoder_out` rearranged according to `new_order`
-        """
-        raise NotImplementedError
-
-    def max_positions(self):
-        """Maximum input length supported by the encoder."""
-        return 1e6  # an arbitrary large number
-
-    def upgrade_state_dict(self, state_dict):
-        """Upgrade a (possibly old) state dict for new versions of fairseq."""
-        return state_dict
-
-
-class VisualTransformerEncoder(VisualFairseqEncoder):
+class VisualTransformerEncoder(FairseqEncoder):
     """
     Transformer encoder consisting of *args.encoder_layers* layers. Each layer
     is a :class:`TransformerEncoderLayer`.
@@ -397,20 +371,12 @@ class VisualTransformerEncoder(VisualFairseqEncoder):
         super().__init__(dictionary)
         self.register_buffer('version', torch.Tensor([3]))
 
-        self.image_sample_write = False
-        self.image_sample_write_ctr = 0
-        self.image_samples_path = args.image_samples_path
-
-        if self.image_samples_path:
-            self.image_sample_write = True
-            self.image_samples_path = self.image_samples_path + '/samples_train'
-            if not os.path.exists(self.image_samples_path):
-                os.makedirs(self.image_samples_path)
-
-        self.robust_encoder = ResNet(
-            dim=512, extract='avgpool', log_softmax=False)
-
+        #self.print_ctr = 0
+        self.args = args
         self.dropout = args.dropout
+
+        self.vis_linear = torch.nn.Linear(
+            self.args.image_embed_dim * 2, self.args.image_embed_dim)
 
         embed_dim = embed_tokens.embedding_dim
         self.padding_idx = embed_tokens.padding_idx
@@ -445,43 +411,7 @@ class VisualTransformerEncoder(VisualFairseqEncoder):
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x, embed
 
-    def visual_forward_embedding(self, src_tokens, src_images):
-        # embed tokens and positions
-        b, t, c, h, w = src_images.shape  # batch x token x channel x height x width
-        # image shape torch.Size([40, 73, 3, 32, 128])  # B X T X C X H X W
-        #print('src_images', src_images.shape)
-        src_images = src_images.view(-1, src_images.size(-3),
-                                     src_images.size(-2), src_images.size(-1))
-        #print('src_images reshape', src_images.shape)
-        embed = self.robust_encoder(src_images)
-        #print('robust ', embed.shape)
-        embed = embed.view(b, t, 512)
-        #print('robust reshape', embed.shape)
-
-        embed = self.embed_scale * embed
-        if self.embed_positions is not None:
-            x = embed + self.embed_positions(src_tokens)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        return x, embed
-
-    def visual_print_samples(self, src_tokens, src_images):
-        if self.image_sample_write:
-            for ctr in range(len(src_images[0])):
-                token_id = src_tokens[0][ctr].cpu()
-                word = self.dictionary[int(token_id)]
-
-                image = np.uint8(src_images[0][ctr].cpu(
-                ).squeeze()).transpose((1, 2, 0)) * 255
-
-                outimage = self.image_samples_path + '/' + \
-                    str(int(token_id)) + '_' + str(word) + '.png'
-                cv2.imwrite(outimage, image)
-
-            self.image_sample_write_ctr += 1
-            if self.image_sample_write_ctr > 5:
-                self.image_sample_write = False
-
-    def forward(self, src_tokens, src_lengths, src_images=None, cls_input=None, return_all_hiddens=False):
+    def forward(self, src_tokens, src_lengths, vis_encoder_out=None, cls_input=None, return_all_hiddens=False):
         """
         Args:
             src_tokens (LongTensor): tokens in the source language of shape
@@ -504,24 +434,25 @@ class VisualTransformerEncoder(VisualFairseqEncoder):
         if self.layer_wise_attention:
             return_all_hiddens = True
 
-        self.visual_print_samples(src_tokens, src_images)
+        x, encoder_embedding = self.forward_embedding(src_tokens)
 
-        x, encoder_embedding = self.visual_forward_embedding(
-            src_tokens, src_images)
-        # print('x shape', x.shape)
+        if self.args.image_verbose:
+            print('ENCODER: token embed %s, visual embed (batch, tgt_len) %s' %
+                  (str(x.shape), str(vis_encoder_out.shape)))
 
-        # x, encoder_embedding = self.forward_embedding(src_tokens)
-        # print('x shape', x.shape)
+        if self.args.image_embed_type == 'concat':
+            x_cat = torch.cat((x, vis_encoder_out), dim=2)
+            x = self.vis_linear(x_cat)
+            x = F.dropout(x, p=self.dropout, training=self.training)
 
-        # Example shapes from encoder:
-        # src_images torch.Size([240, 12, 3, 32, 128])  # B X T X C X H X W
-        # src_images reshape torch.Size([2880, 3, 32, 128])  # (B X T) X C X H X W
-        # robust  torch.Size([2880, 512])  # (B X T) X embed_dim
-        # robust reshape torch.Size([240, 12, 512])  # B X T X embed_dim  visual
-        # image_x shape torch.Size([240, 12, 512]) # B X T X embed_dim  visual_forward_embedding
-        # x shape torch.Size([240, 12, 512])  # B X T X embed_dim  forward_embedding
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT tok and visual embed, concat %s, out %s' %
+                      (str(x_cat.shape), str(x.shape)))
+        else:  # self.args.image_embed_type == 'ignore':
+            if self.args.image_verbose:
+                print('ENCODER: IGNORE visual embed')
 
-        # B x T x C -> T x B x C
+            # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
         # compute padding mask
@@ -541,6 +472,8 @@ class VisualTransformerEncoder(VisualFairseqEncoder):
             x = self.layer_norm(x)
             if return_all_hiddens:
                 encoder_states[-1] = x
+
+        #print('transformer encoder out shape', x.shape)
 
         return {
             'encoder_out': x,  # T x B x C

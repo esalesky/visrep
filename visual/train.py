@@ -12,7 +12,12 @@ from torchvision.utils import save_image
 from torchsummary import summary
 from augment import ImageAug
 from dataset import ImageDataset
-from models import ResNet, Softmax, Trainer
+from models import VisualNet, Softmax, VisualTrainer
+import torch.nn.functional as F
+import logging
+
+LOG = logging.getLogger(__name__)
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
 
 
 def parse_arguments(argv):
@@ -61,7 +66,7 @@ def parse_arguments(argv):
 
     args = parser.parse_args(argv)
     for arg in vars(args):
-        print('{} {}'.format(arg, getattr(args, arg)))
+        LOG.info('%s %s', arg, getattr(args, arg))
 
     return args
 
@@ -74,13 +79,13 @@ def get_lr(optimizer):
 def main(args):
     start_time = time.clock()
 
-    print('__Python VERSION:', sys.version)
-    print('__PyTorch VERSION:', torch.__version__)
-    print('__CUDNN VERSION:', torch.backends.cudnn.version())
-    print('__Number CUDA Devices:', torch.cuda.device_count())
-    print('__Active CUDA Device: GPU', torch.cuda.current_device())
-    print('__CUDA_VISIBLE_DEVICES %s \n' %
-          str(os.environ["CUDA_VISIBLE_DEVICES"]))
+    LOG.info('__Python VERSION: %s', sys.version)
+    LOG.info('__PyTorch VERSION: %s', torch.__version__)
+    LOG.info('__CUDNN VERSION: %s', torch.backends.cudnn.version())
+    LOG.info('__Number CUDA Devices: %s', torch.cuda.device_count())
+    LOG.info('__Active CUDA Device: GPU %s', torch.cuda.current_device())
+    LOG.info('__CUDA_VISIBLE_DEVICES %s ',
+             str(os.environ["CUDA_VISIBLE_DEVICES"]))
 
     ckpts_output = args.output + '/checkpoints'
     if not os.path.exists(ckpts_output):
@@ -127,22 +132,22 @@ def main(args):
                                               shuffle=False, num_workers=0,
                                               pin_memory=True)
 
-    backbone = ResNet(dim=512, input_shape=(args.image_height, args.image_width), model_name='resnet18',
-                      extract=args.layer)
-    head = Softmax(dim=512, classes=len(
-        train_dataset.label_dict), log_softmax=True)
-    model = Trainer(backbone, head)
+    backbone = VisualNet(dim=512, input_shape=(args.image_height, args.image_width), model_name='resnet18',
+                         extract=args.layer, normalize=False)
+    head = Softmax(dim=512, dim_out=len(
+        train_dataset.label_dict), log_softmax=False)
+    model = VisualTrainer(backbone, head)
     model.to(device)
 
     last_checkpoint = os.path.join(args.output, 'checkpoints/model.pth')
-    print('...searching for ', last_checkpoint)
+    LOG.info('...searching for %s', last_checkpoint)
     if os.path.isfile(last_checkpoint):
         checkpoint = torch.load(last_checkpoint)
-        print('Loading checkpoint...')
-        print(' epoch %d' % checkpoint['epoch'])
-        print(' loss %f' % checkpoint['loss'])
-        print(' len vocab %s' % len(checkpoint['vocab']))
-        print(' len rev_vocab %s' % len(checkpoint['rev_vocab']))
+        LOG.info('Loading checkpoint...')
+        LOG.info(' epoch %d', checkpoint['epoch'])
+        LOG.info(' loss %f', checkpoint['loss'])
+        LOG.info(' len vocab %s', len(checkpoint['vocab']))
+        LOG.info(' len rev_vocab %s', len(checkpoint['rev_vocab']))
         model.load_state_dict(checkpoint['state_dict'], strict=False)
 
     summary(backbone, input_size=(3, args.image_height, args.image_width))
@@ -165,8 +170,11 @@ def main(args):
 
             optimizer.zero_grad()
 
-            # outputs = model(inputs)
-            logits, embed = model(inputs, labels)
+            embed, prelogits = model(inputs)
+            logits = F.log_softmax(prelogits, dim=-1)
+
+            LOG.info('Embed %s, logits %s, and labels %s',
+                     embed.shape, logits.shape, labels.shape)
 
             loss = criterion(logits, labels)
 
@@ -178,27 +186,26 @@ def main(args):
             sec_per_batch = float(duration)
 
             if i % 10 == 0 and i > 0:
-                print("Epoch: %d (%d/%d), Batch Size: %d, Loss: %.4f, LR: %.8f, ex/sec: %.1f, sec/batch: %.2f" % (
-                    epoch, i + 1 % len(trainloader),
-                    len(trainloader), len(inputs), loss.item(),
-                    get_lr(optimizer), examples_per_sec, sec_per_batch))
+                LOG.info("Epoch: %d (%d/%d), Batch Size: %d, Loss: %.4f, LR: %.8f, ex/sec: %.1f, sec/batch: %.2f",
+                         epoch, i + 1 % len(trainloader),
+                         len(trainloader), len(inputs), loss.item(),
+                         get_lr(optimizer), examples_per_sec, sec_per_batch)
 
             if epoch == 0 and i < 10:
                 image_list = inputs.cpu().numpy()
                 label_list = labels.cpu().numpy()
                 for img_idx, img in enumerate(inputs):
-                    image = np.uint8(
-                        image_list[img_idx, :].squeeze().transpose((1, 2, 0)) * 255)
                     label_name = str(
                         train_dataset.rev_label_dict[label_list[img_idx].squeeze()])
 
-                    # outpath = samples_train_output + '/' + label_name
-                    # if not os.path.exists(outpath):
-                    #    os.makedirs(outpath)
-                    # outpath = samples_train_output + '/' + label_name + \
-                    #    '_' + str(i) + '_' + str(img_idx) + '.png'
-                    cv2.imwrite(samples_train_output + '/' + label_name +
-                                '_' + str(epoch) + '_' + str(i) + '_' + str(img_idx) + '.png', image)
+                    image = image_list[img_idx, :].squeeze()
+                    image = np.uint8(image.transpose((1, 2, 0)) * 255)
+                    image = image[:, :, ::-1].copy()  # rgb to bgr
+
+                    outpath = samples_train_output + '/' + label_name + \
+                        '_' + str(epoch) + '_' + str(i) + \
+                        '_' + str(img_idx) + '.png'
+                    cv2.imwrite(outpath, image)
 
         if epoch % 10 == 0:
             valid_cnt += 1
@@ -221,7 +228,9 @@ def main(args):
                     labels = labels.to(device)
 
                     # outputs = model(inputs)
-                    logits, embed = model(inputs, labels)
+                    #logits, embed = model(inputs)
+                    embed, prelogits = model(inputs)
+                    logits = F.log_softmax(prelogits, dim=-1)
 
                     _, predicted = torch.max(logits.data, 1)
                     total += labels.size(0)
@@ -231,23 +240,27 @@ def main(args):
                         image_list = inputs.cpu().numpy()
                         label_list = labels.cpu().numpy()
                         for img_idx, img in enumerate(inputs):
-                            image = np.uint8(
-                                image_list[img_idx, :].squeeze().transpose((1, 2, 0)) * 255)
                             label_name = str(
                                 train_dataset.rev_label_dict[label_list[img_idx].squeeze()])
+
+                            image = image_list[img_idx, :].squeeze()
+                            image = np.uint8(image.transpose((1, 2, 0)) * 255)
+                            image = image[:, :, ::-1].copy()  # rgb to bgr
+
                             outpath = samples_valid_output + '/' + label_name + \
-                                '_' + str(i) + '_' + str(img_idx) + '.png'
+                                '_' + str(epoch) + '_' + str(i) + \
+                                '_' + str(img_idx) + '.png'
                             cv2.imwrite(outpath, image)
 
             accuracy = 100 * correct / (total * 1.0)
-            print('\n\nEpoch %d, Count %d, LRate %.8f, Accuracy %.2f \n\n' %
-                  (epoch, total, get_lr(optimizer), accuracy))
+            LOG.info('Epoch %d, Count %d, LRate %.8f, Accuracy %.2f',
+                     epoch, total, get_lr(optimizer), accuracy)
 
             model.train()
 
             scheduler.step(accuracy)
 
-    print('...complete, time {}'.format((time.clock() - start_time)))
+    LOG.info('...complete, time %s', time.clock() - start_time)
 
 
 if __name__ == '__main__':

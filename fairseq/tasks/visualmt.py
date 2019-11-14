@@ -275,6 +275,18 @@ class VisualMTTask(FairseqTask):
                             help='Cache image dictionary')
         parser.add_argument("--image-augment", default=False, action='store_true',
                             help='Use image augmentation')
+        parser.add_argument('--image-layer', default='avgpool', type=str,
+                            help='ResNet layer [avgpool, layer4, fc]')
+        parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
+                            help='Image src loss scale')
+        parser.add_argument('--image-tgt-loss-scale', type=float, default=1.0,
+                            help='Image tgt loss scale')
+        parser.add_argument("--image-embed-type", default='concat', type=str,
+                            help='Image embed type [concat, ignore]')
+        parser.add_argument('--image-embed-dim', default=512, type=int,
+                            help='Image embed dim')
+        parser.add_argument("--image-verbose", default=False, action='store_true',
+                            help='Display verbose debug')
 
     def __init__(self, args, src_dict, tgt_dict, image_cache):
         super().__init__(args)

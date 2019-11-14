@@ -22,7 +22,7 @@ source activate /expscratch/detter/tools/py36
 export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 
 LAYER='avgpool'  #avgpool 'layer4'
-SRC_LANG=${1} # ko zh ja de fr
+SRC_LANG=ko #${1} # ko zh ja de fr
 TGT_LANG=en
 FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
 
@@ -44,16 +44,16 @@ if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 elif `list_include_item "de" "${SRC_LANG}"` ; then
     SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}/dict.$SRC_LANG.txt 
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 elif `list_include_item "zh" "${SRC_LANG}"` ; then
     SIZE=5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}/dict.$SRC_LANG.txt 
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 else
     SIZE=2.5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 fi
 
-EXP_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}
+EXP_DIR=/expscratch/detter/mt/multitarget-ted/visemb_tst/$SRC_LANG-$TGT_LANG/${SIZE}
 
 TRAIN_FONT=/expscratch/detter/fonts/mt/train_${SRC_LANG}_font.txt
 VALID_FONT=/expscratch/detter/fonts/mt/valid_${SRC_LANG}_font.txt

@@ -347,17 +347,6 @@ class TransformerEncoder(FairseqEncoder):
         if self.layer_wise_attention:
             return_all_hiddens = True
 
-        # if self.print_ctr < 25:
-        #     np.set_printoptions(precision=10, linewidth=250)
-        #     embed = self.embed_tokens.weight.data.cpu().numpy()
-        #     for ctr in range(len(src_tokens[0])):
-        #         token_id = src_tokens[0][ctr].cpu()
-        #         if int(token_id.item()) == 7:
-        #             word = self.dictionary[int(token_id)]
-        #             print('\n\n%s %s %s %s\n' % (self.print_ctr, token_id.item(),
-        #                                          word, embed[token_id][0:10]))
-        #             self.print_ctr += 1
-
         x, encoder_embedding = self.forward_embedding(src_tokens)
 
         # B x T x C -> T x B x C
@@ -380,6 +369,8 @@ class TransformerEncoder(FairseqEncoder):
             x = self.layer_norm(x)
             if return_all_hiddens:
                 encoder_states[-1] = x
+
+        #print('transformer encoder out shape', x.shape)
 
         return {
             'encoder_out': x,  # T x B x C

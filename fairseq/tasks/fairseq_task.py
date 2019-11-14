@@ -51,8 +51,10 @@ class FairseqTask(object):
         """
         d = Dictionary()
         for filename in filenames:
-            Dictionary.add_file_to_dictionary(filename, d, tokenizer.tokenize_line, workers)
-        d.finalize(threshold=threshold, nwords=nwords, padding_factor=padding_factor)
+            Dictionary.add_file_to_dictionary(
+                filename, d, tokenizer.tokenize_line, workers)
+        d.finalize(threshold=threshold, nwords=nwords,
+                   padding_factor=padding_factor)
         return d
 
     @classmethod
@@ -86,7 +88,8 @@ class FairseqTask(object):
         if split not in self.datasets:
             raise KeyError('Dataset not loaded: ' + split)
         if not isinstance(self.datasets[split], FairseqDataset):
-            raise TypeError('Datasets are expected to be of type FairseqDataset')
+            raise TypeError(
+                'Datasets are expected to be of type FairseqDataset')
         return self.datasets[split]
 
     def get_batch_iterator(
@@ -142,7 +145,8 @@ class FairseqTask(object):
         # filter examples that are too large
         if max_positions is not None:
             indices = data_utils.filter_by_size(
-                indices, dataset, max_positions, raise_exception=(not ignore_invalid_inputs),
+                indices, dataset, max_positions, raise_exception=(
+                    not ignore_invalid_inputs),
             )
 
         # create mini-batches with given size constraints
@@ -217,7 +221,8 @@ class FairseqTask(object):
                 sampling_topp=getattr(args, 'sampling_topp', -1.0),
                 temperature=getattr(args, 'temperature', 1.),
                 diverse_beam_groups=getattr(args, 'diverse_beam_groups', -1),
-                diverse_beam_strength=getattr(args, 'diverse_beam_strength', 0.5),
+                diverse_beam_strength=getattr(
+                    args, 'diverse_beam_strength', 0.5),
                 match_source_len=getattr(args, 'match_source_len', False),
                 no_repeat_ngram_size=getattr(args, 'no_repeat_ngram_size', 0),
             )
@@ -242,11 +247,20 @@ class FairseqTask(object):
                   gradient
                 - logging outputs to display while training
         """
+        if self.args.image_verbose:
+            print('FAIRSEQ_TASK: model train start')
         model.train()
+
+        if self.args.image_verbose:
+            print('FAIRSEQ_TASK: criterion train start')
         loss, sample_size, logging_output = criterion(model, sample)
+
         if ignore_grad:
             loss *= 0
+        if self.args.image_verbose:
+            print('FAIRSEQ_TASK: optimizer.backward, loss %s' % (loss))
         optimizer.backward(loss)
+
         return loss, sample_size, logging_output
 
     def valid_step(self, sample, model, criterion):

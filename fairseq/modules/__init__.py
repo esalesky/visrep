@@ -28,6 +28,7 @@ from .transformer_sentence_encoder import TransformerSentenceEncoder
 from .unfold import unfold1d
 from .transformer_layer import TransformerDecoderLayer, TransformerEncoderLayer
 from .vggblock import VGGBlock
+from .visual import VisualNet, VisualTrainer, Softmax
 
 __all__ = [
     'AdaptiveInput',
@@ -58,5 +59,8 @@ __all__ = [
     'TransformerDecoderLayer',
     'TransformerEncoderLayer',
     'VGGBlock',
+    'VisualNet',
+    'VisualTrainer',
+    'Softmax',
     'unfold1d',
 ]

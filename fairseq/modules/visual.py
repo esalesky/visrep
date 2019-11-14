@@ -3,9 +3,6 @@ import torch
 import torch.nn as nn
 import torchvision
 import torch.nn.functional as F
-import logging
-
-LOG = logging.getLogger(__name__)
 
 
 class VisualNet(torch.nn.Module):
@@ -40,7 +37,7 @@ class VisualNet(torch.nn.Module):
         else:
             raise ValueError('unknown ResNet layer name given to extract')
 
-        LOG.info('initialized ResNet')
+        print('initialized ResNet')
 
     def forward(self, x):
         x = self.model.conv1(x)
@@ -84,7 +81,7 @@ class TopLayer4(torch.nn.Module):
         self.dropout = torch.nn.Dropout2d(p=dropout_prob)
         self.linear = torch.nn.Linear(self.num_activations, dim)
         self.bn2 = torch.nn.BatchNorm1d(dim)
-        LOG.info('initialized TopLayer4')
+        print('initialized TopLayer4')
 
     def forward(self, x):
         x = self.bn1(x)
@@ -108,7 +105,7 @@ class TopAvgPool(torch.nn.Module):
 
         self.linear = torch.nn.Linear(self.num_activations, dim)
         self.bn2 = torch.nn.BatchNorm1d(dim)
-        LOG.info('initialized TopAvgPool')
+        print('initialized TopAvgPool')
 
     def forward(self, x):
         x = self.linear(x)
@@ -129,7 +126,7 @@ class TopFC(torch.nn.Module):
 
         self.linear = torch.nn.Linear(self.num_activations, dim)
         self.bn2 = torch.nn.BatchNorm1d(dim)
-        LOG.info('initialized TopFC')
+        print('initialized TopFC')
 
     def forward(self, x):
         x = self.linear(x)
@@ -147,7 +144,7 @@ class Softmax(nn.Module):
         super().__init__()
         self.log_softmax = log_softmax
         self.linear = nn.Linear(dim, dim_out)
-        LOG.info('initialized Softmax')
+        print('initialized Softmax')
 
     def forward(self, x):  # pylint: disable=unused-argument
         """Compute logits from representations for training."""

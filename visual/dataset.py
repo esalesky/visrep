@@ -2,6 +2,10 @@ from torch.utils.data import Dataset
 import cv2
 import pygame.freetype
 import random
+import logging
+
+
+LOG = logging.getLogger(__name__)
 
 
 class ImageDataset(Dataset):
@@ -62,20 +66,20 @@ class ImageDataset(Dataset):
                 line = orig_line.split()
                 text_list.append(line[0])
 
-        print('Total from {}, read {}, included {}'.format(
+        LOG.info('Total from {}, read {}, included {}'.format(
             input_text, line_cnt, len(text_list)))
         return text_list
 
     def get_font_list(self, font_file_path):
         fontlist = []
         fontcnt = 0
-        print('...loading fonts from %s' % font_file_path)
+        LOG.info('...loading fonts from %s', font_file_path)
         with open(font_file_path, 'r') as file:  # , encoding='utf8') as file:
             for ctr, line in enumerate(file.readlines()):
                 fontname = line.strip()
                 fontcnt += 1
                 fontlist.append(fontname)
-        print('Found %d fonts' % (len(fontlist)))
+        LOG.info('Found %d fonts', len(fontlist))
         return fontlist
 
     def build_dictionary(self):
@@ -83,12 +87,11 @@ class ImageDataset(Dataset):
         rev_label_dict = {}
         dict_id = 0
         for text_item in self.text_list:
-            # print(text_item)
             if text_item not in label_dict:
                 label_dict[text_item] = dict_id
                 rev_label_dict[dict_id] = text_item
                 dict_id += 1
-        print('max label', dict_id)
+        LOG.info('max label %d', dict_id)
         return label_dict, rev_label_dict
 
     def __len__(self):
@@ -100,7 +103,6 @@ class ImageDataset(Dataset):
         # image size
         dim = None
         (h, w) = image.shape[:2]
-        # print(h,w,height,width)
 
         # if both the width and height are None, then return the original image
         if width is None and height is None:
@@ -111,13 +113,11 @@ class ImageDataset(Dataset):
             # calculate the ratio of the height and construct the dimensions
             r = height / float(h)
             dim = (int(w * r), height)
-            # print('resize height to ', height)
         # otherwise, the height is None
         else:
             # calculate the ratio of the width and construct the dimensions
             r = width / float(w)
             dim = (width, int(h * r))
-            # print('resize width to ', width)
 
         # resize the image
         resized = cv2.resize(image, dim, interpolation=inter)
@@ -127,26 +127,20 @@ class ImageDataset(Dataset):
 
     def resize_or_pad(self, img_data, img_width, img_height):
         img_height, img_width = img_data.shape[:2]
-        #print('input h, w', img_height, img_width)
         if img_height > self.image_height:
             img_data = self.image_resize(img_data, height=self.image_height)
             img_height, img_width = img_data.shape[:2]
-        #print('height resize h, w', img_height, img_width)
 
         if img_width > self.image_width:
             img_data = self.image_resize(img_data, width=self.image_width)
             img_height, img_width = img_data.shape[:2]
-        #print('width resize h, w', img_height, img_width)
 
         img_height, img_width = img_data.shape[:2]
         pad_height = self.image_height - img_height
         pad_width = self.image_width - img_width
 
         border_color = [255, 255, 255]
-        #border_color = [0, 0, 0]
 
-        #print('img h w', img_height, img_width)
-        #print('pad h w',pad_height, pad_width)
         img_data_pad = cv2.copyMakeBorder(
             img_data, pad_height, 0, 0, pad_width, cv2.BORDER_CONSTANT,
             value=border_color)
@@ -239,10 +233,8 @@ class ImageDataset(Dataset):
         sub_surf = surf.subsurface(crop)
 
         img_data = pygame.surfarray.array3d(sub_surf)
-        # print(img_data.shape)
         img_data = img_data.swapaxes(0, 1)
         img_data = cv2.cvtColor(img_data, cv2.COLOR_RGB2BGR)
-        # print(img_data.shape)
 
         return img_data
 
@@ -266,7 +258,6 @@ class ImageDataset(Dataset):
         #    if self.counter % self.mod_cache:
         #        cv_resize_image = self.image_cache[idx]
         # else:
-        #print(seed_text, seed_id)
         if self.default_image:
             cv_image = self.get_image(seed_text,
                                       font_name=self.font_list[0], font_size=16, font_style=1,
@@ -276,12 +267,12 @@ class ImageDataset(Dataset):
             cv_image = self.get_image(seed_text,
                                       font_color='black', bkg_color='white')
 
-        # print(cv_image.shape)  # (32, 128, 3) H, W, C
+        # LOG.info(cv_image.shape)  # (32, 128, 3) H, W, C
         cv_resize_image = self.resize_or_pad(
             cv_image, self.image_width, self.image_height)
-        # print(cv_resize_image.shape) # (32, 128, 3) H, W, C
+        # LOG.info(cv_resize_image.shape) # (32, 128, 3) H, W, C
 
         img_tensor = self.transform(cv_resize_image)
         # Resnet expects shape (3 x H x W)
-        # print(img_tensor.shape) # torch.Size([3, 32, 128])
+        # LOG.info(img_tensor.shape) # torch.Size([3, 32, 128])
         return img_tensor, seed_id, seed_text

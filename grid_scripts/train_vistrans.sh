@@ -45,17 +45,16 @@ if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 elif `list_include_item "de" "${SRC_LANG}"` ; then
     SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 elif `list_include_item "zh" "${SRC_LANG}"` ; then
     SIZE=5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/data-raw/${SRC_LANG}${SIZE}
+    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 else
     SIZE=2.5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 fi
 
 CKPT_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/vis_trans_pre
-PRE_TRAIN=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/norm_word_embeddings.txt
 FONT_FILE=/expscratch/detter/fonts/mt/test_${SRC_LANG}_font.txt
 
 echo "PATH - ${PATH}"
@@ -64,7 +63,6 @@ echo "PYTHONPATH - ${PYTHONPATH}"
 echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
 echo "source lang - ${SRC_LANG}"
 echo "ckpt dir - ${CKPT_DIR}"
-echo "pre train - ${PRE_TRAIN}"
 echo "data dir - ${DATA_DIR}"
 echo "size - ${SIZE}"
 echo "font file - ${FONT_FILE}"
@@ -88,6 +86,12 @@ $DATA_DIR \
 --image-augment \
 --image-height=32 \
 --image-width=64 \
+--image-layer='avgpool' \
+--image-src-loss-scale=0.5 \
+--image-tgt-loss-scale=0.5 \
+--image-embed-type='concat' \
+--image-embed-dim=512 \
+--image-verbose \
 --share-decoder-input-output-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
@@ -98,7 +102,7 @@ $DATA_DIR \
 --dropout=0.3 \
 --weight-decay=0.0001 \
 --max-tokens=4000 \
---criterion=label_smoothed_cross_entropy \
+--criterion=visual_label_smoothed_cross_entropy \
 --label-smoothing=0.1 \
 --max-epoch=250 \
 --num-workers=0 \
