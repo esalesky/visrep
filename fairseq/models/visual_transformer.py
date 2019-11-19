@@ -375,8 +375,12 @@ class VisualTransformerEncoder(FairseqEncoder):
         self.args = args
         self.dropout = args.dropout
 
-        self.vis_linear = torch.nn.Linear(
-            self.args.image_embed_dim * 2, self.args.image_embed_dim)
+        if self.args.image_embed_type == 'concat':
+            self.vis_linear = torch.nn.Linear(
+                self.args.image_embed_dim * 2, self.args.image_embed_dim)
+        else:
+            self.vis_linear = torch.nn.Linear(
+                self.args.image_embed_dim, self.args.image_embed_dim)
 
         embed_dim = embed_tokens.embedding_dim
         self.padding_idx = embed_tokens.padding_idx
@@ -437,8 +441,10 @@ class VisualTransformerEncoder(FairseqEncoder):
         x, encoder_embedding = self.forward_embedding(src_tokens)
 
         if self.args.image_verbose:
-            print('ENCODER: token embed %s, visual embed (batch, tgt_len) %s' %
-                  (str(x.shape), str(vis_encoder_out.shape)))
+            print('ENCODER: token embed %s' %
+                  str(x.shape))
+            print('ENCODER: visual embed (batch, tgt_len) %s' %
+                  str(vis_encoder_out.shape))
 
         if self.args.image_embed_type == 'concat':
             x_cat = torch.cat((x, vis_encoder_out), dim=2)
@@ -448,6 +454,21 @@ class VisualTransformerEncoder(FairseqEncoder):
             if self.args.image_verbose:
                 print('ENCODER: CONCAT tok and visual embed, concat %s, out %s' %
                       (str(x_cat.shape), str(x.shape)))
+        elif self.args.image_embed_type == 'avg':
+            x_avg = torch.mean((x, vis_encoder_out), dim=2)
+            x = self.vis_linear(x_avg)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+
+            if self.args.image_verbose:
+                print('ENCODER: AVG tok and visual embed, avg %s, out %s' %
+                      (str(x_avg.shape), str(x.shape)))
+        elif self.args.image_embed_type == 'visonly':
+            x = vis_encoder_out
+            x = self.vis_linear(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+            
+            if self.args.image_verbose:
+                print('ENCODER: ONLY visual embed')
         else:  # self.args.image_embed_type == 'ignore':
             if self.args.image_verbose:
                 print('ENCODER: IGNORE visual embed')
