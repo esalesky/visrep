@@ -59,10 +59,11 @@ class VisualTransformerModel(BaseFairseqModel):
         :prog:
     """
 
-    def __init__(self, args, visual_encoder, encoder, decoder):
+    # def __init__(self, args, visual_encoder, encoder, decoder):
+    def __init__(self, args, encoder, decoder):
         super().__init__()
         self.args = args
-        self.visual_encoder = visual_encoder
+        #self.visual_encoder = visual_encoder
         self.encoder = encoder
         self.decoder = decoder
         self.supports_align_args = True
@@ -129,6 +130,9 @@ class VisualTransformerModel(BaseFairseqModel):
                             help='perform layer-wise attention (cross-attention or cross+self-attention)')
         # fmt: on
 
+        parser.add_argument('--freeze-encoder-embed', default=False, action='store_true',
+                            help='Freeze the encoder embeddings')
+
     def forward(self, src_tokens, src_lengths, src_images, prev_output_tokens, **kwargs):
         """
         Run the forward pass for an encoder-decoder model.
@@ -153,40 +157,8 @@ class VisualTransformerModel(BaseFairseqModel):
                 - a dictionary with any model-specific outputs
         """
 
-        # if self.args.image_verbose:
-        #     print('VISUAL src_tokens %s' % (
-        #         str(src_tokens.shape)))
-        #     print('VISUAL src_lengths  %s' % (
-        #         str(src_lengths.shape)))
-        #     print('VISUAL src_images (batch, token, channel, height, width) %s' % (
-        #         str(src_images.shape)))
-        #     print('VISUAL prev_output_tokens  %s' % (
-        #         str(prev_output_tokens.shape)))
-
-        b, t, c, h, w = src_images.shape  # batch x token x channel x height x width
-
-        src_images = src_images.view(-1, src_images.size(-3),
-                                     src_images.size(-2), src_images.size(-1))
-
-        if self.args.image_verbose:
-            print('VISUAL input ((batch x token), channel, height, width) %s' % (
-                str(src_images.shape)))
-
-        visual_out, visual_prelogits = self.visual_encoder(
-            src_images)  # (B X T) X D embed_dim
-
-        if self.args.image_verbose:
-            print('VISUAL output ((batch x token), embed_dim) %s, prelogits %s' % (
-                visual_out.shape, visual_prelogits.shape))
-
-        visual_out = visual_out.view(b, t, 512)  # batch, token, embed_dim
-
-        if self.args.image_verbose:
-            print('ENCODER input src_tokens %s, src_lengths %s' % (
-                src_tokens.shape, src_lengths.shape))
-
         encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, vis_encoder_out=visual_out, **kwargs)
+            src_tokens, src_lengths=src_lengths, src_images=src_images, **kwargs)
 
         if self.args.image_verbose:
             print('ENCODER: output (token, batch, embed_dim) %s' %
@@ -196,6 +168,8 @@ class VisualTransformerModel(BaseFairseqModel):
         # 'encoder_padding_mask': encoder_padding_mask,  # B x T
         # 'encoder_embedding': encoder_embedding,  # B x T x C
         # 'encoder_states': encoder_states,  # List[T x B x C]
+        # 'vis_encoder_out': vis_encoder_out,  # B, T, D embed_dim
+        # 'visual_prelogits': visual_prelogits,
 
         if self.args.image_verbose:
             print('DECODER: input (encoder out) %s, prev decoder out (batch, tgt_len) %s' %
@@ -207,6 +181,11 @@ class VisualTransformerModel(BaseFairseqModel):
         if self.args.image_verbose:
             print('DECODER: output (batch, tgt len, vocab) %s' %
                   (str(decoder_out[0].shape)))
+
+        if not self.args.image_disable:
+            visual_prelogits = encoder_out['visual_prelogits']
+        else:
+            visual_prelogits = None
 
         return decoder_out, visual_prelogits
 
@@ -242,7 +221,7 @@ class VisualTransformerModel(BaseFairseqModel):
             else:
                 return F.softmax(logits, dim=-1)
 
-    def extract_features(self, src_tokens, src_lengths, prev_output_tokens, **kwargs):
+    def extract_features(self, src_tokens, src_lengths, src_images, prev_output_tokens, **kwargs):
         """
         Similar to *forward* but only return features.
 
@@ -251,8 +230,8 @@ class VisualTransformerModel(BaseFairseqModel):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, **kwargs)
+        encoder_out, _ = self.encoder(
+            src_tokens, src_lengths=src_lengths, src_images=src_images, **kwargs)
         features = self.decoder.extract_features(
             prev_output_tokens, encoder_out=encoder_out, **kwargs)
         return features
@@ -317,22 +296,53 @@ class VisualTransformerModel(BaseFairseqModel):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
 
+        if args.image_disable:
+            if args.image_embed_path:
+                num_embeddings = len(src_dict)
+                padding_idx = src_dict.pad()
+                visual_embed_tokens = Embedding(
+                    num_embeddings, args.encoder_embed_dim, padding_idx)
+                visual_embed_dict = utils.parse_embedding(
+                    args.image_embed_path)
+                utils.load_embedding(
+                    visual_embed_dict, src_dict, visual_embed_tokens)
+                print('VIS_TRANSFORMER: use pretrained visual embeddings')
+            else:
+                visual_embed_tokens = None
+        else:
+            visual_embed_tokens = None
+
         # print(args)
         if args.image_verbose:
             print('VIS_TRANSFORMER: src_dict len %d' % (len(src_dict)))
             print('VIS_TRANSFORMER: tgt_dict len %d' % (len(tgt_dict)))
 
-        visual_encoder = cls.build_visual_encoder(args, src_dict)
-        encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
+        if args.freeze_encoder_embed:
+            print('...FREEZE encoder embed')
+            encoder_embed_tokens.weight.requires_grad = False
+
+        if visual_embed_tokens:
+            if args.image_freeze_encoder_embed:
+                print('VISUAL ENCODER: freeze pretrain visual_embed_tokens')
+                visual_embed_tokens.weight.requires_grad = False
+
+        #visual_encoder = cls.build_visual_encoder(args, src_dict)
+        encoder = cls.build_encoder(
+            args, src_dict, encoder_embed_tokens, visual_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
-        return cls(args, visual_encoder, encoder, decoder)
+        # return cls(args, visual_encoder, encoder, decoder)
+        return cls(args, encoder, decoder)
 
     @classmethod
-    def build_encoder(cls, args, src_dict, embed_tokens):
-        if args.image_verbose:
-            print('VIS_TRANSFORMER: setup TransformerEncoder')
-        # return TransformerEncoder(args, src_dict, embed_tokens)
-        return VisualTransformerEncoder(args, src_dict, embed_tokens)
+    def build_encoder(cls, args, src_dict, embed_tokens, visual_embed_tokens):
+        if not args.image_disable:
+            if args.image_verbose:
+                print('VIS_TRANSFORMER: setup TransformerEncoder')
+            # return TransformerEncoder(args, src_dict, embed_tokens)
+            visual_encoder = cls.build_visual_encoder(args, src_dict)
+        else:
+            visual_encoder = None
+        return VisualTransformerEncoder(args, src_dict, embed_tokens, visual_embed_tokens, visual_encoder)
 
     @classmethod
     def build_visual_encoder(cls, args, src_dict):
@@ -367,9 +377,19 @@ class VisualTransformerEncoder(FairseqEncoder):
         embed_tokens (torch.nn.Embedding): input embedding
     """
 
-    def __init__(self, args, dictionary, embed_tokens):
+    def __init__(self, args, dictionary, embed_tokens, visual_embed_tokens, visual_encoder):
         super().__init__(dictionary)
         self.register_buffer('version', torch.Tensor([3]))
+
+        self.visual_embed_tokens = visual_embed_tokens
+        if self.visual_embed_tokens == None:
+            print('VISUAL ENCODER: pretrain visual_embed_tokens set to NONE')
+        else:
+            print('VISUAL ENCODER: using pretrain visual_embed_tokens')
+
+        self.visual_encoder = visual_encoder
+        if self.visual_encoder == None:
+            print('VISUAL ENCODER: visual_encoder set to NONE')
 
         #self.print_ctr = 0
         self.args = args
@@ -415,7 +435,35 @@ class VisualTransformerEncoder(FairseqEncoder):
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x, embed
 
-    def forward(self, src_tokens, src_lengths, vis_encoder_out=None, cls_input=None, return_all_hiddens=False):
+    def forward_visual_embedding(self, src_tokens, src_images):
+        if not self.args.image_disable:
+            b, t, c, h, w = src_images.shape  # batch x token x channel x height x width
+
+            src_images = src_images.view(-1, src_images.size(-3),
+                                         src_images.size(-2), src_images.size(-1))
+
+            if self.args.image_verbose:
+                print('ENCODER: input ((batch x token), channel, height, width) %s' % (
+                    str(src_images.shape)))
+
+            visual_out, visual_prelogits = self.visual_encoder(
+                src_images)  # (B X T) X D embed_dim
+
+            vis_encoder_out = visual_out.view(
+                b, t, 512)  # batch, token, embed_dim
+
+        else:
+            if self.args.image_embed_path:
+                vis_encoder_out = self.embed_scale * \
+                    self.visual_embed_tokens(src_tokens)
+                visual_prelogits = None
+            else:
+                vis_encoder_out = None
+                visual_prelogits = None
+
+        return vis_encoder_out, visual_prelogits
+
+    def forward(self, src_tokens, src_lengths, src_images, cls_input=None, return_all_hiddens=False):
         """
         Args:
             src_tokens (LongTensor): tokens in the source language of shape
@@ -438,40 +486,60 @@ class VisualTransformerEncoder(FairseqEncoder):
         if self.layer_wise_attention:
             return_all_hiddens = True
 
+        if self.args.image_verbose:
+            print('ENCODER: input src_tokens %s, src_lengths %s' % (
+                src_tokens.shape, src_lengths.shape))
+
+        vis_encoder_out, visual_prelogits = self.forward_visual_embedding(
+            src_tokens, src_images)
+
+        if self.args.image_verbose:
+            if type(vis_encoder_out) == type(None):
+                print('ENCODER: visual embed NONE')
+            else:
+                print('ENCODER: visual embed ((batch x token), embed_dim) %s' % (
+                    str(vis_encoder_out.shape)))
+
+            if type(visual_prelogits) == type(None):
+                print('ENCODER: visual embed prelogits NONE')
+            else:
+                print('ENCODER: visual embed prelogits %s' % (
+                    str(visual_prelogits.shape)))
+
         x, encoder_embedding = self.forward_embedding(src_tokens)
 
         if self.args.image_verbose:
             print('ENCODER: token embed %s' %
                   str(x.shape))
-            print('ENCODER: visual embed (batch, tgt_len) %s' %
-                  str(vis_encoder_out.shape))
 
-        if self.args.image_embed_type == 'concat':
-            x_cat = torch.cat((x, vis_encoder_out), dim=2)
-            x = self.vis_linear(x_cat)
-            x = F.dropout(x, p=self.dropout, training=self.training)
+        # if not self.args.image_disable:
+        if type(vis_encoder_out) != type(None):
+            if self.args.image_embed_type == 'concat':
+                x_cat = torch.cat((x, vis_encoder_out), dim=2)
+                x = self.vis_linear(x_cat)
+                x = F.dropout(x, p=self.dropout, training=self.training)
 
-            if self.args.image_verbose:
-                print('ENCODER: CONCAT tok and visual embed, concat %s, out %s' %
-                      (str(x_cat.shape), str(x.shape)))
-        elif self.args.image_embed_type == 'avg':
-            x_avg = torch.mean((x, vis_encoder_out), dim=2)
-            x = self.vis_linear(x_avg)
-            x = F.dropout(x, p=self.dropout, training=self.training)
+                if self.args.image_verbose:
+                    print('ENCODER: CONCAT tok and visual embed, concat %s, out %s' %
+                          (str(x_cat.shape), str(x.shape)))
+            elif self.args.image_embed_type == 'avg':
+                x_avg = torch.mean((x, vis_encoder_out), dim=2)
+                x = self.vis_linear(x_avg)
+                x = F.dropout(x, p=self.dropout, training=self.training)
 
-            if self.args.image_verbose:
-                print('ENCODER: AVG tok and visual embed, avg %s, out %s' %
-                      (str(x_avg.shape), str(x.shape)))
-        elif self.args.image_embed_type == 'visonly':
-            x = vis_encoder_out
-            x = self.vis_linear(x)
-            x = F.dropout(x, p=self.dropout, training=self.training)
-            
-            if self.args.image_verbose:
-                print('ENCODER: ONLY visual embed')
-        else:  # self.args.image_embed_type == 'ignore':
-            if self.args.image_verbose:
-                print('ENCODER: IGNORE visual embed')
+                if self.args.image_verbose:
+                    print('ENCODER: AVG tok and visual embed, avg %s, out %s' %
+                          (str(x_avg.shape), str(x.shape)))
+            elif self.args.image_embed_type == 'visonly':
+                x = vis_encoder_out
+                x = self.vis_linear(x)
+                x = F.dropout(x, p=self.dropout, training=self.training)
+
+                if self.args.image_verbose:
+                    print('ENCODER: ONLY visual embed')
+            else:  # self.args.image_embed_type == 'ignore':
+                if self.args.image_verbose:
+                    print('ENCODER: IGNORE visual embed')
 
             # B x T x C -> T x B x C
         x = x.transpose(0, 1)
@@ -494,14 +562,25 @@ class VisualTransformerEncoder(FairseqEncoder):
             if return_all_hiddens:
                 encoder_states[-1] = x
 
-        #print('transformer encoder out shape', x.shape)
-
-        return {
+        encoder_out_dict = {
             'encoder_out': x,  # T x B x C
             'encoder_padding_mask': encoder_padding_mask,  # B x T
             'encoder_embedding': encoder_embedding,  # B x T x C
             'encoder_states': encoder_states,  # List[T x B x C]
+            'vis_encoder_out': vis_encoder_out,  # B, T, D embed_dim
+            'visual_prelogits': visual_prelogits,
         }
+
+        if self.args.image_verbose:
+            print('ENCODER OUT: encoder_out %s' %
+                  (str(encoder_out_dict['encoder_out'].shape)))
+
+        if not self.args.image_disable:
+            if self.args.image_verbose:
+                print('ENCODER OUT: visual_prelogits %s' %
+                      (str(visual_prelogits.shape)))
+
+        return encoder_out_dict
 
     def reorder_encoder_out(self, encoder_out, new_order):
         """

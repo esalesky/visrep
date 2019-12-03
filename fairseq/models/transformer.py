@@ -88,7 +88,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
         parser.add_argument('--encoder-embed-path', type=str, metavar='STR',
                             help='path to pre-trained encoder embedding')
 
-        parser.add_argument('--freeze-enocder-embed', default=False, action='store_true',
+        parser.add_argument('--freeze-encoder-embed', default=False, action='store_true',
                             help='Freeze the encoder embeddings')
 
         parser.add_argument('--encoder-embed-dim', type=int, metavar='N',

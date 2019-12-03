@@ -24,6 +24,7 @@ export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 LAYER='avgpool'  #avgpool 'layer4'
 SRC_LANG=${1} # ko zh ja de fr
 TGT_LANG=en
+SIZE=${2}
 FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
 
 # list_include_item "10 11 12" "2"
@@ -40,16 +41,16 @@ function list_include_item {
 }
 
 if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
-    SIZE=2.5k
+    #SIZE=2.5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 elif `list_include_item "de" "${SRC_LANG}"` ; then
-    SIZE=2.5k
+    #SIZE=2.5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 elif `list_include_item "zh" "${SRC_LANG}"` ; then
-    SIZE=5k
+    #SIZE=5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 else
-    SIZE=2.5k
+    #SIZE=2.5k
     DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}/dict.$SRC_LANG.txt 
 fi
 

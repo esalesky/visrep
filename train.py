@@ -133,56 +133,61 @@ def train(args, trainer, task, epoch_itr):
     extra_meters = collections.defaultdict(lambda: AverageMeter())
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
+
     for i, samples in enumerate(progress, start=epoch_itr.iterations_in_epoch):
-        #print(i, samples)
-        if args.image_verbose:
-            print('\n\nDATA: id %s' % (len(samples[0]['id'])))
-            print('DATA: nsentences', samples[0]['nsentences'])
-            print('DATA: ntokens', samples[0]['ntokens'])
-            print('DATA: src_tokens', samples[0]
-                  ['net_input']['src_tokens'].shape)
-            print('DATA: src_lengths',
-                  samples[0]['net_input']['src_lengths'].shape)
-            print('DATA: src_images', samples[0]
-                  ['net_input']['src_images'].shape)
-            print('DATA: target', samples[0]['target'].shape)
-            print('DATA: prev_output_tokens',
-                  samples[0]['net_input']['prev_output_tokens'].shape)
+            #print(i, samples)
+            if args.image_verbose:
 
-        log_output = trainer.train_step(samples)
-        if log_output is None:
-            continue
+                print('\n\nDATA: id %s' % (len(samples[0]['id'])))
+                print('DATA: nsentences', samples[0]['nsentences'])
+                print('DATA: ntokens', samples[0]['ntokens'])
+                print('DATA: src_tokens', samples[0]
+                      ['net_input']['src_tokens'].shape)
+                print('DATA: src_lengths',
+                      samples[0]['net_input']['src_lengths'].shape)
 
-        # log mid-epoch stats
-        stats = get_training_stats(trainer)
-        for k, v in log_output.items():
-            if k in ['loss', 'nll_loss', 'ntokens', 'nsentences', 'sample_size']:
-                continue  # these are already logged above
-            if 'loss' in k or k == 'accuracy':
-                extra_meters[k].update(v, log_output['sample_size'])
-            else:
-                extra_meters[k].update(v)
-            stats[k] = extra_meters[k].avg
-        progress.log(stats, tag='train', step=stats['num_updates'])
+                if not args.image_disable:
+                    print('DATA: src_images', samples[0]
+                          ['net_input']['src_images'].shape)
 
-        # ignore the first mini-batch in words-per-second calculation
-        if i == 0:
-            trainer.get_meter('wps').reset()
+                print('DATA: target', samples[0]['target'].shape)
+                print('DATA: prev_output_tokens',
+                      samples[0]['net_input']['prev_output_tokens'].shape)
 
-        num_updates = trainer.get_num_updates()
-        if (
-            not args.disable_validation
-            and args.save_interval_updates > 0
-            and num_updates % args.save_interval_updates == 0
-            and num_updates > 0
-        ):
-            valid_losses = validate(
-                args, trainer, task, epoch_itr, valid_subsets)
-            checkpoint_utils.save_checkpoint(
-                args, trainer, epoch_itr, valid_losses[0])
+            log_output = trainer.train_step(samples)
+            if log_output is None:
+                continue
 
-        if num_updates >= max_update:
-            break
+            # log mid-epoch stats
+            stats = get_training_stats(trainer)
+            for k, v in log_output.items():
+                if k in ['loss', 'nll_loss', 'ntokens', 'nsentences', 'sample_size']:
+                    continue  # these are already logged above
+                if 'loss' in k or k == 'accuracy':
+                    extra_meters[k].update(v, log_output['sample_size'])
+                else:
+                    extra_meters[k].update(v)
+                stats[k] = extra_meters[k].avg
+            progress.log(stats, tag='train', step=stats['num_updates'])
+
+            # ignore the first mini-batch in words-per-second calculation
+            if i == 0:
+                trainer.get_meter('wps').reset()
+
+            num_updates = trainer.get_num_updates()
+            if (
+                not args.disable_validation
+                and args.save_interval_updates > 0
+                and num_updates % args.save_interval_updates == 0
+                and num_updates > 0
+            ):
+                valid_losses = validate(
+                    args, trainer, task, epoch_itr, valid_subsets)
+                checkpoint_utils.save_checkpoint(
+                    args, trainer, epoch_itr, valid_losses[0])
+
+            if num_updates >= max_update:
+                break
 
     # log end-of-epoch stats
     stats = get_training_stats(trainer)

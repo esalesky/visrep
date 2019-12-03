@@ -87,9 +87,11 @@ class SequenceGenerator(object):
         assert temperature > 0, '--temperature must be greater than 0'
 
         if sampling:
-            self.search = search.Sampling(tgt_dict, sampling_topk, sampling_topp)
+            self.search = search.Sampling(
+                tgt_dict, sampling_topk, sampling_topp)
         elif diverse_beam_groups > 0:
-            self.search = search.DiverseBeamSearch(tgt_dict, diverse_beam_groups, diverse_beam_strength)
+            self.search = search.DiverseBeamSearch(
+                tgt_dict, diverse_beam_groups, diverse_beam_strength)
         elif match_source_len:
             self.search = search.LengthConstrainedBeamSearch(
                 tgt_dict, min_len_a=1, min_len_b=0, max_len_a=1, max_len_b=0,
@@ -132,7 +134,8 @@ class SequenceGenerator(object):
         }
 
         src_tokens = encoder_input['src_tokens']
-        src_lengths = (src_tokens.ne(self.eos) & src_tokens.ne(self.pad)).long().sum(dim=1)
+        src_lengths = (src_tokens.ne(self.eos) &
+                       src_tokens.ne(self.pad)).long().sum(dim=1)
         input_size = src_tokens.size()
         # batch dimension goes first followed by source lengths
         bsz = input_size[0]
@@ -157,7 +160,8 @@ class SequenceGenerator(object):
         # initialize buffers
         scores = src_tokens.new(bsz * beam_size, max_len + 1).float().fill_(0)
         scores_buf = scores.clone()
-        tokens = src_tokens.new(bsz * beam_size, max_len + 2).long().fill_(self.pad)
+        tokens = src_tokens.new(
+            bsz * beam_size, max_len + 2).long().fill_(self.pad)
         tokens_buf = tokens.clone()
         tokens[:, 0] = self.eos if bos_token is None else bos_token
         attn, attn_buf = None, None
@@ -166,7 +170,8 @@ class SequenceGenerator(object):
         # For example, suppose we're sampling and have already finalized 2/5
         # samples. Then the blacklist would mark 2 positions as being ignored,
         # so that we only finalize the remaining 3 samples.
-        blacklist = src_tokens.new_zeros(bsz, beam_size).eq(-1)  # forward and backward-compatible False mask
+        # forward and backward-compatible False mask
+        blacklist = src_tokens.new_zeros(bsz, beam_size).eq(-1)
 
         # list of completed sentences
         finalized = [[] for i in range(bsz)]
@@ -177,7 +182,8 @@ class SequenceGenerator(object):
         cand_size = 2 * beam_size  # 2 x beam size in case half are EOS
 
         # offset arrays for converting between different indexing schemes
-        bbsz_offsets = (torch.arange(0, bsz) * beam_size).unsqueeze(1).type_as(tokens)
+        bbsz_offsets = (torch.arange(0, bsz) *
+                        beam_size).unsqueeze(1).type_as(tokens)
         cand_offsets = torch.arange(0, cand_size).type_as(tokens)
 
         # helper function for allocating buffers on the fly
@@ -219,10 +225,12 @@ class SequenceGenerator(object):
 
             # clone relevant token and attention tensors
             tokens_clone = tokens.index_select(0, bbsz_idx)
-            tokens_clone = tokens_clone[:, 1:step + 2]  # skip the first index, which is EOS
+            # skip the first index, which is EOS
+            tokens_clone = tokens_clone[:, 1:step + 2]
             assert not tokens_clone.eq(self.eos).any()
             tokens_clone[:, step] = self.eos
-            attn_clone = attn.index_select(0, bbsz_idx)[:, :, 1:step+2] if attn is not None else None
+            attn_clone = attn.index_select(
+                0, bbsz_idx)[:, :, 1:step+2] if attn is not None else None
 
             # compute scores per token position
             pos_scores = scores.index_select(0, bbsz_idx)[:, :step+1]
@@ -286,10 +294,13 @@ class SequenceGenerator(object):
             if reorder_state is not None:
                 if batch_idxs is not None:
                     # update beam indices to take into account removed sentences
-                    corr = batch_idxs - torch.arange(batch_idxs.numel()).type_as(batch_idxs)
-                    reorder_state.view(-1, beam_size).add_(corr.unsqueeze(-1) * beam_size)
+                    corr = batch_idxs - \
+                        torch.arange(batch_idxs.numel()).type_as(batch_idxs)
+                    reorder_state.view(-1,
+                                       beam_size).add_(corr.unsqueeze(-1) * beam_size)
                 model.reorder_incremental_state(reorder_state)
-                encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
+                encoder_outs = model.reorder_encoder_out(
+                    encoder_outs, reorder_state)
 
             lprobs, avg_attn_scores = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
@@ -307,7 +318,8 @@ class SequenceGenerator(object):
 
             # handle prefix tokens (possibly with different lengths)
             if prefix_tokens is not None and step < prefix_tokens.size(1):
-                prefix_toks = prefix_tokens[:, step].unsqueeze(-1).repeat(1, beam_size).view(-1)
+                prefix_toks = prefix_tokens[:,
+                                            step].unsqueeze(-1).repeat(1, beam_size).view(-1)
                 prefix_lprobs = lprobs.gather(-1, prefix_toks.unsqueeze(-1))
                 prefix_mask = prefix_toks.ne(self.pad)
                 lprobs[prefix_mask] = -math.inf
@@ -319,7 +331,8 @@ class SequenceGenerator(object):
                 eos_mask = prefix_toks.eq(self.eos)
                 if eos_mask.any():
                     # validate that the first beam matches the prefix
-                    first_beam = tokens[eos_mask].view(-1, beam_size, tokens.size(-1))[:, 0, 1:step + 1]
+                    first_beam = tokens[eos_mask].view(-1, beam_size, tokens.size(-1))[
+                        :, 0, 1:step + 1]
                     eos_mask_batch_dim = eos_mask.view(-1, beam_size)[:, 0]
                     target_prefix = prefix_tokens[eos_mask_batch_dim][:, :step]
                     assert (first_beam == target_prefix).all()
@@ -341,12 +354,14 @@ class SequenceGenerator(object):
                     gen_tokens = tokens[bbsz_idx].tolist()
                     for ngram in zip(*[gen_tokens[i:] for i in range(self.no_repeat_ngram_size)]):
                         gen_ngrams[bbsz_idx][tuple(ngram[:-1])] = \
-                                gen_ngrams[bbsz_idx].get(tuple(ngram[:-1]), []) + [ngram[-1]]
+                            gen_ngrams[bbsz_idx].get(
+                                tuple(ngram[:-1]), []) + [ngram[-1]]
 
             # Record attention scores
             if avg_attn_scores is not None:
                 if attn is None:
-                    attn = scores.new(bsz * beam_size, src_tokens.size(1), max_len + 2)
+                    attn = scores.new(
+                        bsz * beam_size, src_tokens.size(1), max_len + 2)
                     attn_buf = attn.clone()
                 attn[:, :, step + 1].copy_(avg_attn_scores)
 
@@ -360,12 +375,14 @@ class SequenceGenerator(object):
             if self.no_repeat_ngram_size > 0:
                 def calculate_banned_tokens(bbsz_idx):
                     # before decoding the next token, prevent decoding of ngrams that have already appeared
-                    ngram_index = tuple(tokens[bbsz_idx, step + 2 - self.no_repeat_ngram_size:step + 1].tolist())
+                    ngram_index = tuple(
+                        tokens[bbsz_idx, step + 2 - self.no_repeat_ngram_size:step + 1].tolist())
                     return gen_ngrams[bbsz_idx].get(ngram_index, [])
 
                 if step + 2 - self.no_repeat_ngram_size >= 0:
                     # no banned tokens if we haven't generated no_repeat_ngram_size tokens yet
-                    banned_tokens = [calculate_banned_tokens(bbsz_idx) for bbsz_idx in range(bsz * beam_size)]
+                    banned_tokens = [calculate_banned_tokens(
+                        bbsz_idx) for bbsz_idx in range(bsz * beam_size)]
                 else:
                     banned_tokens = [[] for bbsz_idx in range(bsz * beam_size)]
 
@@ -401,7 +418,8 @@ class SequenceGenerator(object):
                     mask=eos_mask[:, :beam_size],
                     out=eos_scores,
                 )
-                finalized_sents = finalize_hypos(step, eos_bbsz_idx, eos_scores)
+                finalized_sents = finalize_hypos(
+                    step, eos_bbsz_idx, eos_scores)
                 num_remaining_sent -= len(finalized_sents)
 
             assert num_remaining_sent >= 0
@@ -428,12 +446,15 @@ class SequenceGenerator(object):
                 src_lengths = src_lengths[batch_idxs]
                 blacklist = blacklist[batch_idxs]
 
-                scores = scores.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
+                scores = scores.view(
+                    bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
                 scores_buf.resize_as_(scores)
-                tokens = tokens.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
+                tokens = tokens.view(
+                    bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
                 tokens_buf.resize_as_(tokens)
                 if attn is not None:
-                    attn = attn.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, attn.size(1), -1)
+                    attn = attn.view(
+                        bsz, -1)[batch_idxs].view(new_bsz * beam_size, attn.size(1), -1)
                     attn_buf.resize_as_(attn)
                 bsz = new_bsz
             else:
@@ -453,7 +474,8 @@ class SequenceGenerator(object):
 
             # get the top beam_size active hypotheses, which are just the hypos
             # with the smallest values in active_mask
-            active_hypos, new_blacklist = buffer('active_hypos'), buffer('new_blacklist')
+            active_hypos, new_blacklist = buffer(
+                'active_hypos'), buffer('new_blacklist')
             torch.topk(
                 active_mask, k=beam_size, dim=1, largest=False,
                 out=(new_blacklist, active_hypos)
@@ -513,7 +535,8 @@ class SequenceGenerator(object):
 
         # sort by score descending
         for sent in range(len(finalized)):
-            finalized[sent] = sorted(finalized[sent], key=lambda r: r['score'], reverse=True)
+            finalized[sent] = sorted(
+                finalized[sent], key=lambda r: r['score'], reverse=True)
         return finalized
 
 
@@ -568,7 +591,8 @@ class EnsembleModel(torch.nn.Module):
                     avg_attn = attn
                 else:
                     avg_attn.add_(attn)
-        avg_probs = torch.logsumexp(torch.stack(log_probs, dim=0), dim=0) - math.log(len(self.models))
+        avg_probs = torch.logsumexp(torch.stack(
+            log_probs, dim=0), dim=0) - math.log(len(self.models))
         if avg_attn is not None:
             avg_attn.div_(len(self.models))
         return avg_probs, avg_attn
@@ -579,10 +603,12 @@ class EnsembleModel(torch.nn.Module):
     ):
         if self.incremental_states is not None:
             decoder_out = list(model.forward_decoder(
-                tokens, encoder_out=encoder_out, incremental_state=self.incremental_states[model],
+                tokens, encoder_out=encoder_out, incremental_state=self.incremental_states[
+                    model],
             ))
         else:
-            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out))
+            decoder_out = list(model.forward_decoder(
+                tokens, encoder_out=encoder_out))
         decoder_out[0] = decoder_out[0][:, -1:, :]
         if temperature != 1.:
             decoder_out[0].div_(temperature)
@@ -607,7 +633,8 @@ class EnsembleModel(torch.nn.Module):
         if self.incremental_states is None:
             return
         for model in self.models:
-            model.decoder.reorder_incremental_state(self.incremental_states[model], new_order)
+            model.decoder.reorder_incremental_state(
+                self.incremental_states[model], new_order)
 
 
 class SequenceGeneratorWithAlignment(SequenceGenerator):
@@ -637,25 +664,30 @@ class SequenceGeneratorWithAlignment(SequenceGenerator):
         src_tokens, src_lengths, prev_output_tokens, tgt_tokens = \
             self._prepare_batch_for_alignment(sample, finalized)
         if any(getattr(m, 'full_context_alignment', False) for m in model.models):
-            attn = model.forward_align(src_tokens, src_lengths, prev_output_tokens)
+            attn = model.forward_align(
+                src_tokens, src_lengths, prev_output_tokens)
         else:
             attn = [
-                finalized[i // beam_size][i % beam_size]['attention'].transpose(1, 0)
+                finalized[i // beam_size][i %
+                                          beam_size]['attention'].transpose(1, 0)
                 for i in range(bsz * beam_size)
             ]
 
         # Process the attn matrix to extract hard alignments.
         for i in range(bsz * beam_size):
-            alignment = utils.extract_hard_alignment(attn[i], src_tokens[i], tgt_tokens[i], self.pad, self.eos)
+            alignment = utils.extract_hard_alignment(
+                attn[i], src_tokens[i], tgt_tokens[i], self.pad, self.eos)
             finalized[i // beam_size][i % beam_size]['alignment'] = alignment
         return finalized
 
     def _prepare_batch_for_alignment(self, sample, hypothesis):
         src_tokens = sample['net_input']['src_tokens']
         bsz = src_tokens.shape[0]
-        src_tokens = src_tokens[:, None, :].expand(-1, self.beam_size, -1).contiguous().view(bsz * self.beam_size, -1)
+        src_tokens = src_tokens[:, None, :].expand(
+            -1, self.beam_size, -1).contiguous().view(bsz * self.beam_size, -1)
         src_lengths = sample['net_input']['src_lengths']
-        src_lengths = src_lengths[:, None].expand(-1, self.beam_size).contiguous().view(bsz * self.beam_size)
+        src_lengths = src_lengths[:, None].expand(
+            -1, self.beam_size).contiguous().view(bsz * self.beam_size)
         prev_output_tokens = data_utils.collate_tokens(
             [beam['tokens'] for example in hypothesis for beam in example],
             self.pad, self.eos, self.left_pad_target, move_eos_to_beginning=True,
@@ -697,7 +729,8 @@ class EnsembleModelWithAlignment(EnsembleModel):
                 incremental_state=self.incremental_states[model],
             ))
         else:
-            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out))
+            decoder_out = list(model.forward_decoder(
+                tokens, encoder_out=encoder_out))
         decoder_out[0] = decoder_out[0][:, -1:, :]
         if temperature != 1.:
             decoder_out[0].div_(temperature)

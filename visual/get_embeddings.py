@@ -12,7 +12,7 @@ from torchvision.utils import save_image
 from torchsummary import summary
 from augment import ImageAug
 from dataset import ImageDataset
-from models import VisualNet, Softmax, Trainer
+from models import VisualNet, Softmax, VisualTrainer
 import csv
 
 
@@ -115,7 +115,7 @@ def main(args):
                          extract=args.layer)
     head = Softmax(dim=512, dim_out=len(
         test_dataset.label_dict), log_softmax=True)
-    model = Trainer(backbone, head)
+    model = VisualTrainer(backbone, head)
     model.load_state_dict(checkpoint['state_dict'], strict=False)
     model.to(device)
     model.eval()
@@ -148,7 +148,7 @@ def main(args):
             inputs = inputs.to(device)
             labels = labels.to(device)
 
-            logits, embed = model(inputs, labels)
+            embed, logits = model(inputs)  # , labels)
 
             _, predicted = torch.max(logits.data, 1)
             total += labels.size(0)

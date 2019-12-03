@@ -25,6 +25,7 @@ export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 
 SRC_LANG=${1} # ko zh ja de fr
 TGT_LANG=en
+SIZE=${2}
 FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
 
 # list_include_item "10 11 12" "2"
@@ -40,15 +41,15 @@ function list_include_item {
   return $result
 }
 
-if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
-    SIZE=2.5k
-elif `list_include_item "de" "${SRC_LANG}"` ; then
-    SIZE=2.5k
-elif `list_include_item "zh" "${SRC_LANG}"` ; then
-    SIZE=5k
-else
-    SIZE=2.5k
-fi
+#if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
+#    SIZE=2.5k
+#elif `list_include_item "de" "${SRC_LANG}"` ; then
+#    SIZE=2.5k
+#elif `list_include_item "zh" "${SRC_LANG}"` ; then
+#    SIZE=5k
+#else
+#    SIZE=2.5k
+#fi
 
 DATA_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/word_embeddings.npz
 EXP_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}

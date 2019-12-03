@@ -173,8 +173,8 @@ def main(args):
             embed, prelogits = model(inputs)
             logits = F.log_softmax(prelogits, dim=-1)
 
-            LOG.info('Embed %s, logits %s, and labels %s',
-                     embed.shape, logits.shape, labels.shape)
+            # LOG.info('Embed %s, logits %s, and labels %s',
+            #         embed.shape, logits.shape, labels.shape)
 
             loss = criterion(logits, labels)
 

@@ -74,7 +74,7 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
-        print('LabelSmoothedCrossEntropyCriterion loss', loss)
+        #print('LabelSmoothedCrossEntropyCriterion loss', loss)
         return loss, nll_loss
 
     @staticmethod
@@ -90,7 +90,7 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
             'nsentences': nsentences,
             'sample_size': sample_size,
         }
-        print('agg loss', agg['loss'])
+        #print('agg loss', agg['loss'])
         return agg
 
 
@@ -99,6 +99,7 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
     def __init__(self, args, task):
         super().__init__(args, task)
         self.eps = args.label_smoothing
+        self.image_disable = args.image_disable
         self.image_verbose = args.image_verbose
         self.image_src_loss_scale = args.image_src_loss_scale
         self.image_tgt_loss_scale = args.image_tgt_loss_scale
@@ -122,21 +123,32 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
         sample_size = sample['target'].size(
             0) if self.args.sentence_avg else sample['ntokens']
 
-        src_images = sample['net_input']['src_images']
-        src_images_view = src_images.view(-1, src_images.size(-3),
-                                          src_images.size(-2), src_images.size(-1))
+        if not self.image_disable:
+            src_images = sample['net_input']['src_images']
+            src_images_view = src_images.view(-1, src_images.size(-3),
+                                              src_images.size(-2), src_images.size(-1))
+            loss = (tgt_loss * self.image_tgt_loss_scale) + \
+                (src_loss * self.image_src_loss_scale)
+            nll_loss = (tgt_nll_loss * self.image_tgt_loss_scale) + \
+                (src_nll_loss * self.image_src_loss_scale)
 
-        loss = (tgt_loss * self.image_tgt_loss_scale) + \
-            (src_loss * self.image_src_loss_scale)
-        nll_loss = (tgt_nll_loss * self.image_tgt_loss_scale) + \
-            (src_nll_loss * self.image_src_loss_scale)
+            src_image_count = src_images_view.size(0)
+        else:
+            loss = tgt_loss
+            nll_loss = tgt_nll_loss
+            src_image_count = 0
 
         tgt_loss = utils.item(tgt_loss.data) if reduce else tgt_loss.data
         tgt_nll_loss = utils.item(
             tgt_nll_loss.data) if reduce else tgt_nll_loss.data
-        src_loss = utils.item(src_loss.data) if reduce else src_loss.data
-        src_nll_loss = utils.item(
-            src_nll_loss.data) if reduce else src_nll_loss.data
+
+        if not self.image_disable:
+            src_loss = utils.item(src_loss.data) if reduce else src_loss.data
+            src_nll_loss = utils.item(
+                src_nll_loss.data) if reduce else src_nll_loss.data
+        else:
+            src_loss = None
+            src_nll_loss = None
 
         #print('input images', src_images_view.shape)
         logging_output = {
@@ -154,7 +166,7 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
             'src_loss': src_loss,
             'src_nll_loss': src_nll_loss,
             'src_loss_scale': self.image_src_loss_scale,
-            'src_ntokens': src_images_view.size(0),
+            'src_ntokens': src_image_count,
         }
         if self.image_verbose:
             print(logging_output)
@@ -165,28 +177,30 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
         lprobs = lprobs.view(-1, lprobs.size(-1))
         target = model.get_targets(sample, net_output).view(-1, 1)
 
-        src_lprobs = model.get_src_normalized_probs(
-            encoder_prelogits, log_probs=True)
-
-        src_target = model.get_src_targets(sample, net_output).view(-1, 1)
+        if not self.image_disable:
+            src_lprobs = model.get_src_normalized_probs(
+                encoder_prelogits, log_probs=True)
+            src_target = model.get_src_targets(sample, net_output).view(-1, 1)
+            src_loss, src_nll_loss = label_smoothed_nll_loss(
+                src_lprobs, src_target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
+            )
+            if self.image_verbose:
+                print('CRITERION: source loss %s, nll_loss %s' %
+                      (src_loss, src_nll_loss))
+                print('CRITERION: compute_loss source, logits %s, labels %s' %
+                      (src_lprobs.shape, src_target.shape))
+        else:
+            src_loss = None
+            src_nll_loss = None
 
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
-
-        src_loss, src_nll_loss = label_smoothed_nll_loss(
-            src_lprobs, src_target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
-        )
-
         if self.image_verbose:
             print('CRITERION: compute_loss decoder, logits %s, labels %s' %
                   (lprobs.shape, target.shape))
-            print('CRITERION: compute_loss source, logits %s, labels %s' %
-                  (src_lprobs.shape, src_target.shape))
             print('CRITERION: decoder loss %s, nll_loss %s' %
                   (loss, nll_loss))
-            print('CRITERION: source loss %s, nll_loss %s' %
-                  (src_loss, src_nll_loss))
 
         return loss, nll_loss, src_loss, src_nll_loss
 

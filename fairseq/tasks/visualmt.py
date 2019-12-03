@@ -271,9 +271,9 @@ class VisualMTTask(FairseqTask):
                             help='Image height')
         parser.add_argument('--image-samples-path', default=None, type=str,
                             help='Image Samples path')
-        parser.add_argument("--image-use-cache", default=False, action='store_true',
+        parser.add_argument("--image-use-cache", action='store_true',
                             help='Cache image dictionary')
-        parser.add_argument("--image-augment", default=False, action='store_true',
+        parser.add_argument("--image-augment", action='store_true',
                             help='Use image augmentation')
         parser.add_argument('--image-layer', default='avgpool', type=str,
                             help='ResNet layer [avgpool, layer4, fc]')
@@ -285,8 +285,15 @@ class VisualMTTask(FairseqTask):
                             help='Image embed type [concat, ignore]')
         parser.add_argument('--image-embed-dim', default=512, type=int,
                             help='Image embed dim')
-        parser.add_argument("--image-verbose", default=False, action='store_true',
+        parser.add_argument("--image-embed-path", type=str,
+                            help='Load pretrained image embeddings')
+        parser.add_argument("--image-verbose", action='store_true',
                             help='Display verbose debug')
+        parser.add_argument("--image-disable", action='store_true',
+                            help='Disable visual')
+
+        parser.add_argument("--image-freeze-encoder-embed", action='store_true',
+                            help='Freeze preloaded visual embed')
 
     def __init__(self, args, src_dict, tgt_dict, image_cache):
         super().__init__(args)

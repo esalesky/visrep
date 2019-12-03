@@ -18,7 +18,8 @@ if [ ! -z $SGE_HGR_gpu ]; then
     sleep 3
 fi
 
-source activate /expscratch/detter/tools/py36
+conda deactivate
+conda activate /expscratch/detter/tools/py36
 
 export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 
@@ -26,35 +27,11 @@ export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 SRC_LANG=ko #${1} # ko zh ja de fr
 TGT_LANG=en
 FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
+SIZE=5k #${2}
 
-# list_include_item "10 11 12" "2"
-function list_include_item {
-  local list="$1"
-  local item="$2"
-  if [[ $list =~ (^|[[:space:]])"$item"($|[[:space:]]) ]] ; then
-    # yes, list include item
-    result=0
-  else
-    result=1
-  fi
-  return $result
-}
+DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE} #/dict.$SRC_LANG.txt 
 
-if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
-    SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-elif `list_include_item "de" "${SRC_LANG}"` ; then
-    SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-elif `list_include_item "zh" "${SRC_LANG}"` ; then
-    SIZE=5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-else
-    SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-fi
-
-CKPT_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/vis_trans_pre
+CKPT_DIR=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/${SIZE}/vis_trans
 FONT_FILE=/expscratch/detter/fonts/mt/test_${SRC_LANG}_font.txt
 
 echo "PATH - ${PATH}"
@@ -91,7 +68,6 @@ $DATA_DIR \
 --image-tgt-loss-scale=0.5 \
 --image-embed-type='concat' \
 --image-embed-dim=512 \
---image-verbose \
 --share-decoder-input-output-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
@@ -103,10 +79,13 @@ $DATA_DIR \
 --weight-decay=0.0001 \
 --max-tokens=4000 \
 --criterion=visual_label_smoothed_cross_entropy \
---label-smoothing=0.1 \
---max-epoch=250 \
+--label-smoothing=0.3 \
+--max-epoch=100 \
+--update-freq=8 \
 --num-workers=0 \
 --save-dir=$CKPT_DIR \
 --raw-text \
 --no-epoch-checkpoints 
 
+# --image-verbose \
+# --image-enable \
