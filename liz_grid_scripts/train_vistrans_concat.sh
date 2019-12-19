@@ -24,36 +24,15 @@ export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 
 SRC_LANG=${1} # ko zh ja de fr
 TGT_LANG=en
+SIZE=${2} #5k or chars
+
+echo "segmentation: ${SIZE}"
+echo "lang pair: ${SRC_LANG}-${TGT_LANG}"
+
 #FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
 FAIRSEQ_PATH=/exp/esalesky/mtocr19/fairseq-ocr
 
-# list_include_item "10 11 12" "2"
-function list_include_item {
-  local list="$1"
-  local item="$2"
-  if [[ $list =~ (^|[[:space:]])"$item"($|[[:space:]]) ]] ; then
-    # yes, list include item
-    result=0
-  else
-    result=1
-  fi
-  return $result
-}
-
-if `list_include_item "ko fr ja" "${SRC_LANG}"` ; then
-    SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-elif `list_include_item "de" "${SRC_LANG}"` ; then
-    SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-elif `list_include_item "zh" "${SRC_LANG}"` ; then
-    SIZE=5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-else
-    SIZE=2.5k
-    DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
-fi
-
+DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}
 CKPT_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/ckpts/viz_loss/concat_${SIZE}
 FONT_FILE=/expscratch/detter/fonts/mt/test_${SRC_LANG}_font.txt
 
@@ -91,7 +70,6 @@ $DATA_DIR \
 --image-tgt-loss-scale=0.5 \
 --image-embed-type='concat' \
 --image-embed-dim=512 \
---image-verbose \
 --share-decoder-input-output-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
@@ -115,3 +93,15 @@ $DATA_DIR \
 
 # only store last and best checkpoints
 
+#--image-verbose \
+
+
+#--score!!--
+PAIR=$SRC_LANG-$TGT_LANG
+
+#dev
+python $FAIRSEQ_PATH/generate.py /exp/esalesky/mtocr19/$PAIR/data/$SIZE --path $CKPT_DIR/checkpoint_best.pt --batch-size 128 --beam 5 --remove-bpe=sentencepiece --dataset-impl raw --sacrebleu --quiet --gen-subset valid
+echo "dev scored"
+#test
+python $FAIRSEQ_PATH/generate.py /exp/esalesky/mtocr19/$PAIR/data/$SIZE --path $CKPT_DIR/checkpoint_best.pt --batch-size 128 --beam 5 --remove-bpe=sentencepiece --dataset-impl raw --sacrebleu --quiet --gen-subset test
+echo "test scored"
