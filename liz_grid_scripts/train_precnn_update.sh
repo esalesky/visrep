@@ -3,7 +3,7 @@
 #
 #$ -S /bin/bash -q gpu.q@@2080 -cwd 
 #$ -l h_rt=48:00:00,gpu=1 
-#$ -N preconv_update
+#$ -N pretrain_update
 # num_proc=16,mem_free=32G,
 
 # Train Transformer model
@@ -29,16 +29,17 @@ hostname
 
 SRC_LANG=$1
 TGT_LANG=en
-FAIRSEQ_PATH=/exp/esalesky/mtocr19/fairseq
-DATA_DIR=$2
+SEGM=$2
 CKPT_DIR=$3
-SEGM=$4
+DATA_DIR=$SRC_LANG-$TGT_LANG/data/$SEGM
+FAIRSEQ_PATH=/exp/esalesky/mtocr19/fairseq
 
-echo $DATA_DIR
-echo $FAIRSEQ_PATH
-echo $SRC_LANG
-echo $TGT_LANG
-echo $CKPT_DIR
+echo "data dir: $DATA_DIR"
+echo "fairseq: $FAIRSEQ_PATH"
+echo "src lang: $SRC_LANG"
+echo "tgt lang: $TGT_LANG"
+echo "ckpt dir: $CKPT_DIR"
+echo "segments: $SEGM"
 
 mkdir -p $CKPT_DIR
 
@@ -71,3 +72,14 @@ $DATA_DIR \
 --log-interval=10 2>&1 | tee $CKPT_DIR/train.log
 
 # only store last and best checkpoints
+
+
+#--score!!--
+PAIR=$SRC_LANG-$TGT_LANG
+
+#dev
+python /exp/esalesky/mtocr19/fairseq-ocr/generate.py /exp/esalesky/mtocr19/$PAIR/data/$SEGM --path $CKPT_DIR/checkpoint_best.pt --batch-size 128 --beam 5 --remove-bpe=sentencepiece --dataset-impl raw --sacrebleu --quiet --gen-subset valid
+echo "dev scored"
+#test
+python /exp/esalesky/mtocr19/fairseq-ocr/generate.py /exp/esalesky/mtocr19/$PAIR/data/$SEGM --path $CKPT_DIR/checkpoint_best.pt --batch-size 128 --beam 5 --remove-bpe=sentencepiece --dataset-impl raw --sacrebleu --quiet --gen-subset test
+echo "test scored"
