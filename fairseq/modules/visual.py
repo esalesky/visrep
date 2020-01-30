@@ -5,6 +5,139 @@ import torchvision
 import torch.nn.functional as F
 
 
+class VistaOCR(nn.Module):
+    """ Vista OCR - VGG style """
+
+    def __init__(self, use_bridge, encoder_dim, input_line_height, image_verbose):
+        super().__init__()
+
+        self.use_bridge = use_bridge
+        self.encoder_dim = encoder_dim
+        self.input_line_height = input_line_height
+        self.image_verbose = image_verbose
+
+        self.cnn = nn.Sequential(
+            *self.ConvBNReLU(3, 64),
+            *self.ConvBNReLU(64, 64),
+            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            *self.ConvBNReLU(64, 128),
+            *self.ConvBNReLU(128, 128),
+            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            *self.ConvBNReLU(128, 256),
+            *self.ConvBNReLU(256, 256),
+            *self.ConvBNReLU(256, 256)
+        )
+
+        if self.use_bridge:
+            print('VistaOCR: use bridge')
+
+            # We need to calculate cnn output size to construct the bridge layer
+            fake_input_width = 800
+            print('VistaOCR: Fake input width %d' % (fake_input_width))
+            cnn_out_h, cnn_out_w = self.cnn_input_size_to_output_size(
+                (self.input_line_height, fake_input_width))
+            print('VistaOCR: CNN out height %d, width %d' %
+                  (cnn_out_h, cnn_out_w))
+            cnn_out_c = self.cnn_output_num_channels()
+
+            cnn_feat_size = cnn_out_c * cnn_out_h
+
+            print('VistaOCR: CNN out height %d' % (cnn_out_h))
+            print('VistaOCR: CNN out channels %d' % (cnn_out_c))
+            print('VistaOCR: CNN feature size (channels %d x height %d) = %d' %
+                  (cnn_out_c, cnn_out_h, cnn_feat_size))
+
+            self.bridge_layer = nn.Sequential(
+                nn.Linear(cnn_feat_size, self.encoder_dim),
+                nn.ReLU(inplace=True)
+            )
+
+        else:
+            print('VistaOCR: avg pool')
+            self.avgpool = nn.AdaptiveAvgPool2d((1, None))
+
+    def forward(self, x):
+        x = self.cnn(x)
+
+        if self.image_verbose:
+            print('VistaOCR: forward features out', x.shape)
+
+        if self.use_bridge:
+            b, c, h, w = x.size()
+            x = x.permute(3, 0, 1, 2).contiguous()
+            x = x.view(-1, c * h)
+            x = self.bridge_layer(x)
+            if self.image_verbose:
+                print('VistaOCR: forward bridge out', x.shape)
+            x = x.view(w, b, -1)
+            if self.image_verbose:
+                print('VistaOCR: forward bridge view', x.shape)
+        else:
+            x = self.avgpool(x)
+            if self.image_verbose:
+                print('VistaOCR: forward avg pool out', x.shape)
+            x = x.permute(3, 0, 1, 2).view(
+                x.size(3), x.size(0), -1)  # seq_len x bsz x embed_dim
+            if self.image_verbose:
+                print('VistaOCR: forward avg pool view', x.shape)
+
+        return x
+
+    def ConvBNReLU(self, nInputMaps, nOutputMaps):
+        return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=3, padding=1),
+                nn.BatchNorm2d(nOutputMaps),
+                nn.ReLU(inplace=True)]
+
+    def cnn_output_num_channels(self):
+        out_c = 0
+        for module in self.cnn.modules():
+            if isinstance(module, nn.Conv2d):
+                out_c = module.out_channels
+        return out_c
+
+    def calculate_hw(self, module, out_h, out_w):
+        if isinstance(module, nn.Conv2d) or isinstance(module, nn.MaxPool2d):
+            if isinstance(module.padding, tuple):
+                padding_y, padding_x = module.padding
+            else:
+                padding_y = padding_x = module.padding
+            if isinstance(module.dilation, tuple):
+                dilation_y, dilation_x = module.dilation
+            else:
+                dilation_y = dilation_x = module.dilation
+            if isinstance(module.stride, tuple):
+                stride_y, stride_x = module.stride
+            else:
+                stride_y = stride_x = module.stride
+            if isinstance(module.kernel_size, tuple):
+                kernel_size_y, kernel_size_x = module.kernel_size
+            else:
+                kernel_size_y = kernel_size_x = module.kernel_size
+
+            out_h = math.floor(
+                (out_h + 2.0 * padding_y - dilation_y *
+                 (kernel_size_y - 1) - 1) / stride_y + 1)
+            out_w = math.floor(
+                (out_w + 2.0 * padding_x - dilation_x *
+                 (kernel_size_x - 1) - 1) / stride_x + 1)
+        elif isinstance(module, nn.FractionalMaxPool2d):
+            if module.output_size is not None:
+                out_h, out_w = module.output_size
+            else:
+                rh, rw = module.output_ratio
+                out_h, out_w = math.floor(out_h * rh), math.floor(out_w * rw)
+
+        return out_h, out_w
+
+    def cnn_input_size_to_output_size(self, in_size):
+        out_h, out_w = in_size
+
+        for module in self.cnn.modules():
+            out_h, out_w = self.calculate_hw(module, out_h, out_w)
+
+        return (out_h, out_w)
+
+
 class VisualNet(torch.nn.Module):
     """Define an architecture for visual word representation. """
 
@@ -149,6 +282,7 @@ class Softmax(nn.Module):
     def forward(self, x):  # pylint: disable=unused-argument
         """Compute logits from representations for training."""
         x = self.linear(x)
+
         if self.log_softmax:
             x = F.log_softmax(x, dim=-1)
         return x

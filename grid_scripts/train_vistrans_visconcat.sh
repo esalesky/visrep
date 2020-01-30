@@ -1,7 +1,7 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
-# 2019-11-07
+# 2020-01-30
 #
 # qsub -v PATH -S /bin/bash -b y -q gpu.q@@2080 -cwd -j y -N koscr \
 # -l num_proc=4,mem_free=16G,h_rt=48:00:00,gpu=1 \
@@ -12,6 +12,7 @@
 
 module load cuda10.0/toolkit/10.0.130
 module load cudnn/7.5.0_cuda10.0
+module load gcc/7.2.0
 
 if [ ! -z $SGE_HGR_gpu ]; then
     export CUDA_VISIBLE_DEVICES=$SGE_HGR_gpu
@@ -24,10 +25,10 @@ source activate /expscratch/detter/tools/py36
 export LD_LIBRARY_PATH=/cm/local/apps/gcc/7.2.0/lib64:$LD_LIBRARY_PATH
 
 
-SRC_LANG=ko #${1} # ko zh ja de fr
+SRC_LANG=zh #${1} # ko zh ja de fr
 TGT_LANG=en
 FAIRSEQ_PATH=/expscratch/detter/src/fairseq/fairseq-ocr
-SIZE=5k #${2}
+SIZE=chars #5k #${2}
 
 DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE} #/dict.$SRC_LANG.txt 
 
@@ -48,6 +49,7 @@ echo "fairseq path - ${FAIRSEQ_PATH}"
 nvidia-smi
 
 mkdir -p $CKPT_DIR
+cd $CKPT_DIR
 
 python $FAIRSEQ_PATH/train.py \
 $DATA_DIR \
@@ -60,14 +62,15 @@ $DATA_DIR \
 --image-font-path=$FONT_FILE \
 --image-samples-path=$CKPT_DIR \
 --image-use-cache \
---image-augment \
 --image-height=32 \
---image-width=64 \
---image-layer='avgpool' \
+--image-width=32 \
 --image-src-loss-scale=1.0 \
 --image-tgt-loss-scale=1.0 \
 --image-embed-type='concat' \
 --image-embed-dim=512 \
+--image-backbone='resnet18' \
+--image-use-bridge \
+--image-layer='avgpool' \
 --share-decoder-input-output-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
@@ -85,7 +88,9 @@ $DATA_DIR \
 --num-workers=0 \
 --save-dir=$CKPT_DIR \
 --raw-text \
---no-epoch-checkpoints 
+--no-epoch-checkpoints \
+--image-verbose
 
+# --image-augment \
 # --image-verbose \
-# --image-enable \
+# --image-disable \

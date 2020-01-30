@@ -275,8 +275,6 @@ class VisualMTTask(FairseqTask):
                             help='Cache image dictionary')
         parser.add_argument("--image-augment", action='store_true',
                             help='Use image augmentation')
-        parser.add_argument('--image-layer', default='avgpool', type=str,
-                            help='ResNet layer [avgpool, layer4, fc]')
         parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
                             help='Image src loss scale')
         parser.add_argument('--image-tgt-loss-scale', type=float, default=1.0,
@@ -294,6 +292,13 @@ class VisualMTTask(FairseqTask):
 
         parser.add_argument("--image-freeze-encoder-embed", action='store_true',
                             help='Freeze preloaded visual embed')
+
+        parser.add_argument('--image-backbone', default='vista',
+                            help='CNN backbone architecture. (default: vista,  others: resnet18, resnet50)')
+        parser.add_argument('--image-use-bridge', action='store_true',
+                            help='If using backbone vista: use bridge layer')
+        parser.add_argument('--image-layer', default='avgpool', type=str,
+                            help='If using backbone ResNet: layer [avgpool, layer4, fc]')
 
     def __init__(self, args, src_dict, tgt_dict, image_cache):
         super().__init__(args)

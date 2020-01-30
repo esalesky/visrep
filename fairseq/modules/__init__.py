@@ -28,7 +28,7 @@ from .transformer_sentence_encoder import TransformerSentenceEncoder
 from .unfold import unfold1d
 from .transformer_layer import TransformerDecoderLayer, TransformerEncoderLayer
 from .vggblock import VGGBlock
-from .visual import VisualNet, VisualTrainer, Softmax
+from .visual import VisualNet, VisualTrainer, Softmax, VistaOCR
 
 __all__ = [
     'AdaptiveInput',

@@ -27,6 +27,7 @@ from fairseq.models.transformer import (
 
 from fairseq.modules import (
     VisualNet,
+    VistaOCR,
     Softmax,
     VisualTrainer,
     AdaptiveSoftmax,
@@ -348,8 +349,14 @@ class VisualTransformerModel(BaseFairseqModel):
     def build_visual_encoder(cls, args, src_dict):
         if args.image_verbose:
             print('VIS_TRANSFORMER: setup VisualNet')
-        backbone = VisualNet(dim=512, input_shape=(args.image_height, args.image_width),
-                             model_name='resnet18', extract=args.image_layer, normalize=False)
+
+        if 'vista' in args.image_backbone:
+            backbone = VistaOCR(use_bridge=args.image_use_bridge, encoder_dim=args.image_embed_dim,
+                                input_line_height=args.image_height, image_verbose=args.image_verbose)
+        else:
+            backbone = VisualNet(dim=512, input_shape=(args.image_height, args.image_width),
+                                 model_name=args.image_backbone, extract=args.image_layer, normalize=False)
+
         # Get src normal prob with handle log_softmax
         head = Softmax(dim=512, dim_out=len(src_dict), log_softmax=False)
         return VisualTrainer(backbone, head)
@@ -489,7 +496,8 @@ class VisualTransformerEncoder(FairseqEncoder):
         if self.args.image_verbose:
             print('ENCODER: input src_tokens %s, src_lengths %s' % (
                 src_tokens.shape, src_lengths.shape))
-
+            print('ENCODER: src_lengths %s' % (
+                src_lengths))
         vis_encoder_out, visual_prelogits = self.forward_visual_embedding(
             src_tokens, src_images)
 
@@ -515,13 +523,18 @@ class VisualTransformerEncoder(FairseqEncoder):
         # if not self.args.image_disable:
         if type(vis_encoder_out) != type(None):
             if self.args.image_embed_type == 'concat':
+                if self.args.image_verbose:
+                    print('ENCODER: CONCAT input for tok and visual embed, tok %s, visual %s' %
+                          (str(x.shape), str(vis_encoder_out.shape)))
                 x_cat = torch.cat((x, vis_encoder_out), dim=2)
+                if self.args.image_verbose:
+                    print('ENCODER: CONCAT out %s' %
+                          (str(x_cat.shape)))
                 x = self.vis_linear(x_cat)
                 x = F.dropout(x, p=self.dropout, training=self.training)
-
                 if self.args.image_verbose:
-                    print('ENCODER: CONCAT tok and visual embed, concat %s, out %s' %
-                          (str(x_cat.shape), str(x.shape)))
+                    print('ENCODER: CONCAT after linear %s' %
+                          (str(x.shape)))
             elif self.args.image_embed_type == 'avg':
                 x_avg = torch.mean((x, vis_encoder_out), dim=2)
                 x = self.vis_linear(x_avg)
