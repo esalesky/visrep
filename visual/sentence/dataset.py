@@ -13,7 +13,7 @@ import gc
 import sys
 import inspect
 from typing import Optional, Iterable, Any
-
+from text_utils import utf8_to_uxxxx, uxxxx_to_utf8
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
@@ -226,11 +226,11 @@ class ImageDataset(Dataset):
         self.dpi = dpi
 
         self.font_rotation = [0]  # [-6, -4, -2, 0, 2, 4, 6]
-        self.pad_top = [0, 2, 4]  # [0, 2, 4, 6, 8]
-        self.pad_bottom = [0, 2, 4]  # [0, 2, 4, 6, 8]
-        self.pad_left = [0, 2, 4]  # [0, 2, 4, 6, 8]
-        self.pad_right = [0, 2, 4]  # [0, 2, 4, 6, 8]
-        self.font_size = [8]  # [10, 14, 18, 24, 32]
+        self.pad_top = [0, 1, 2]  # [0, 2, 4, 6, 8]
+        self.pad_bottom = [0, 1, 2]  # [0, 2, 4, 6, 8]
+        self.pad_left = [0, 1, 2]  # [0, 2, 4, 6, 8]
+        self.pad_right = [0, 1, 2]  # [0, 2, 4, 6, 8]
+        self.font_size = [10]  # [10, 14, 18, 24, 32]
         self.font_color = ['black']
         self.bkg_color = ['white']
 
@@ -247,7 +247,8 @@ class ImageDataset(Dataset):
             self.alphabet = alphabet
 
             for idx, text_line in enumerate(self.text_list):
-                for char in text_line:
+                uxxxx_text_list = utf8_to_uxxxx(text_line, output_array=True)
+                for char in uxxxx_text_list:
                     if char not in self.alphabet.char_to_idx:
                         self.alphabet.max_id += 1
                         self.alphabet.char_to_idx[char] = self.alphabet.max_id
@@ -330,7 +331,8 @@ class ImageDataset(Dataset):
         unique_chars = set()
 
         for idx, text_line in enumerate(self.text_list):
-            for char in text_line:
+            uxxxx_text_list = utf8_to_uxxxx(text_line, output_array=True)
+            for char in uxxxx_text_list:
                 unique_chars.add(char)
 
         # Now add CTC blank as first letter in alphabet. Also sort alphabet lexigraphically for convinience
@@ -552,7 +554,8 @@ class ImageDataset(Dataset):
             line_image_padded = line_image
 
         transcription = []
-        for char in seed_text:
+        uxxxx_text_list = utf8_to_uxxxx(seed_text, output_array=True)
+        for char in uxxxx_text_list:
             transcription.append(self.alphabet.char_to_idx[char])
 
         metadata = {

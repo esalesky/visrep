@@ -2,6 +2,50 @@ import math
 import sys
 import numpy as np
 
+
+def uxxxx_to_utf8(in_str):
+    idx = 0
+    result = ''
+    if in_str.strip() == "":
+        return ""
+
+    for uxxxx in in_str.split():
+        if uxxxx == '':
+            continue
+
+        if uxxxx == "<unk>" or uxxxx == "<s>" or uxxxx == "</s>":
+            cur_utf8_char = uxxxx
+        else:
+            # First get the 'xxxx' part out of the current 'uxxxx' char
+
+            cur_char = uxxxx[1:]
+
+            # Now decode the hex code point into utf-8
+            try:
+                cur_utf8_char = chr(int(cur_char, 16))
+            except:
+                print("Exception converting cur_char = [%s]" % cur_char)
+                sys.exit(1)
+
+        # And add it to the result buffer
+        result = result + cur_utf8_char
+
+    return result
+
+
+def utf8_to_uxxxx(in_str, output_array=False):
+
+    char_array = []
+    for char in in_str:
+        raw_hex = hex(ord(char))[2:].zfill(4).lower()
+        char_array.append("u%s" % raw_hex)
+
+    if output_array:
+        return char_array
+    else:
+        return ' '.join(char_array)
+
+
 # Rudimintary dynamic programming method of computing edit distance bewteen two sequences
 # Let dist[i,j] = edit distance between A[0..i] and B[0..j]
 #  Then dist[i,j] is the smallest of:

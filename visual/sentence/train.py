@@ -16,7 +16,7 @@ from dataset import ImageDataset, GroupedSampler, SortByWidthCollater
 # from models import VisualNet, Softmax, VisualTrainer
 import torch.nn.functional as F
 import logging
-from text_utils import compute_cer_wer
+from text_utils import compute_cer_wer, uxxxx_to_utf8, utf8_to_uxxxx
 
 from torch.nn.utils.rnn import pack_padded_sequence as rnn_pack
 from torch.nn.utils.rnn import pad_packed_sequence as rnn_unpack
@@ -169,8 +169,8 @@ class OCRCRNNModel(torch.nn.Module):
 
                 # Add a space to all but last iteration
                 # only need if chars encoded as uxxxx
-                # if t != T - 1:
-                #    result[b] += ' '
+                if t != T - 1:
+                    result[b] += ' '
 
         # Strip off final token-stream space if needed
         for b in range(B):
@@ -413,10 +413,6 @@ def main(args):
             ImageAug(),
             transforms.ToTensor(),
         ])
-        # train_transform = transforms.Compose([
-        #    transforms.ToPILImage(),
-        #    transforms.ToTensor(),
-        # ])
     else:
         train_transform = transforms.Compose([
             transforms.ToPILImage(),
@@ -478,8 +474,6 @@ def main(args):
         LOG.info('Loading checkpoint...')
         LOG.info(' epoch %d', checkpoint['epoch'])
         LOG.info(' loss %f', checkpoint['loss'])
-        LOG.info(' len vocab %s', len(checkpoint['vocab']))
-        LOG.info(' len rev_vocab %s', len(checkpoint['rev_vocab']))
         model.load_state_dict(checkpoint['state_dict'], strict=False)
 
     # summary(encoder, input_size=(3, args.image_height, 800))
@@ -520,8 +514,8 @@ def main(args):
             examples_per_sec = args.batch_size / duration
             sec_per_batch = float(duration)
 
-            if i % 10 == 0 and i > 0:
-                LOG.info("Epoch: %d (%d/%d), Batch Size: %d, Groud Size: %d, Loss: %.4f, LR: %.8f, ex/sec: %.1f, sec/batch: %.2f",
+            if i % 50 == 0 and i > 0:
+                LOG.info("Epoch: %d (%d/%d), Batch Size: %d, Group: %d, Loss: %.4f, LR: %.8f, ex/sec: %.1f, sec/batch: %.2f",
                          epoch, i + 1 % len(trainloader),
                          len(trainloader), batch_size, sample['group_id'],
                          loss.item(),
@@ -581,17 +575,21 @@ def main(args):
                 batch_wer = 0
 
                 for hyp_ctr in range(len(hyp_transcriptions)):
-                    ref_text = sample['seed_text'][hyp_ctr]
+                    utf8_ref_text = sample['seed_text'][hyp_ctr]
+                    uxxxx_ref_text = utf8_to_uxxxx(utf8_ref_text)
+
+                    utf8_hyp_text = uxxxx_to_utf8(hyp_transcriptions[hyp_ctr])
+                    uxxxx_hyp_text = hyp_transcriptions[hyp_ctr]
 
                     cer, wer = compute_cer_wer(
-                        hyp_transcriptions[hyp_ctr], ref_text)
+                        uxxxx_hyp_text, uxxxx_ref_text)
 
                     batch_cer += cer
                     batch_wer += wer
 
                     if sample_ctr % 10 == 0 and hyp_ctr % 20 == 0:
-                        print('\nhyp', hyp_transcriptions[hyp_ctr])
-                        print('ref', ref_text)
+                        print('\nhyp', utf8_hyp_text, uxxxx_hyp_text)
+                        print('ref', utf8_ref_text, uxxxx_ref_text)
                         print('cer %f \twer %f' % (cer, wer))
 
                 cer_running_avg += (batch_cer / batch_size -
