@@ -189,10 +189,12 @@ class OCRCNNEncoder(torch.nn.Module):
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(3, 64),
             *self.ConvBNReLU(64, 64),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            #nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.25)),
             *self.ConvBNReLU(64, 128),
             *self.ConvBNReLU(128, 128),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            #nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            nn.FractionalMaxPool2d(2, output_ratio=(0.25, 0.25)),
             *self.ConvBNReLU(128, 256),
             *self.ConvBNReLU(256, 256),
             *self.ConvBNReLU(256, 256)
@@ -376,7 +378,7 @@ class OCRCNNDecoder(torch.nn.Module):
             print("DECODER: prob_output", prob_output.shape)
             print("DECODER: prob_output_view", prob_output_view.shape)
 
-        return prob_output_view, lstm_output_lengths.to(torch.int32)
+        return prob_output_view, lstm_output_lengths.to(torch.int32), encoder_out, lstm_output
 
 
 def main(args):
@@ -458,7 +460,7 @@ def main(args):
                                                   valid_dataset, rand=True),
                                               collate_fn=lambda b: SortByWidthCollater(
                                                   b, args.image_verbose),
-                                              num_workers=0)
+                                              num_workers=0, pin_memory=True)
 
     encoder = OCRCNNEncoder(args)
     decoder = OCRCNNDecoder(args, train_dataset.alphabet)
@@ -476,7 +478,7 @@ def main(args):
         LOG.info(' loss %f', checkpoint['loss'])
         model.load_state_dict(checkpoint['state_dict'], strict=False)
 
-    # summary(encoder, input_size=(3, args.image_height, 800))
+    #summary(encoder, input_size=[(3, args.image_height, 800), (8, 8)])
     optimizer = torch.optim.Adam(
         model.parameters(), lr=args.lr)
 
@@ -496,7 +498,7 @@ def main(args):
 
             optimizer.zero_grad()
 
-            net_output, model_output_actual_lengths = model(
+            net_output, model_output_actual_lengths, encoder_out, lstm_out = model(
                 **sample['net_input'])
             log_probs = F.log_softmax(net_output, dim=2)
             targets = sample['target']
@@ -515,9 +517,12 @@ def main(args):
             sec_per_batch = float(duration)
 
             if i % 50 == 0 and i > 0:
-                LOG.info("Epoch: %d (%d/%d), Batch Size: %d, Group: %d, Loss: %.4f, LR: %.8f, ex/sec: %.1f, sec/batch: %.2f",
+                LOG.info("Epoch: %d (%d/%d), Batch:  %d, Group: %d, Shape: %s, Max target: %s, Encoder: %s, LSTM %s, Loss: %.4f, LR: %.6f, ex/sec: %.1f, sec/batch: %.2f",
                          epoch, i + 1 % len(trainloader),
                          len(trainloader), batch_size, sample['group_id'],
+                         sample['batch_shape'],
+                         max(target_lengths.cpu().numpy()),
+                         encoder_out.detach().cpu().numpy().shape, lstm_out.detach().cpu().numpy().shape,
                          loss.item(),
                          get_lr(optimizer), examples_per_sec, sec_per_batch)
 
@@ -552,7 +557,7 @@ def main(args):
                 batch_size = len(sample['net_input']['src_widths'])
                 total_val_images += batch_size
 
-                net_output, model_output_actual_lengths = model(
+                net_output, model_output_actual_lengths, encoder_shape, lstm_shape = model(
                     **sample['net_input'])
                 log_probs = F.log_softmax(net_output, dim=2)
                 targets = sample['target']
@@ -565,7 +570,7 @@ def main(args):
 
                 n_samples += 1
 
-                loss_running_avg += (loss -
+                loss_running_avg += (loss.item() -
                                      loss_running_avg) / n_samples
 
                 hyp_transcriptions = model.decode(
@@ -620,7 +625,7 @@ def main(args):
             best_cer = cer_running_avg
         elif cer_running_avg < best_cer:
             best_cer = cer_running_avg
-
+            print('...checkpoint: saving new best', best_cer, cer_running_avg)
             torch.save({'epoch': epoch,
                         'loss': loss.item(),
                         'cer': cer_running_avg,
@@ -647,6 +652,8 @@ def main(args):
 
         print("Validation Loss: %f \tVal CER: %f\tVal WER: %f \tSamples: %d" %
               (loss_running_avg, cer_running_avg, wer_running_avg, n_samples))
+
+        torch.cuda.empty_cache()
 
     LOG.info('...complete, time %s', time.clock() - start_time)
 

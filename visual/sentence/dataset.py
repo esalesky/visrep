@@ -174,6 +174,7 @@ def SortByWidthCollater(batch, image_verbose):
         'target_length': target_transcription_widths,
         'seed_text': meta_seed_text,
         'group_id': meta_groups[-1],
+        'batch_shape': input_tensor.shape,
     }
 
     if image_verbose:
@@ -185,6 +186,7 @@ def SortByWidthCollater(batch, image_verbose):
         print('COLLATE: target_length', batch['target_length'])
         print('COLLATE: target', batch['target'])
         print('COLLATE: seed_text', batch['seed_text'])
+        print('COLLATE: batch_shape', batch['batch_shape'])
 
     return batch
 
