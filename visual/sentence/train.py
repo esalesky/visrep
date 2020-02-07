@@ -63,7 +63,7 @@ def parse_arguments(argv):
     parser.add_argument("--decoder-lstm-layers", type=int,
                         default=3, help="Number of LSTM layers in model")
     parser.add_argument("--decoder-lstm-units", type=int,
-                        default=640, help="Number of LSTM hidden units ")  # 640
+                        default=256, help="Number of LSTM hidden units ")  # 640
     parser.add_argument("--decoder-lstm-dropout", type=float,
                         default=0.50, help="Number of LSTM layers in model")
     parser.add_argument('--image-verbose', action='store_true',
