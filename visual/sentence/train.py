@@ -190,7 +190,7 @@ class OCRCNNEncoder(torch.nn.Module):
             *self.ConvBNReLU(3, 64),
             *self.ConvBNReLU(64, 64),
             #nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.25)),
+            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.5)),
             *self.ConvBNReLU(64, 128),
             *self.ConvBNReLU(128, 128),
             #nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
@@ -228,13 +228,13 @@ class OCRCNNEncoder(torch.nn.Module):
         if self.args.image_verbose:
             print('\nENCODER: forward input', src_tokens.shape)
 
-        x = self.cnn(src_tokens)
+        x_cnn = self.cnn(src_tokens)
 
         if self.args.image_verbose:
             print('ENCODER: forward features out', x.shape)
 
-        b, c, h, w = x.size()
-        x = x.permute(3, 0, 1, 2).contiguous()
+        b, c, h, w = x_cnn.size()
+        x = x_cnn.permute(3, 0, 1, 2).contiguous()
         x = x.view(-1, c * h)
         x = self.bridge_layer(x)
         if self.args.image_verbose:
@@ -249,6 +249,7 @@ class OCRCNNEncoder(torch.nn.Module):
         # print('encoder actual_cnn_output_widths', actual_cnn_output_widths)
         return {
             'encoder_out': x,
+            'encoder_cnn': x_cnn,
             'encoder_actual_cnn_output_widths': actual_cnn_output_widths
         }
 
@@ -378,7 +379,7 @@ class OCRCNNDecoder(torch.nn.Module):
             print("DECODER: prob_output", prob_output.shape)
             print("DECODER: prob_output_view", prob_output_view.shape)
 
-        return prob_output_view, lstm_output_lengths.to(torch.int32), encoder_out, lstm_output
+        return prob_output_view, lstm_output_lengths.to(torch.int32), encoder_out, lstm_output, encoder_output['encoder_cnn']
 
 
 def main(args):
@@ -498,7 +499,7 @@ def main(args):
 
             optimizer.zero_grad()
 
-            net_output, model_output_actual_lengths, encoder_out, lstm_out = model(
+            net_output, model_output_actual_lengths, encoder_out, lstm_out, encoder_cnn = model(
                 **sample['net_input'])
             log_probs = F.log_softmax(net_output, dim=2)
             targets = sample['target']
@@ -517,11 +518,12 @@ def main(args):
             sec_per_batch = float(duration)
 
             if i % 50 == 0 and i > 0:
-                LOG.info("Epoch: %d (%d/%d), Batch:  %d, Group: %d, Shape: %s, Max target: %s, Encoder: %s, LSTM %s, Loss: %.4f, LR: %.6f, ex/sec: %.1f, sec/batch: %.2f",
+                LOG.info("Epoch: %d (%d/%d), Group: %d, Shape: %s, Target: %s, CNN %s, Encoder: %s, LSTM %s, Loss: %.4f, LR: %.6f, ex/sec: %.1f, sec/batch: %.2f",
                          epoch, i + 1 % len(trainloader),
-                         len(trainloader), batch_size, sample['group_id'],
+                         len(trainloader), sample['group_id'],
                          sample['batch_shape'],
                          max(target_lengths.cpu().numpy()),
+                         encoder_cnn.detach().cpu().numpy().shape,
                          encoder_out.detach().cpu().numpy().shape, lstm_out.detach().cpu().numpy().shape,
                          loss.item(),
                          get_lr(optimizer), examples_per_sec, sec_per_batch)
@@ -557,7 +559,7 @@ def main(args):
                 batch_size = len(sample['net_input']['src_widths'])
                 total_val_images += batch_size
 
-                net_output, model_output_actual_lengths, encoder_shape, lstm_shape = model(
+                net_output, model_output_actual_lengths, encoder_shape, lstm_shape, encoder_cnn = model(
                     **sample['net_input'])
                 log_probs = F.log_softmax(net_output, dim=2)
                 targets = sample['target']
