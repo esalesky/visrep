@@ -8,13 +8,14 @@ import torch.nn.functional as F
 class VistaOCR(nn.Module):
     """ Vista OCR - VGG style """
 
-    def __init__(self, use_bridge, encoder_dim, input_line_height, image_verbose):
+    def __init__(self, use_bridge, encoder_dim, input_line_height, use_pool=False, image_verbose=True):
         super().__init__()
 
         self.use_bridge = use_bridge
         self.encoder_dim = encoder_dim
         self.input_line_height = input_line_height
         self.image_verbose = image_verbose
+        self.use_pool = use_pool
 
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(3, 64),
@@ -52,9 +53,12 @@ class VistaOCR(nn.Module):
                 nn.ReLU(inplace=True)
             )
 
+            if self.use_pool:
+                self.avgpool = nn.AdaptiveAvgPool2d((None, 1))
+
         else:
             print('VistaOCR: avg pool')
-            self.avgpool = nn.AdaptiveAvgPool2d((1, None))
+            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
     def forward(self, x):
         x = self.cnn(x)
@@ -72,14 +76,32 @@ class VistaOCR(nn.Module):
             x = x.view(w, b, -1)
             if self.image_verbose:
                 print('VistaOCR: forward bridge view', x.shape)
+
+            if self.use_pool:
+                x = x.permute(1, 2, 0).contiguous()
+                if self.image_verbose:
+                    print('VistaOCR: forward permute out', x.shape)
+                x = self.avgpool(x)
+                if self.image_verbose:
+                    print('VistaOCR: forward avg pool out', x.shape)
+                x = x.squeeze()
+                if self.image_verbose:
+                    print('VistaOCR: squeeze out', x.shape)
         else:
             x = self.avgpool(x)
             if self.image_verbose:
                 print('VistaOCR: forward avg pool out', x.shape)
-            x = x.permute(3, 0, 1, 2).view(
-                x.size(3), x.size(0), -1)  # seq_len x bsz x embed_dim
+            x = x.squeeze()
             if self.image_verbose:
-                print('VistaOCR: forward avg pool view', x.shape)
+                print('VistaOCR: squeeze out', x.shape)
+
+            #x = self.top(x)
+            # if self.image_verbose:
+            #    print('VistaOCR: forward top out', x.shape)
+            # x = x.permute(3, 0, 1, 2).view(
+            #    x.size(3), x.size(0), -1)  # seq_len x bsz x embed_dim
+            # if self.image_verbose:
+            #    print('VistaOCR: forward avg pool view', x.shape)
 
         return x
 
@@ -145,13 +167,14 @@ class VisualNet(torch.nn.Module):
     CHANNEL_SCALE = {'resnet18': 512, 'resnet50': 2048}
 
     def __init__(self, dim=None, input_shape=None, model_name='resnet18',
-                 extract='layer4', normalize=False):
+                 extract='layer4', normalize=False, image_verbose=True):
         super().__init__()
         self.dim = dim
         self.model_name = model_name
         self.model_class = getattr(torchvision.models, model_name)
         self.model = self.model_class(num_classes=dim)
         self.extract = extract
+        self.image_verbose = image_verbose
 
         if extract == 'layer4':
             del self.model.fc
@@ -176,28 +199,44 @@ class VisualNet(torch.nn.Module):
         x = self.model.conv1(x)
         x = self.model.bn1(x)
         x = self.model.relu(x)
+        if self.image_verbose:
+            print('ENCODER: VisualNet after conv/bn/relu ', x.shape)
         x = self.model.maxpool(x)
+        if self.image_verbose:
+            print('ENCODER: VisualNet after maxpool ', x.shape)
 
         done = self.extract == 'maxpool'
         if not done:
             x = self.model.layer1(x)
             done = self.extract == 'layer1'
+            if self.image_verbose:
+                print('ENCODER: VisualNet after layer1 ', x.shape)
         if not done:
             x = self.model.layer2(x)
             done = self.extract == 'layer2'
+            if self.image_verbose:
+                print('ENCODER: VisualNet after layer2 ', x.shape)
         if not done:
             x = self.model.layer3(x)
             done = self.extract == 'layer3'
+            if self.image_verbose:
+                print('ENCODER: VisualNet after layer3 ', x.shape)
         if not done:
             x = self.model.layer4(x)
             done = self.extract == 'layer4'
+            if self.image_verbose:
+                print('ENCODER: VisualNet after layer4 ', x.shape)
         if not done:
             x = self.model.avgpool(x)
             x = x.reshape(x.size(0), -1)
             done = self.extract == 'avgpool'
+            if self.image_verbose:
+                print('ENCODER: VisualNet after avgpool ', x.shape)
         if not done:
             x = self.model.fc(x)
         x = self.top(x)
+        if self.image_verbose:
+            print('ENCODER: VisualNet return ', x.shape)
         return x
 
 

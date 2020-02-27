@@ -290,6 +290,9 @@ class VisualMTTask(FairseqTask):
         parser.add_argument("--image-disable", action='store_true',
                             help='Disable visual')
 
+        parser.add_argument("--image-pool", action='store_true',
+                            help='Vista image pool')
+
         parser.add_argument("--image-freeze-encoder-embed", action='store_true',
                             help='Freeze preloaded visual embed')
 

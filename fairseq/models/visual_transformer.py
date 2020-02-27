@@ -352,13 +352,16 @@ class VisualTransformerModel(BaseFairseqModel):
 
         if 'vista' in args.image_backbone:
             backbone = VistaOCR(use_bridge=args.image_use_bridge, encoder_dim=args.image_embed_dim,
-                                input_line_height=args.image_height, image_verbose=args.image_verbose)
+                                input_line_height=args.image_height, use_pool=args.image_pool,
+                                image_verbose=args.image_verbose)
         else:
-            backbone = VisualNet(dim=512, input_shape=(args.image_height, args.image_width),
-                                 model_name=args.image_backbone, extract=args.image_layer, normalize=False)
+            backbone = VisualNet(dim=args.image_embed_dim, input_shape=(args.image_height, args.image_width),
+                                 model_name=args.image_backbone, extract=args.image_layer, normalize=False,
+                                 image_verbose=args.image_verbose)
 
         # Get src normal prob with handle log_softmax
-        head = Softmax(dim=512, dim_out=len(src_dict), log_softmax=False)
+        head = Softmax(dim=args.image_embed_dim,
+                       dim_out=len(src_dict), log_softmax=False)
         return VisualTrainer(backbone, head)
 
     @classmethod
@@ -457,7 +460,7 @@ class VisualTransformerEncoder(FairseqEncoder):
                 src_images)  # (B X T) X D embed_dim
 
             vis_encoder_out = visual_out.view(
-                b, t, 512)  # batch, token, embed_dim
+                b, t, self.args.image_embed_dim)  # batch, token, embed_dim
 
         else:
             if self.args.image_embed_path:
