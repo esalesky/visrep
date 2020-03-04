@@ -186,6 +186,7 @@ class OCRCNNEncoder(torch.nn.Module):
         super().__init__()
         self.args = args
 
+        # The magic of this sequence comes from the Rawls paper
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(3, 64),
             *self.ConvBNReLU(64, 64),
@@ -215,6 +216,7 @@ class OCRCNNEncoder(torch.nn.Module):
         print('CNN feature size (channels %d x height %d) = %d' %
               (cnn_out_c, cnn_out_h, cnn_feat_size))
 
+        # Bridge from CNN output (batch, width, height, channels) to MT model size (batch, width, model)
         self.bridge_layer = nn.Sequential(
             nn.Linear(cnn_feat_size, self.args.encoder_dim),
             nn.ReLU(inplace=True)
