@@ -99,6 +99,7 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
     def __init__(self, args, task):
         super().__init__(args, task)
         self.eps = args.label_smoothing
+        self.image_type = args.image_type
         self.image_disable = args.image_disable
         self.image_verbose = args.image_verbose
         self.image_src_loss_scale = args.image_src_loss_scale
@@ -123,7 +124,8 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
         sample_size = sample['target'].size(
             0) if self.args.sentence_avg else sample['ntokens']
 
-        if not self.image_disable:
+        if self.image_type == "word" and not self.image_disable:
+            # MJP: source-level loss currently disabled for line-level images
             src_images = sample['net_input']['src_images']
             src_images_view = src_images.view(-1, src_images.size(-3),
                                               src_images.size(-2), src_images.size(-1))
@@ -142,7 +144,7 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
         tgt_nll_loss = utils.item(
             tgt_nll_loss.data) if reduce else tgt_nll_loss.data
 
-        if not self.image_disable:
+        if self.image_type == "word" and not self.image_disable:
             src_loss = utils.item(src_loss.data) if reduce else src_loss.data
             src_nll_loss = utils.item(
                 src_nll_loss.data) if reduce else src_nll_loss.data
@@ -177,10 +179,11 @@ class VisualLabelSmoothedCrossEntropyCriterion(LabelSmoothedCrossEntropyCriterio
         lprobs = lprobs.view(-1, lprobs.size(-1))
         target = model.get_targets(sample, net_output).view(-1, 1)
 
-        if not self.image_disable:
+        if self.image_type == "word" and not self.image_disable:
             src_lprobs = model.get_src_normalized_probs(
                 encoder_prelogits, log_probs=True)
             src_target = model.get_src_targets(sample, net_output).view(-1, 1)
+            print(f"src_lprobs: {src_lprobs.shape} src_target: {src_target.shape}")
             src_loss, src_nll_loss = label_smoothed_nll_loss(
                 src_lprobs, src_target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
             )

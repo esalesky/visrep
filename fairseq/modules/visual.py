@@ -8,22 +8,25 @@ import torch.nn.functional as F
 class VistaOCR(nn.Module):
     """ Vista OCR - VGG style """
 
-    def __init__(self, use_bridge, encoder_dim, input_line_height, use_pool=False, image_verbose=True):
+    def __init__(self, use_bridge, encoder_dim, input_line_height, image_type, kernel_size=2, width=0.7, use_pool=False, image_verbose=True):
         super().__init__()
 
         self.use_bridge = use_bridge
         self.encoder_dim = encoder_dim
         self.input_line_height = input_line_height
         self.image_verbose = image_verbose
+        self.image_type = image_type
         self.use_pool = use_pool
+        self.kernel_size = kernel_size
+        self.width = width
 
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(3, 64),
             *self.ConvBNReLU(64, 64),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            nn.FractionalMaxPool2d(self.kernel_size, output_ratio=(0.5, self.width)),
             *self.ConvBNReLU(64, 128),
             *self.ConvBNReLU(128, 128),
-            nn.FractionalMaxPool2d(2, output_ratio=(0.5, 0.7)),
+            nn.FractionalMaxPool2d(self.kernel_size, output_ratio=(0.5, self.width)),
             *self.ConvBNReLU(128, 256),
             *self.ConvBNReLU(256, 256),
             *self.ConvBNReLU(256, 256)
@@ -54,6 +57,7 @@ class VistaOCR(nn.Module):
             )
 
             if self.use_pool:
+                print("Applying pooling to reduce dimensions")
                 self.avgpool = nn.AdaptiveAvgPool2d((None, 1))
 
         else:
@@ -61,6 +65,17 @@ class VistaOCR(nn.Module):
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
     def forward(self, x):
+        """
+        With word-based decoding, the data is a batch of images with the following shape: (batch x
+        tokens, channel, height, width).  The output is (batch x tokens, d=embed_dim).
+
+        For line-based decoding: Input shape = (batch, channel, height, width)
+        Output shape = (batch x slices, d=embed_dim)
+
+        """
+        if self.image_verbose:
+            print('VistaOCR: input', x.shape)
+
         x = self.cnn(x)
 
         if self.image_verbose:
@@ -73,20 +88,26 @@ class VistaOCR(nn.Module):
             x = self.bridge_layer(x)
             if self.image_verbose:
                 print('VistaOCR: forward bridge out', x.shape)
-            x = x.view(w, b, -1)
+
+            if self.image_type == "word":
+                # (width * batch * word, model_size) -> (width, batch * word, model_size)
+                x = x.view(w, b, -1)
+            elif self.image_type == "line":
+                
+                x = x.view(b, w, -1)
+
             if self.image_verbose:
                 print('VistaOCR: forward bridge view', x.shape)
 
             if self.use_pool:
+                # (width, batch * word, model_size) -> (batch * word, model_size, width)
                 x = x.permute(1, 2, 0).contiguous()
                 if self.image_verbose:
                     print('VistaOCR: forward permute out', x.shape)
-                x = self.avgpool(x)
+                # (batch * word, model_size, width) -> (batch * word, model_size, 1)
+                x = self.avgpool(x).squeeze()
                 if self.image_verbose:
                     print('VistaOCR: forward avg pool out', x.shape)
-                x = x.squeeze()
-                if self.image_verbose:
-                    print('VistaOCR: squeeze out', x.shape)
         else:
             x = self.avgpool(x)
             if self.image_verbose:
@@ -94,14 +115,6 @@ class VistaOCR(nn.Module):
             x = x.squeeze()
             if self.image_verbose:
                 print('VistaOCR: squeeze out', x.shape)
-
-            #x = self.top(x)
-            # if self.image_verbose:
-            #    print('VistaOCR: forward top out', x.shape)
-            # x = x.permute(3, 0, 1, 2).view(
-            #    x.size(3), x.size(0), -1)  # seq_len x bsz x embed_dim
-            # if self.image_verbose:
-            #    print('VistaOCR: forward avg pool view', x.shape)
 
         return x
 
@@ -172,7 +185,13 @@ class VisualNet(torch.nn.Module):
         self.dim = dim
         self.model_name = model_name
         self.model_class = getattr(torchvision.models, model_name)
-        self.model = self.model_class(num_classes=dim)
+        try:
+            self.model = self.model_class(num_classes=dim)
+        except TypeError as e:
+            import sys
+            print(f"No such model type '{model_name}': bad argument to --image-backbone", file=sys.stderr)
+            sys.exit(1)
+            
         self.extract = extract
         self.image_verbose = image_verbose
 

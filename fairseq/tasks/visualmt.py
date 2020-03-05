@@ -65,6 +65,9 @@ from imgaug import augmenters as iaa
 
 
 class ImageAug(object):
+    """
+    Adds Gaussian noise and other distortions to text.
+    """
 
     def __init__(self):
         def sometimes(aug): return iaa.Sometimes(.50, aug)
@@ -106,9 +109,12 @@ def load_visual_dataset(
     max_target_positions, prepend_bos=False, load_alignments=False,
     args=None,
     image_cache=None
-
-
 ):
+    """
+    Loads the visual dataset.
+    
+    """
+
     def split_exists(split, src, tgt, lang, data_path):
         filename = os.path.join(
             data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
@@ -138,23 +144,16 @@ def load_visual_dataset(
         path = prefix + src
         dictionary = src_dict
         print('...loading ImageDataset', path, len(dictionary))
-        if args.image_type:
-            if args.image_augment:
-                transform = transforms.Compose([
-                    # ImageAug(),
-                    transforms.ToPILImage(),
-                    transforms.ToTensor(),
-                ])
-            else:
-                transform = transforms.Compose([
-                    transforms.ToPILImage(),
-                    transforms.ToTensor(),
-                ])
-        else:
-            transform = None
+        # TODO: --image-augment
+        transform = transforms.Compose([
+            # ImageAug(),
+            transforms.ToPILImage(),
+            transforms.ToTensor(),
+        ])
 
         img_dataset = ImageDataset(path, dictionary, append_eos=True, reverse_order=False,
                                    transform=transform,
+                                   font_size=args.image_font_size,
                                    image_type=args.image_type,
                                    image_font_path=args.image_font_path,
                                    image_height=args.image_height,
@@ -208,6 +207,7 @@ def load_visual_dataset(
         left_pad_target=args.left_pad_target,
         max_source_positions=args.max_source_positions,
         max_target_positions=args.max_target_positions,
+        image_type=args.image_type
     )
 
 
@@ -261,20 +261,24 @@ class VisualMTTask(FairseqTask):
                             help='amount to upsample primary dataset')
 
         # Image dataset loader parameters
-        parser.add_argument('--image-type', type=str, default=None,
+        parser.add_argument('--image-type', type=str, choices=["word", "line"], default=None,
                             help='use word or line image dataset (None | word | line)')
         parser.add_argument('--image-font-path', default=None, type=str,
                             help='Font path')
+        parser.add_argument('--image-font-size', default=8, type=float,
+                            help='Font size. Default: %(default)s.')
         parser.add_argument('--image-width', default=64, type=int,
                             help='Image width')
         parser.add_argument('--image-height', default=32, type=int,
                             help='Image height')
+        parser.add_argument('--image-pad-right', default=5, type=int,
+                            help="Pixels to pad between words for '--image-type line'")
         parser.add_argument('--image-samples-path', default=None, type=str,
                             help='Image Samples path')
         parser.add_argument("--image-use-cache", action='store_true',
                             help='Cache image dictionary')
         parser.add_argument("--image-augment", action='store_true',
-                            help='Use image augmentation')
+                            help='Apply image noisification for robustness purposes')
         parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
                             help='Image src loss scale')
         parser.add_argument('--image-tgt-loss-scale', type=float, default=1.0,
@@ -289,7 +293,10 @@ class VisualMTTask(FairseqTask):
                             help='Display verbose debug')
         parser.add_argument("--image-disable", action='store_true',
                             help='Disable visual')
-
+        parser.add_argument("--image-vista-kernel-size", type=int, default=2,
+                            help="kernel size for fractional max 2d pooling")
+        parser.add_argument("--image-vista-width", type=int, default=0.7,
+                            help="fractional max pool 2d image width (applied twice)")
         parser.add_argument("--image-pool", action='store_true',
                             help='Vista image pool')
 
@@ -299,7 +306,7 @@ class VisualMTTask(FairseqTask):
         parser.add_argument('--image-backbone', default='vista',
                             help='CNN backbone architecture. (default: vista,  others: resnet18, resnet50)')
         parser.add_argument('--image-use-bridge', action='store_true',
-                            help='If using backbone vista: use bridge layer')
+                            help='Creates a linear bridge from OCR (height, channels) to MT model size')
         parser.add_argument('--image-layer', default='avgpool', type=str,
                             help='If using backbone ResNet: layer [avgpool, layer4, fc]')
 
@@ -351,39 +358,44 @@ class VisualMTTask(FairseqTask):
             args.target_lang, len(tgt_dict)))
 
         image_cache = None
-        write_dict = False
-        if args.image_samples_path:
-            image_dir = os.path.join(args.image_samples_path, 'dict')
-            if os.path.exists(image_dir):
-                print(
-                    f'* Not Dumping dictionary since {image_dir} exists', file=sys.stderr)
-            else:
-                os.makedirs(image_dir)
-                print(
-                    f'* Dumping {len(src_dict)} word images to {image_dir}', file=sys.stderr)
-                write_dict = True
-
-        if write_dict or args.image_use_cache:
+        if args.image_use_cache:
             image_generator = ImageGenerator(font_file_path=args.image_font_path,
                                              image_width=args.image_width,
                                              image_height=args.image_height)
             image_cache = {}
-            print('...BUILDING CACHE')
+            print('BUILDING CACHE...', end="")
             for index in range(len(src_dict)):
                 word = src_dict[index]
                 img_data = image_generator.get_image(word,
                                                      font_name=image_generator.font_list[0],
-                                                     font_size=16, font_style=1,
+                                                     font_size=args.image_font_size, font_style=1,
                                                      font_color='black', bkg_color='white', font_rotate=0,
-                                                     pad_top=5, pad_bottom=5, pad_left=5, pad_right=5)
-                img_data = image_generator.resize_or_pad(
-                    img_data, height=args.image_height, width=args.image_width)
-                if write_dict:
-                    image_path = os.path.join(image_dir, f'{index}_{word}.png')
-                    cv2.imwrite(image_path, img_data)
+                                                     pad_top=3, pad_bottom=3, pad_left=1, pad_right=args.image_pad_right)
+                if args.image_type == "line":
+                    img_data = image_generator.resize_or_pad(
+                        img_data, height=args.image_height)
+                else:                    
+                    img_data = image_generator.resize_or_pad(
+                        img_data, height=args.image_height, width=args.image_width)
+
                 if args.image_use_cache:
                     image_cache[word] = img_data
-            print('CACHE COMPLETE', len(image_cache))
+            print('CACHE GENERATION COMPLETE', len(image_cache))
+
+        if args.image_samples_path:
+            image_dir = os.path.join(args.image_samples_path, 'dict')
+            if os.path.exists(image_dir):
+                print(
+                    f'* Not dumping dictionary since {image_dir} exists', file=sys.stderr)
+            else:
+                print(
+                    f'* Dumping {len(src_dict)} word images to {image_dir}', file=sys.stderr)
+                os.makedirs(image_dir)
+                for index in range(len(src_dict)):
+                    word = src_dict[index]
+                    img_data = image_cache[word]
+                    image_path = os.path.join(image_dir, f'{index}_{word}.png')
+                    cv2.imwrite(image_path, img_data)
 
         return cls(args, src_dict, tgt_dict, image_cache)
 

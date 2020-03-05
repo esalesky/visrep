@@ -352,8 +352,9 @@ class VisualTransformerModel(BaseFairseqModel):
 
         if 'vista' in args.image_backbone:
             backbone = VistaOCR(use_bridge=args.image_use_bridge, encoder_dim=args.image_embed_dim,
-                                input_line_height=args.image_height, use_pool=args.image_pool,
-                                image_verbose=args.image_verbose)
+                                input_line_height=args.image_height, use_pool=(args.image_type=="word"),
+                                image_type=args.image_type, kernel_size=args.image_vista_kernel_size,
+                                width=args.image_vista_width, image_verbose=args.image_verbose)
         else:
             backbone = VisualNet(dim=args.image_embed_dim, input_shape=(args.image_height, args.image_width),
                                  model_name=args.image_backbone, extract=args.image_layer, normalize=False,
@@ -405,7 +406,8 @@ class VisualTransformerEncoder(FairseqEncoder):
         self.args = args
         self.dropout = args.dropout
 
-        if self.args.image_embed_type == 'concat':
+        # A linear layer on top of the visual embeddings
+        if self.args.image_type == "word" and self.args.image_embed_type == 'concat':
             self.vis_linear = torch.nn.Linear(
                 self.args.image_embed_dim * 2, self.args.image_embed_dim)
         else:
@@ -438,7 +440,8 @@ class VisualTransformerEncoder(FairseqEncoder):
             self.layer_norm = None
 
     def forward_embedding(self, src_tokens):
-        # embed tokens and positions
+        """Scales embeddings (which were already computed) and adds positional embeddings."""
+
         embed = self.embed_scale * self.embed_tokens(src_tokens)
         if self.embed_positions is not None:
             x = embed + self.embed_positions(src_tokens)
@@ -453,14 +456,23 @@ class VisualTransformerEncoder(FairseqEncoder):
                                          src_images.size(-2), src_images.size(-1))
 
             if self.args.image_verbose:
-                print('ENCODER: input ((batch x token), channel, height, width) %s' % (
-                    str(src_images.shape)))
+                print(f"ENCODER: input (({b} x {t}), channel={c}, height={h}, width={w})")
 
-            visual_out, visual_prelogits = self.visual_encoder(
-                src_images)  # (B X T) X D embed_dim
+            # Return shape is (b x t, d=embed_dim)
+            visual_out, visual_prelogits = self.visual_encoder(src_images)
 
-            vis_encoder_out = visual_out.view(
-                b, t, self.args.image_embed_dim)  # batch, token, embed_dim
+            if self.args.image_type == "word":
+
+                if self.args.image_verbose:
+                    print(f"ENCODER: visual encoder gave us {visual_out}")
+
+                vis_encoder_out = visual_out.view(
+                    b, t, self.args.image_embed_dim)  # batch, token, embed_dim
+
+            elif self.args.image_type == "line":
+                # nothing to do, the image comes back in the required dimensions
+                # (batch, time, embed_dim)
+                vis_encoder_out = visual_out
 
         else:
             if self.args.image_embed_path:
@@ -480,6 +492,7 @@ class VisualTransformerEncoder(FairseqEncoder):
                 `(batch, src_len)`
             src_lengths (torch.LongTensor): lengths of each source sentence of
                 shape `(batch)`
+            src_images (?): source images
             return_all_hiddens (bool, optional): also return all of the
                 intermediate hidden states (default: False).
 
@@ -517,53 +530,60 @@ class VisualTransformerEncoder(FairseqEncoder):
                 print('ENCODER: visual embed prelogits %s' % (
                     str(visual_prelogits.shape)))
 
-        x, encoder_embedding = self.forward_embedding(src_tokens)
-
-        if self.args.image_verbose:
-            print('ENCODER: token embed %s' %
-                  str(x.shape))
+        if self.args.image_type != "line":
+            x, encoder_embedding = self.forward_embedding(src_tokens)
+            if self.args.image_verbose:
+                print('ENCODER: token embed %s' %
+                      str(x.shape))
+        else:
+            x, encoder_embedding = None, None
 
         # if not self.args.image_disable:
-        if type(vis_encoder_out) != type(None):
-            if self.args.image_embed_type == 'concat':
-                if self.args.image_verbose:
-                    print('ENCODER: CONCAT input for tok and visual embed, tok %s, visual %s' %
-                          (str(x.shape), str(vis_encoder_out.shape)))
-                x_cat = torch.cat((x, vis_encoder_out), dim=2)
-                if self.args.image_verbose:
-                    print('ENCODER: CONCAT out %s' %
-                          (str(x_cat.shape)))
-                x = self.vis_linear(x_cat)
-                x = F.dropout(x, p=self.dropout, training=self.training)
-                if self.args.image_verbose:
-                    print('ENCODER: CONCAT after linear %s' %
-                          (str(x.shape)))
-            elif self.args.image_embed_type == 'avg':
-                x_avg = torch.mean((x, vis_encoder_out), dim=2)
-                x = self.vis_linear(x_avg)
-                x = F.dropout(x, p=self.dropout, training=self.training)
+        if self.args.image_type == "word" and self.args.image_embed_type == 'concat':
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT input for tok and visual embed, tok %s, visual %s' %
+                      (str(x.shape), str(vis_encoder_out.shape)))
+            x_cat = torch.cat((x, vis_encoder_out), dim=2)
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT out %s' %
+                      (str(x_cat.shape)))
+            x = self.vis_linear(x_cat)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT after linear %s' %
+                      (str(x.shape)))
 
-                if self.args.image_verbose:
-                    print('ENCODER: AVG tok and visual embed, avg %s, out %s' %
-                          (str(x_avg.shape), str(x.shape)))
-            elif self.args.image_embed_type == 'visonly':
-                x = vis_encoder_out
-                x = self.vis_linear(x)
-                x = F.dropout(x, p=self.dropout, training=self.training)
+        elif self.args.image_type == "word" and self.args.image_embed_type == 'avg':
+            x_avg = torch.mean((x, vis_encoder_out), dim=2)
+            x = self.vis_linear(x_avg)
+            x = F.dropout(x, p=self.dropout, training=self.training)
 
-                if self.args.image_verbose:
-                    print('ENCODER: ONLY visual embed')
-            else:  # self.args.image_embed_type == 'ignore':
-                if self.args.image_verbose:
-                    print('ENCODER: IGNORE visual embed')
+            if self.args.image_verbose:
+                print('ENCODER: AVG tok and visual embed, avg %s, out %s' %
+                      (str(x_avg.shape), str(x.shape)))
 
-            # B x T x C -> T x B x C
+        elif self.args.image_type == "line" or self.args.image_embed_type == 'visonly':
+            x = vis_encoder_out
+            x = self.vis_linear(x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+
+            if self.args.image_verbose:
+                print('ENCODER: ONLY visual embed')
+
+        else:  # self.args.image_embed_type == 'ignore':
+            if self.args.image_verbose:
+                print('ENCODER: IGNORE visual embed')
+
+        # (batch, words, model_size) -> (word, batch, model_size)
         x = x.transpose(0, 1)
 
         # compute padding mask
-        encoder_padding_mask = src_tokens.eq(self.padding_idx)
-        if not encoder_padding_mask.any():
+        if self.args.image_type == "line":
             encoder_padding_mask = None
+        else:
+            encoder_padding_mask = src_tokens.eq(self.padding_idx)
+            if not encoder_padding_mask.any():
+                encoder_padding_mask = None
 
         encoder_states = [] if return_all_hiddens else None
 

@@ -20,7 +20,7 @@ import torchvision.transforms as transforms
 
 def image_collate(
     samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False,
-    input_feeding=True,
+    input_feeding=True, image_type=None
 ):
     if len(samples) == 0:
         return {}
@@ -64,27 +64,40 @@ def image_collate(
 
     src_images_tensor = None
     if samples[0]['source_image']:
-        biggest_size = samples[0]['source_image'][0].shape
-        src_images_tensor = torch.zeros(len(samples), len(
-            src_tokens[0]), biggest_size[0], biggest_size[1], biggest_size[2])  # CHW
-        max_word = len(src_tokens[0])
+        num_channels, word_height, word_width = samples[0]['source_image'][0].shape
+#        print(f"source image: {samples[0]['source_image'][0].shape} from word ID {samples[0]['source'][0]}")
+        
+        src_images_tensor = None
+        if image_type == "word":
+            # In this situation, words are padded to the same width and height
+            src_images_tensor = torch.zeros(len(samples), len(
+                src_tokens[0]), num_channels, word_height, word_width)  # (batch, sentlen, channel, height, width)
+            max_word = len(src_tokens[0])
 
-        for sample_idx, img_sample in enumerate(samples):
-            word_sample = samples[sample_idx]
-            len_word_sample = len(samples[sample_idx]['source_image'])
-            for word_idx in range(max_word - 1):
-                if word_idx < len_word_sample - 1:
-                    width = samples[sample_idx]['source_image'][word_idx].size(
-                        2)
-                    src_images_tensor[sample_idx, word_idx:, :,
-                                      :width] = samples[sample_idx]['source_image'][word_idx]
-                else:
-                    zero_image = torch.ones(
-                        biggest_size[0], biggest_size[1], biggest_size[2])
-                    width = zero_image.size(2)
-                    src_images_tensor[sample_idx,
-                                      word_idx:, :, :width] = zero_image
+            for sample_idx, sentence_sample in enumerate(samples):
+                len_sentence = len(sentence_sample['source_image'])
+                for word_idx, word_sample in enumerate(sentence_sample['source_image']):
+                    width = word_sample.shape[2]
+                    src_images_tensor[sample_idx, word_idx:, :, :, :width] = word_sample
+
+        elif image_type == "line":
+            # Words are padded to same height, but widths differ
+            widths = [sum([word.shape[2] for word in sample['source_image']]) for sample in samples]
+            max_sentence_width = max(widths)
+            print(f"BATCH max width is {max_sentence_width}", file=sys.stderr)
+
+            # pad sentences to maximum width observed
+            src_images_tensor = torch.zeros(len(samples), 1, num_channels, word_height, max_sentence_width)
+            
+            for i, sample in enumerate(samples):
+                # concatenate all the images along the width
+                sentence = torch.cat(sample['source_image'], 2)
+#                print(f"SAMPLE[{i}] has shape {sentence.shape}")
+                # assign to the array
+                src_images_tensor[i, 0, :, :, 0:widths[i]] = sentence
+
         src_images_tensor = src_images_tensor.index_select(0, sort_order)
+        print(f"SRC_IMAGES_TENSOR: {src_images_tensor.shape}")
 
     prev_output_tokens = None
     target = None
@@ -152,7 +165,7 @@ def image_collate(
 
 class ImagePairDataset(FairseqDataset):
     """
-    A pair of torch.utils.data.Datasets.
+    Pairs an ImageDataset for the source side with a standard torch.utils.data.Dataset for the target side.
 
     Args:
         src (torch.utils.data.Dataset): source dataset to wrap
@@ -179,6 +192,7 @@ class ImagePairDataset(FairseqDataset):
             target if it's absent (default: False).
         align_dataset (torch.utils.data.Dataset, optional): dataset
             containing alignments.
+        image_type: type of image processing (word or line)
     """
 
     def __init__(
@@ -188,7 +202,7 @@ class ImagePairDataset(FairseqDataset):
         max_source_positions=1024, max_target_positions=1024,
         shuffle=True, input_feeding=True,
         remove_eos_from_source=False, append_eos_to_target=False,
-        align_dataset=None,
+        align_dataset=None, image_type=None,
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
@@ -211,9 +225,12 @@ class ImagePairDataset(FairseqDataset):
         self.align_dataset = align_dataset
         if self.align_dataset is not None:
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
+        self.image_type = image_type
 
     def __getitem__(self, index):
         tgt_item = self.tgt[index] if self.tgt is not None else None
+        # src_item: list of token IDS
+        # src_img_list: list of three-channel image vectors of shape (3, width, height)
         src_item, src_img_list = self.src[index]
 
         #src_images = []
@@ -289,7 +306,7 @@ class ImagePairDataset(FairseqDataset):
         return image_collate(
             samples, pad_idx=self.src_dict.pad(), eos_idx=self.src_dict.eos(),
             left_pad_source=self.left_pad_source, left_pad_target=self.left_pad_target,
-            input_feeding=self.input_feeding,
+            input_feeding=self.input_feeding, image_type=self.image_type
         )
 
     def num_tokens(self, index):
@@ -335,7 +352,9 @@ class ImageGenerator():
                  font_file_path,
                  surf_width=1500, surf_height=250,
                  start_x=50, start_y=50, dpi=120,
-                 image_height=128, image_width=32):
+                 image_height=128, image_width=32,
+                 font_size=8,
+                 pad_right=None):
 
         pygame.freetype.init()
         pygame.freetype.set_default_resolution(dpi)
@@ -347,11 +366,15 @@ class ImageGenerator():
         self.dpi = dpi
 
         self.font_rotation = [-6, -4, -2, 0, 2, 4, 6]
-        self.pad_top = [0, 2, 4, 6, 8]
-        self.pad_bottom = [0, 2, 4, 6, 8]
-        self.pad_left = [0, 2, 4, 6, 8]
-        self.pad_right = [0, 2, 4, 6, 8]
-        self.font_size = [10, 14, 18, 24, 32]
+        self.pad_top = [0]
+        self.pad_bottom = [0]
+        self.pad_left = [0]
+        self.pad_right = [0]
+#        self.pad_top = [0, 2, 4, 6, 8]
+#        self.pad_bottom = [0, 2, 4, 6, 8]
+#        self.pad_left = [0, 2, 4, 6, 8]
+#        self.pad_right = pad_right if pad_right else random.choice([0, 2, 4, 6, 8])
+        self.font_sizes = [font_size] if font_size else [10, 14, 18, 24, 32]
         self.font_color = ['black']
         self.bkg_color = ['white']
 
@@ -404,7 +427,10 @@ class ImageGenerator():
         (h, w) = resized.shape[:2]
         return resized
 
-    def resize_or_pad(self, img_data, width, height):
+    def resize_or_pad(self, img_data, height, width=None):
+        """
+        For line-based decoding, we don't want to change the width.
+        """
         img_height, img_width = img_data.shape[:2]
         # print('input h, w', img_height, img_width)
         if img_height > height:
@@ -412,25 +438,27 @@ class ImageGenerator():
             img_height, img_width = img_data.shape[:2]
         # print('height resize h, w', img_height, img_width)
 
-        if img_width > width:
-            img_data = self.image_resize(img_data, width=width)
+        # Only adjust width if a requested width was passed (i.e., for word-based embeddings)
+        if width:
+            if img_width > width:
+                img_data = self.image_resize(img_data, width=width)
+                img_height, img_width = img_data.shape[:2]
+                # print('width resize h, w', img_height, img_width)
+
             img_height, img_width = img_data.shape[:2]
-        # print('width resize h, w', img_height, img_width)
+            pad_height = height - img_height
+            pad_width = width - img_width
 
-        img_height, img_width = img_data.shape[:2]
-        pad_height = height - img_height
-        pad_width = width - img_width
+            border_color = [255, 255, 255]
+            # border_color = [0, 0, 0]
 
-        border_color = [255, 255, 255]
-        # border_color = [0, 0, 0]
+            # print('img h w', img_height, img_width)
+            # print('pad h w',pad_height, pad_width)
+            img_data = cv2.copyMakeBorder(
+                img_data, pad_height, 0, 0, pad_width, cv2.BORDER_CONSTANT,
+                value=border_color)
 
-        # print('img h w', img_height, img_width)
-        # print('pad h w',pad_height, pad_width)
-        img_data_pad = cv2.copyMakeBorder(
-            img_data, pad_height, 0, 0, pad_width, cv2.BORDER_CONSTANT,
-            value=border_color)
-
-        return img_data_pad
+        return img_data
 
     def get_image(self, line_text,
                   font_name=None, font_size=None, font_style=None,
@@ -440,6 +468,7 @@ class ImageGenerator():
 
         # Replace Unicode Character 'LOWER ONE EIGHTH BLOCK' (U+2581)
         # many of the fonts can not render this code
+        # TODO
         line_text = line_text.replace('▁', '_')
 
         surf = pygame.Surface((self.surface_width, self.surface_height))
@@ -453,7 +482,7 @@ class ImageGenerator():
             font = pygame.freetype.Font(font_name, font_size)
         else:
             font = pygame.freetype.Font(
-                font_name, random.choice(self.font_size))
+                font_name, random.choice(self.font_sizes))
 
         if font_style:
             font_style = font_style
@@ -506,14 +535,12 @@ class ImageGenerator():
         else:
             pad_left = random.choice(self.pad_left)
 
-        if pad_right:
-            pad_right = pad_right
-        else:
-            pad_right = random.choice(self.pad_right)
+        if not pad_right:
+            pad_right = self.pad_right
 
         crop = (self.start_x - pad_left, self.start_y - pad_top,
                 text_rect.width + (pad_left + pad_right),
-                text_rect.height + (pad_top + pad_bottom))
+                max(self.image_height, text_rect.height + (pad_top + pad_bottom)))
 
         sub_surf = surf.subsurface(crop)
 
@@ -528,11 +555,24 @@ class ImageGenerator():
 
 class ImageDataset(FairseqDataset):
     """Takes a text file as input and binarizes it in memory at instantiation.
-    Original lines are also kept in memory"""
+    Original lines are also kept in memory.
+
+    :param path:
+    :param dictionary:
+    :param append_eos:
+    :param reverse_order:
+    :param transform:
+    :param image_type: word or sentence
+    :param image_font_path:
+    :param image_height:
+    :param image_width:
+    :param image_cache:
+    """
 
     def __init__(self, path, dictionary, append_eos=True, reverse_order=False,
                  transform=None,
-                 image_type=None,
+                 font_size=8,
+                 image_type="",
                  image_font_path=None,
                  image_height=30,
                  image_width=120,
@@ -547,22 +587,18 @@ class ImageDataset(FairseqDataset):
         self.dictionary = dictionary
         self.read_data(path, dictionary)
         self.size = len(self.tokens_list)
-        self.image_type = image_type
+        self.image_type = image_type.lower()
         self.image_height = image_height
         self.image_width = image_width
         self.transform = transform
+        self.font_size = font_size
         self.image_cache = image_cache
+        self.image_use_cache = True if self.image_cache else False
 
-        if self.image_type:
-            if self.image_cache:
-                self.image_use_cache = True
-                print('...using image cache for', path)
-            else:
-                self.image_use_cache = False
-                print('...NOT using image cache for', path)
-                self.image_generator = ImageGenerator(font_file_path=image_font_path,
-                                                      image_width=image_width,
-                                                      image_height=image_height)
+        if self.image_type is not None and not self.image_use_cache:
+            self.image_generator = ImageGenerator(font_file_path=image_font_path,
+                                                  image_width=image_width,
+                                                  image_height=image_height)
 
     def read_data(self, path, dictionary):
         with open(path, 'r', encoding='utf-8') as f:
@@ -585,7 +621,7 @@ class ImageDataset(FairseqDataset):
         self.check_index(i)
 
         img_data_list = None
-        if self.image_type:
+        if self.image_type == "word":
             img_data_list = []
             for id in self.tokens_list[i]:
                 if self.image_use_cache:
@@ -598,7 +634,8 @@ class ImageDataset(FairseqDataset):
                             3, self.image_height, self.image_width))
                 else:
                     img_data = self.image_generator.get_image(
-                        word, font_color='black', bkg_color='white')
+                        word, font_color='black', font_size=self.font_size,
+                        height=self.image_height, bkg_color='white')
                     img_data = self.image_generator.resize_or_pad(
                         img_data, height=self.image_height, width=self.image_width)
 
@@ -613,6 +650,11 @@ class ImageDataset(FairseqDataset):
                 # image tensor torch.Size([3, 32, 128]) (C x H x W)
 
                 img_data_list.append(img_tensor)
+
+        elif self.image_type == "line":
+            assert self.image_use_cache
+            img_data = [self.image_cache[self.dictionary[word]] for word in self.tokens_list[i]]
+            img_data_list = [self.transform(image) for image in img_data]
 
         return self.tokens_list[i], img_data_list
 
