@@ -112,7 +112,7 @@ def load_visual_dataset(
 ):
     """
     Loads the visual dataset.
-    
+
     """
 
     def split_exists(split, src, tgt, lang, data_path):
@@ -295,7 +295,7 @@ class VisualMTTask(FairseqTask):
                             help='Disable visual')
         parser.add_argument("--image-vista-kernel-size", type=int, default=2,
                             help="kernel size for fractional max 2d pooling")
-        parser.add_argument("--image-vista-width", type=int, default=0.7,
+        parser.add_argument("--image-vista-width", type=float, default=0.7,
                             help="fractional max pool 2d image width (applied twice)")
         parser.add_argument("--image-pool", action='store_true',
                             help='Vista image pool')
@@ -374,7 +374,7 @@ class VisualMTTask(FairseqTask):
                 if args.image_type == "line":
                     img_data = image_generator.resize_or_pad(
                         img_data, height=args.image_height)
-                else:                    
+                else:
                     img_data = image_generator.resize_or_pad(
                         img_data, height=args.image_height, width=args.image_width)
 
