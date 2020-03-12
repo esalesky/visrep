@@ -60,7 +60,7 @@ python -u $SRC_PATH/decode_synth.py \
 --decoder-lstm-layers 3 \
 --decoder-lstm-dropout 0.5 \
 --batch-size 32 \
---num-workers 0
+--num-workers 8
 
 #--write-images \
 #--image-verbose

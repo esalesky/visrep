@@ -284,7 +284,7 @@ class LineSynthDataset(Dataset):
         if self.use_font_chars:
             self.get_font_chars(self.font_list[0], self.text_list)
 
-        self.text_list.sort()
+        #self.text_list.sort()
         self.bkg_list = self.get_background_list(bkg_file_path)
 
         # Init alphabet
