@@ -66,7 +66,7 @@ def image_collate(
     if samples[0]['source_image']:
         num_channels, word_height, word_width = samples[0]['source_image'][0].shape
 #        print(f"source image: {samples[0]['source_image'][0].shape} from word ID {samples[0]['source'][0]}")
-        
+
         src_images_tensor = None
         if image_type == "word":
             # In this situation, words are padded to the same width and height
@@ -78,17 +78,20 @@ def image_collate(
                 len_sentence = len(sentence_sample['source_image'])
                 for word_idx, word_sample in enumerate(sentence_sample['source_image']):
                     width = word_sample.shape[2]
-                    src_images_tensor[sample_idx, word_idx:, :, :, :width] = word_sample
+                    src_images_tensor[sample_idx, word_idx:,
+                                      :, :, :width] = word_sample
 
         elif image_type == "line":
             # Words are padded to same height, but widths differ
-            widths = [sum([word.shape[2] for word in sample['source_image']]) for sample in samples]
+            widths = [sum([word.shape[2] for word in sample['source_image']])
+                      for sample in samples]
             max_sentence_width = max(widths)
             print(f"BATCH max width is {max_sentence_width}", file=sys.stderr)
 
             # pad sentences to maximum width observed
-            src_images_tensor = torch.zeros(len(samples), 1, num_channels, word_height, max_sentence_width)
-            
+            src_images_tensor = torch.zeros(
+                len(samples), 1, num_channels, word_height, max_sentence_width)
+
             for i, sample in enumerate(samples):
                 # concatenate all the images along the width
                 sentence = torch.cat(sample['source_image'], 2)
@@ -233,7 +236,7 @@ class ImagePairDataset(FairseqDataset):
         # src_img_list: list of three-channel image vectors of shape (3, width, height)
         src_item, src_img_list = self.src[index]
 
-        #src_images = []
+        # src_images = []
         # for src_img in src_img_list:
         #    src_images.append(src_img)
 
@@ -576,6 +579,7 @@ class ImageDataset(FairseqDataset):
                  image_font_path=None,
                  image_height=30,
                  image_width=120,
+                 image_pretrain_path=None,
                  image_cache=None
                  ):
 
@@ -594,6 +598,7 @@ class ImageDataset(FairseqDataset):
         self.font_size = font_size
         self.image_cache = image_cache
         self.image_use_cache = True if self.image_cache else False
+        self.image_pretrain_path = image_pretrain_path
 
         if self.image_type is not None and not self.image_use_cache:
             self.image_generator = ImageGenerator(font_file_path=image_font_path,
@@ -653,7 +658,33 @@ class ImageDataset(FairseqDataset):
 
         elif self.image_type == "line":
             assert self.image_use_cache
-            img_data = [self.image_cache[self.dictionary[word]] for word in self.tokens_list[i]]
+
+            if self.image_pretrain_path:
+                meta_path = os.path.join(
+                    self.image_pretrain_path, str(i) + '.npz')
+
+                sent_list = []
+                for word_idx in self.tokens_list[i]:
+                    sent_list.append(self.dictionary[word_idx])
+                print('GETITEM:', i, ''.join(sent_list))
+
+                np_embedding = np.load(meta_path, allow_pickle=True)
+                decode_metadata = np_embedding['metadata'].item()
+
+                meta_image_id = decode_metadata['image_id']
+                meta_ref_utf8_text = decode_metadata['utf8_ref_text']
+                meta_ref_uxxxx_text = decode_metadata['uxxxx_ref_text']
+                meta_image = decode_metadata['image']
+                meta_embedding = decode_metadata['embedding']
+
+                print('GETITEM:', i, meta_image_id)
+                print('GETITEM:', i, meta_ref_utf8_text)
+                print('GETITEM:', i, meta_ref_uxxxx_text)
+                print('GETITEM:', i, meta_image.shape)
+                print('GETITEM:', i, meta_embedding.shape)
+
+            img_data = [self.image_cache[self.dictionary[word]]
+                        for word in self.tokens_list[i]]
             img_data_list = [self.transform(image) for image in img_data]
 
         return self.tokens_list[i], img_data_list

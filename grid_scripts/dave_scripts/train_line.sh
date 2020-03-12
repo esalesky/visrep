@@ -25,6 +25,7 @@ DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE} #/dict.$SRC_LANG
 FONT_FILE=/expscratch/detter/fonts/mt/${SRC_LANG}.txt
 
 FAIRSEQ_PATH=/expscratch/detter/src/Mar2020/fairseq/robust
+PRETRAIN_PATH=/expscratch/detter/vismt/zh/vista_maxpool/20200310
 
 EXP_DIR=/expscratch/detter/vismt/zh/vista_maxpool/20200310/fairseq
 
@@ -39,11 +40,17 @@ echo "DATA_DIR - ${DATA_DIR}"
 echo "FONT_FILE - ${FONT_FILE}"
 echo "FAIRSEQ_PATH - ${FAIRSEQ_PATH}"
 echo "EXP_DIR - ${EXP_DIR}"
+echo "PRETRAIN_PATH - ${PRETRAIN_PATH}"
 
 nvidia-smi
 
 mkdir -p $EXP_DIR
 cd $EXP_DIR
+
+mkdir -p $TMPDIR/vismt
+pushd $TMPDIR/vismt
+tar xf ${PRETRAIN_PATH}/decode_embeddings.tar.gz
+popd
 
 python $FAIRSEQ_PATH/train.py \
 $DATA_DIR \
@@ -54,6 +61,7 @@ $DATA_DIR \
 --task visualmt \
 --arch visual_transformer_iwslt_de_en \
 --image-type line \
+--image-pretrain-path $TMPDIR/vismt/embeddings \
 --image-vista-kernel-size 2 \
 --image-vista-width 0.7 \
 --image-font-path $FONT_FILE \
@@ -82,7 +90,7 @@ $DATA_DIR \
 --label-smoothing 0.3 \
 --max-epoch 100 \
 --num-workers 0 \
---max-tokens=600 \
+--max-sentences 4 \
 --raw-text \
 --no-epoch-checkpoints \
 --image-use-cache \

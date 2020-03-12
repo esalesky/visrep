@@ -158,6 +158,7 @@ def load_visual_dataset(
                                    image_font_path=args.image_font_path,
                                    image_height=args.image_height,
                                    image_width=args.image_width,
+                                   image_pretrain_path=args.image_pretrain_path,
                                    image_cache=image_cache)
         src_datasets.append(
             img_dataset
@@ -299,6 +300,9 @@ class VisualMTTask(FairseqTask):
                             help="fractional max pool 2d image width (applied twice)")
         parser.add_argument("--image-pool", action='store_true',
                             help='Vista image pool')
+
+        parser.add_argument("--image-pretrain-path", type=str, default=None,
+                            help='Load pretrain sentence embeddings')
 
         parser.add_argument("--image-freeze-encoder-embed", action='store_true',
                             help='Freeze preloaded visual embed')
