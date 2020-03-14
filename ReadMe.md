@@ -34,9 +34,15 @@ visonly with pretrain embedding - grid_scripts/dave_scripts/train_pretrain_vison
 - Auxillary loss (CTC)  
 Add auxillary CTC loss for visual embeddings  
 
-### Results
+### Sentence Results
 
-Markdown | Less | Pretty
---- | --- | ---
-*Still* | `renders` | **nicely**
-1 | 2 | 3  
+- arch  
+transformer_iwslt_de_en  
+- input  
+/exp/esalesky/mtocr19/zh-en/data/5k  
+- script  
+baseline robust/grid_scripts/dave_scripts/train_orig.sh  
+
+Language | Baseline | VisDiable | PreConcat | PreVisOnly | VisConcat | VisOnly
+--- | --- | --- | --- | --- | --- | ---
+Zh | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0   

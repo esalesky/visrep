@@ -18,10 +18,7 @@ fi
 source deactivate
 source activate /expscratch/detter/tools/anaconda3
 
-SRC_LANG=zh 
-TGT_LANG=en
-SIZE=5k 
-DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}  
+DATA_DIR=/exp/esalesky/mtocr19/zh-en/data/5k  
 
 FAIRSEQ_PATH=/expscratch/detter/src/Mar2020/fairseq/robust
 
@@ -31,9 +28,6 @@ echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
 echo "PYTHONPATH - ${PYTHONPATH}"
 echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
-echo "SRC_LANG - ${SRC_LANG}"
-echo "TGT_LANG - ${TGT_LANG}"
-echo "SIZE - ${SIZE}"
 echo "DATA_DIR - ${DATA_DIR}"
 echo "FAIRSEQ_PATH - ${FAIRSEQ_PATH}"
 echo "EXP_DIR - ${EXP_DIR}"
@@ -46,8 +40,8 @@ cd $EXP_DIR
 python -u $FAIRSEQ_PATH/train.py \
 $DATA_DIR \
 --save-dir $EXP_DIR \
---source-lang $SRC_LANG \
---target-lang $TGT_LANG \
+--source-lang zh \
+--target-lang en \
 --user-dir $FAIRSEQ_PATH \
 --task translation \
 --arch transformer_iwslt_de_en \
