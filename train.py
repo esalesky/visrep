@@ -134,9 +134,11 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
 
-    samples_train_output = os.path.join(task.args.image_samples_path, 'train')
-    if not os.path.exists(samples_train_output):
-        os.makedirs(samples_train_output)
+    if args.image_verbose:
+        samples_train_output = os.path.join(
+            task.args.image_samples_path, 'train')
+        if not os.path.exists(samples_train_output):
+            os.makedirs(samples_train_output)
 
     for i, samples in enumerate(progress, start=epoch_itr.iterations_in_epoch):
         if args.image_verbose:

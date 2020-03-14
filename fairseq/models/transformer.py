@@ -186,7 +186,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
 
-        if args.freeze_enocder_embed:
+        if args.freeze_encoder_embed:
             print('...FREEZE encoder embed')
             encoder_embed_tokens.weight.requires_grad = False
 
