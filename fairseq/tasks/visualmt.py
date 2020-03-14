@@ -123,7 +123,6 @@ def load_visual_dataset(
     src_datasets = []
     tgt_datasets = []
 
-    print('....loading dataset, split', split)
     for k in itertools.count():
         split_k = split + (str(k) if k > 0 else '')
 
@@ -143,7 +142,7 @@ def load_visual_dataset(
 
         path = prefix + src
         dictionary = src_dict
-        print('...loading ImageDataset', path, len(dictionary))
+        print('...loading imageDataset', path, len(dictionary))
         # TODO: --image-augment
         transform = transforms.Compose([
             # ImageAug(),
@@ -159,7 +158,10 @@ def load_visual_dataset(
                                    image_height=args.image_height,
                                    image_width=args.image_width,
                                    image_pretrain_path=args.image_pretrain_path,
-                                   image_cache=image_cache)
+                                   image_verbose=args.image_verbose,
+                                   image_pad_right=args.image_pad_right,
+                                   image_cache=image_cache,
+                                   image_use_cache=args.image_use_cache)
         src_datasets.append(
             img_dataset
         )
@@ -199,7 +201,7 @@ def load_visual_dataset(
             align_dataset = data_utils.load_indexed_dataset(
                 align_path, None, dataset_impl)
 
-    print('...loading ImagePairDataset', split)
+    print('...loading imagePairDataset', split)
 
     return ImagePairDataset(
         src_dataset, src_dataset.sizes, src_dict,
@@ -278,6 +280,8 @@ class VisualMTTask(FairseqTask):
                             help='Image Samples path')
         parser.add_argument("--image-use-cache", action='store_true',
                             help='Cache image dictionary')
+        parser.add_argument("--image-preload-cache", action='store_true',
+                            help='Preload cache image dictionary')
         parser.add_argument("--image-augment", action='store_true',
                             help='Apply image noisification for robustness purposes')
         parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
@@ -362,7 +366,8 @@ class VisualMTTask(FairseqTask):
             args.target_lang, len(tgt_dict)))
 
         image_cache = None
-        if args.image_use_cache:
+        print('image_preload_cache', args.image_preload_cache)
+        if args.image_preload_cache:
             image_generator = ImageGenerator(font_file_path=args.image_font_path,
                                              image_width=args.image_width,
                                              image_height=args.image_height)
@@ -386,7 +391,7 @@ class VisualMTTask(FairseqTask):
                     image_cache[word] = img_data
             print('CACHE GENERATION COMPLETE', len(image_cache))
 
-        if args.image_samples_path:
+        if args.image_samples_path and args.image_preload_cache:
             image_dir = os.path.join(args.image_samples_path, 'dict')
             if os.path.exists(image_dir):
                 print(

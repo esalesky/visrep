@@ -63,11 +63,10 @@ def image_collate(
     src_tokens = src_tokens.index_select(0, sort_order)
 
     src_images_tensor = None
-    if samples[0]['source_image']:
-        num_channels, word_height, word_width = samples[0]['source_image'][0].shape
-#        print(f"source image: {samples[0]['source_image'][0].shape} from word ID {samples[0]['source'][0]}")
+    if 'src_img_list' in samples[0]:
+        num_channels, word_height, word_width = samples[0]['src_img_list'][0].shape
 
-        src_images_tensor = None
+        #src_images_tensor = None
         if image_type == "word":
             # In this situation, words are padded to the same width and height
             src_images_tensor = torch.zeros(len(samples), len(
@@ -75,18 +74,18 @@ def image_collate(
             max_word = len(src_tokens[0])
 
             for sample_idx, sentence_sample in enumerate(samples):
-                len_sentence = len(sentence_sample['source_image'])
-                for word_idx, word_sample in enumerate(sentence_sample['source_image']):
+                len_sentence = len(sentence_sample['src_img_list'])
+                for word_idx, word_sample in enumerate(sentence_sample['src_img_list']):
                     width = word_sample.shape[2]
                     src_images_tensor[sample_idx, word_idx:,
                                       :, :, :width] = word_sample
 
         elif image_type == "line":
             # Words are padded to same height, but widths differ
-            widths = [sum([word.shape[2] for word in sample['source_image']])
+            widths = [sum([word.shape[2] for word in sample['src_img_list']])
                       for sample in samples]
             max_sentence_width = max(widths)
-            print(f"BATCH max width is {max_sentence_width}", file=sys.stderr)
+            #print(f"BATCH max width is {max_sentence_width}", file=sys.stderr)
 
             # pad sentences to maximum width observed
             src_images_tensor = torch.zeros(
@@ -94,13 +93,10 @@ def image_collate(
 
             for i, sample in enumerate(samples):
                 # concatenate all the images along the width
-                sentence = torch.cat(sample['source_image'], 2)
-#                print(f"SAMPLE[{i}] has shape {sentence.shape}")
-                # assign to the array
+                sentence = torch.cat(sample['src_img_list'], 2)
                 src_images_tensor[i, 0, :, :, 0:widths[i]] = sentence
 
         src_images_tensor = src_images_tensor.index_select(0, sort_order)
-        print(f"SRC_IMAGES_TENSOR: {src_images_tensor.shape}")
 
     prev_output_tokens = None
     target = None
@@ -123,6 +119,19 @@ def image_collate(
     else:
         ntokens = sum(len(s['source']) for s in samples)
 
+    src_embeddings_tensor = None
+    if 'src_pretrain_embedding' in samples[0]:
+        embedding_shapes = [list(s['src_pretrain_embedding'].shape)
+                            for s in samples]
+        max_shape = np.max(embedding_shapes, axis=0)
+        src_embeddings_tensor = torch.zeros(
+            len(samples), max_shape[0], max_shape[1])  # (batch, tstep, dim)
+        for sample_idx, sample in enumerate(samples):
+            sample_shape = sample['src_pretrain_embedding'].shape
+            np_embedding = torch.from_numpy(sample['src_pretrain_embedding'])
+            src_embeddings_tensor[sample_idx,
+                                  0:np_embedding.shape[0], :] = np_embedding
+
     batch = {
         'id': id,
         'nsentences': len(samples),
@@ -131,9 +140,19 @@ def image_collate(
             'src_tokens': src_tokens,
             'src_lengths': src_lengths,
             'src_images': src_images_tensor,
+            'src_embeddings': src_embeddings_tensor,
         },
         'target': target,
     }
+
+    if 'src_pretrain_text' in samples[0]:
+        batch['src_pretrain_text'] = [s['src_pretrain_text'] for s in samples]
+    if 'src_pretrain_image' in samples[0]:
+        batch['src_pretrain_image'] = [s['src_pretrain_image']
+                                       for s in samples]
+
+    #print('COLLATE: src_images', src_images_tensor.shape)
+
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
 
@@ -234,7 +253,11 @@ class ImagePairDataset(FairseqDataset):
         tgt_item = self.tgt[index] if self.tgt is not None else None
         # src_item: list of token IDS
         # src_img_list: list of three-channel image vectors of shape (3, width, height)
-        src_item, src_img_list = self.src[index]
+        #src_item, src_img_list = self.src[index]
+
+        src_metadata = self.src[index]
+        src_item = src_metadata['src_item']
+        #src_img_list = src_metadata['src_img_list']
 
         # src_images = []
         # for src_img in src_img_list:
@@ -264,11 +287,17 @@ class ImagePairDataset(FairseqDataset):
             'id': index,
             'source': src_item,
             'target': tgt_item,
-            'source_image': src_img_list,
         }
 
-        # print(src_item.shape)  # torch.Size([23])
-        # print(tgt_item.shape)  # torch.Size([21])
+        if 'src_img_list' in src_metadata:
+            example['src_img_list'] = src_metadata['src_img_list']
+
+        if 'src_pretrain_embedding' in src_metadata:
+            example['src_pretrain_embedding'] = src_metadata['src_pretrain_embedding']
+        if 'src_pretrain_text' in src_metadata:
+            example['src_pretrain_text'] = src_metadata['src_pretrain_text']
+        if 'src_pretrain_image' in src_metadata:
+            example['src_pretrain_image'] = src_metadata['src_pretrain_image']
 
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
@@ -580,7 +609,10 @@ class ImageDataset(FairseqDataset):
                  image_height=30,
                  image_width=120,
                  image_pretrain_path=None,
-                 image_cache=None
+                 image_verbose=False,
+                 image_pad_right=5,
+                 image_cache=None,
+                 image_use_cache=False
                  ):
 
         self.tokens_list = []
@@ -597,13 +629,16 @@ class ImageDataset(FairseqDataset):
         self.transform = transform
         self.font_size = font_size
         self.image_cache = image_cache
-        self.image_use_cache = True if self.image_cache else False
+        if self.image_cache is None:
+            self.image_cache = {}
+        self.image_use_cache = image_use_cache
         self.image_pretrain_path = image_pretrain_path
+        self.image_verbose = image_verbose
+        self.image_pad_right = image_pad_right
 
-        if self.image_type is not None and not self.image_use_cache:
-            self.image_generator = ImageGenerator(font_file_path=image_font_path,
-                                                  image_width=image_width,
-                                                  image_height=image_height)
+        self.image_generator = ImageGenerator(font_file_path=image_font_path,
+                                              image_width=image_width,
+                                              image_height=image_height)
 
     def read_data(self, path, dictionary):
         with open(path, 'r', encoding='utf-8') as f:
@@ -624,6 +659,11 @@ class ImageDataset(FairseqDataset):
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
         self.check_index(i)
+
+        image_metadata = {
+            'index': i,
+            'image_type': self.image_type,
+        }
 
         img_data_list = None
         if self.image_type == "word":
@@ -657,7 +697,7 @@ class ImageDataset(FairseqDataset):
                 img_data_list.append(img_tensor)
 
         elif self.image_type == "line":
-            assert self.image_use_cache
+            #assert self.image_use_cache
 
             if self.image_pretrain_path:
                 meta_path = os.path.join(
@@ -666,28 +706,55 @@ class ImageDataset(FairseqDataset):
                 sent_list = []
                 for word_idx in self.tokens_list[i]:
                     sent_list.append(self.dictionary[word_idx])
-                print('GETITEM:', i, ''.join(sent_list))
 
                 np_embedding = np.load(meta_path, allow_pickle=True)
                 decode_metadata = np_embedding['metadata'].item()
 
-                meta_image_id = decode_metadata['image_id']
-                meta_ref_utf8_text = decode_metadata['utf8_ref_text']
-                meta_ref_uxxxx_text = decode_metadata['uxxxx_ref_text']
-                meta_image = decode_metadata['image']
-                meta_embedding = decode_metadata['embedding']
+                image_metadata['src_pretrain_embedding'] = decode_metadata['embedding']
 
-                print('GETITEM:', i, meta_image_id)
-                print('GETITEM:', i, meta_ref_utf8_text)
-                print('GETITEM:', i, meta_ref_uxxxx_text)
-                print('GETITEM:', i, meta_image.shape)
-                print('GETITEM:', i, meta_embedding.shape)
+                if self.image_verbose:
+                    # only add these for debug
+                    image_metadata['src_pretrain_text'] = decode_metadata['utf8_ref_text']
+                    image_metadata['src_pretrain_image'] = decode_metadata['image']
 
-            img_data = [self.image_cache[self.dictionary[word]]
-                        for word in self.tokens_list[i]]
-            img_data_list = [self.transform(image) for image in img_data]
+                    print('\n\nGETITEM: sentence %s' % (''.join(sent_list)))
+                    print('GETITEM: pretrain image_id %s ' %
+                          decode_metadata['image_id'])
+                    print('GETITEM: pretrain utf8 %s' %
+                          decode_metadata['utf8_ref_text'])
+                    print('GETITEM: pretrain uxxxx %s' %
+                          decode_metadata['uxxxx_ref_text'])
+                    print('GETITEM: pretrain image',
+                          decode_metadata['image'].shape)
+                    print('GETITEM: pretrain embedding',
+                          decode_metadata['embedding'].shape)
+            else:
+                img_data_list = []
+                for id in self.tokens_list[i]:
+                    word = self.dictionary[id]
+                    if word in self.image_cache:
+                        img_data = self.image_cache[word]
+                    else:
+                        img_data = self.image_generator.get_image(word,
+                                                                  font_name=self.image_generator.font_list[0],
+                                                                  font_size=self.font_size, font_style=1,
+                                                                  font_color='black', bkg_color='white', font_rotate=0,
+                                                                  pad_top=3, pad_bottom=3, pad_left=1,
+                                                                  pad_right=self.image_pad_right)
+                        img_data = self.image_generator.resize_or_pad(
+                            img_data, height=self.image_height)
 
-        return self.tokens_list[i], img_data_list
+                        if self.image_use_cache:
+                            self.image_cache[word] = img_data
+
+                    img_tensor = self.transform(img_data)
+                    img_data_list.append(img_tensor)
+
+                image_metadata['src_img_list'] = img_data_list
+
+        image_metadata['src_item'] = self.tokens_list[i]
+
+        return image_metadata
 
     def get_original_text(self, i):
         self.check_index(i)

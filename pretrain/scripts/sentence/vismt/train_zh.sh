@@ -19,7 +19,7 @@ source deactivate
 source activate /expscratch/detter/tools/anaconda3
 
 EXP_DIR=/expscratch/detter/vismt/zh/vista_maxpool/20200310
-SRC_PATH=/expscratch/detter/src/Mar2020/fairseq/fairseq-ocr/visual/sentence
+SRC_PATH=/expscratch/detter/src/Mar2020/fairseq/robust/visual/sentence
 
 TRAIN_DATA=/exp/esalesky/mtocr19/zh-en/data/data-raw/raw/ted_train_en-zh.raw.zh
 

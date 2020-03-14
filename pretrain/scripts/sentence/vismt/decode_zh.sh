@@ -20,7 +20,7 @@ source activate /expscratch/detter/tools/anaconda3
 
 EXP_DIR=/expscratch/detter/vismt/zh/vista_maxpool/20200310
 CKPT_PATH=/expscratch/detter/vismt/zh/vista_maxpool/20200310/checkpoints/model_ckpt_best.pth
-SRC_PATH=/expscratch/detter/src/Mar2020/fairseq/fairseq-ocr/visual/sentence
+SRC_PATH=/expscratch/detter/src/Mar2020/fairseq/robust/visual/sentence
 
 TEST_DATA=/exp/esalesky/mtocr19/zh-en/data/data-raw/raw/ted_train_en-zh.raw.zh
 TEST_FONT=/exp/ocr/fonts/zh.txt
@@ -59,8 +59,8 @@ python -u $SRC_PATH/decode_synth.py \
 --decoder-lstm-units 256 \
 --decoder-lstm-layers 3 \
 --decoder-lstm-dropout 0.5 \
---batch-size 32 \
---num-workers 8
+--batch-size 1 \
+--num-workers 0
 
 #--write-images \
 #--image-verbose

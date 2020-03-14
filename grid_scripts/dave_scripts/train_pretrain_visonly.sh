@@ -1,9 +1,9 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
-# 2020-03-04
+# 2020-03-15
 # 
-# Train sentence embeddings 
+# Train pretrain concat 
 #
 
 module load cuda10.1/toolkit/10.1.105
@@ -18,16 +18,16 @@ fi
 source deactivate
 source activate /expscratch/detter/tools/anaconda3
 
-SRC_LANG=zh #${1} # ko zh ja de fr
+SRC_LANG=zh 
 TGT_LANG=en
-SIZE=5k #5k #${2}
-DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE} #/dict.$SRC_LANG.txt 
+SIZE=5k 
+DATA_DIR=/exp/esalesky/mtocr19/$SRC_LANG-$TGT_LANG/data/${SIZE}  
 FONT_FILE=/expscratch/detter/fonts/mt/${SRC_LANG}.txt
 
 FAIRSEQ_PATH=/expscratch/detter/src/Mar2020/fairseq/robust
 PRETRAIN_PATH=/expscratch/detter/vismt/zh/vista_maxpool/20200310
 
-EXP_DIR=/expscratch/detter/vismt/zh/vista_maxpool/20200310/fairseq
+EXP_DIR=/expscratch/detter/vismt/zh/pretrain/visonly/20200314
 
 echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
@@ -44,7 +44,7 @@ echo "PRETRAIN_PATH - ${PRETRAIN_PATH}"
 
 nvidia-smi
 
-mkdir -p $EXP_DIR
+mkdir -p $EXP_DIR/samples
 cd $EXP_DIR
 
 mkdir -p $TMPDIR/vismt
@@ -52,7 +52,7 @@ pushd $TMPDIR/vismt
 tar xf ${PRETRAIN_PATH}/decode_embeddings.tar.gz
 popd
 
-python $FAIRSEQ_PATH/train.py \
+python -u $FAIRSEQ_PATH/train.py \
 $DATA_DIR \
 --save-dir $EXP_DIR \
 --source-lang $SRC_LANG \
@@ -67,12 +67,12 @@ $DATA_DIR \
 --image-font-path $FONT_FILE \
 --image-font-size 6 \
 --image-pad-right 5 \
---image-samples-path $EXP_DIR \
+--image-samples-path $EXP_DIR/samples \
 --image-height 32 \
 --image-width 32 \
 --image-src-loss-scale 1.0 \
 --image-tgt-loss-scale 1.0 \
---image-embed-type 'concat' \
+--image-embed-type 'visonly' \
 --image-embed-dim 512 \
 --image-use-bridge \
 --image-layer 'avgpool' \
@@ -89,14 +89,15 @@ $DATA_DIR \
 --criterion visual_label_smoothed_cross_entropy \
 --label-smoothing 0.3 \
 --max-epoch 100 \
---num-workers 0 \
---max-sentences 4 \
+--num-workers 8 \
+--max-sentences 32 \
 --raw-text \
---no-epoch-checkpoints \
---image-use-cache \
---image-verbose
+--no-epoch-checkpoints
 
-#--max-sentences 4 \
+#--image-verbose
+#--image-embed-type 'concat' \
+#--image-preload-cache
 #--image-use-cache \
+#--max-sentences 4 \
 #--max-tokens=600 \
 #--update-freq=8 \

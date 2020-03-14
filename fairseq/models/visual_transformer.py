@@ -134,7 +134,7 @@ class VisualTransformerModel(BaseFairseqModel):
         parser.add_argument('--freeze-encoder-embed', default=False, action='store_true',
                             help='Freeze the encoder embeddings')
 
-    def forward(self, src_tokens, src_lengths, src_images, prev_output_tokens, **kwargs):
+    def forward(self, src_tokens, src_lengths, src_images, src_embeddings, prev_output_tokens, **kwargs):
         """
         Run the forward pass for an encoder-decoder model.
 
@@ -159,7 +159,7 @@ class VisualTransformerModel(BaseFairseqModel):
         """
 
         encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, src_images=src_images, **kwargs)
+            src_tokens, src_lengths=src_lengths, src_images=src_images, src_embeddings=src_embeddings, **kwargs)
 
         if self.args.image_verbose:
             print('ENCODER: output (token, batch, embed_dim) %s' %
@@ -460,11 +460,10 @@ class VisualTransformerEncoder(FairseqEncoder):
 
             # Return shape is (b x t, d=embed_dim)
             visual_out, visual_prelogits = self.visual_encoder(src_images)
+            #if self.args.image_verbose:
+            #    print(f"ENCODER: visual encoder gave us {visual_out}")
 
             if self.args.image_type == "word":
-
-                if self.args.image_verbose:
-                    print(f"ENCODER: visual encoder gave us {visual_out}")
 
                 vis_encoder_out = visual_out.view(
                     b, t, self.args.image_embed_dim)  # batch, token, embed_dim
@@ -485,7 +484,7 @@ class VisualTransformerEncoder(FairseqEncoder):
 
         return vis_encoder_out, visual_prelogits
 
-    def forward(self, src_tokens, src_lengths, src_images, cls_input=None, return_all_hiddens=False):
+    def forward(self, src_tokens, src_lengths, src_images, src_embeddings, cls_input=None, return_all_hiddens=False):
         """
         Args:
             src_tokens (LongTensor): tokens in the source language of shape
@@ -514,10 +513,23 @@ class VisualTransformerEncoder(FairseqEncoder):
                 src_tokens.shape, src_lengths.shape))
             print('ENCODER: src_lengths %s' % (
                 src_lengths))
-        vis_encoder_out, visual_prelogits = self.forward_visual_embedding(
-            src_tokens, src_images)
+        
+
+        if type(src_embeddings) == type(None):
+            vis_encoder_out, visual_prelogits = self.forward_visual_embedding(
+                src_tokens, src_images)
+        else:
+            vis_encoder_out = src_embeddings
+            visual_prelogits = None
+
 
         if self.args.image_verbose:
+            if type(src_embeddings) == type(None):
+                print('ENCODER: src_embeddings NONE')
+            else:
+                print('ENCODER: src_embeddings ((batch x token), embed_dim) %s' % (
+                    str(src_embeddings.shape)))
+
             if type(vis_encoder_out) == type(None):
                 print('ENCODER: visual embed NONE')
             else:
@@ -530,7 +542,8 @@ class VisualTransformerEncoder(FairseqEncoder):
                 print('ENCODER: visual embed prelogits %s' % (
                     str(visual_prelogits.shape)))
 
-        if self.args.image_type != "line":
+        #if self.args.image_type != "line":
+        if self.args.image_type != "visonly":
             x, encoder_embedding = self.forward_embedding(src_tokens)
             if self.args.image_verbose:
                 print('ENCODER: token embed %s' %
@@ -561,6 +574,20 @@ class VisualTransformerEncoder(FairseqEncoder):
             if self.args.image_verbose:
                 print('ENCODER: AVG tok and visual embed, avg %s, out %s' %
                       (str(x_avg.shape), str(x.shape)))
+
+        elif self.args.image_type == "line" and self.args.image_embed_type == 'concat':
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT input for tok and visual line embed, tok %s, visual line %s' %
+                      (str(x.shape), str(vis_encoder_out.shape)))
+            x_cat = torch.cat((x, vis_encoder_out), dim=1)
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT out %s' %
+                      (str(x_cat.shape)))
+            x = self.vis_linear(x_cat)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+            if self.args.image_verbose:
+                print('ENCODER: CONCAT after linear %s' %
+                      (str(x.shape)))
 
         elif self.args.image_type == "line" or self.args.image_embed_type == 'visonly':
             x = vis_encoder_out
@@ -613,8 +640,9 @@ class VisualTransformerEncoder(FairseqEncoder):
 
         if not self.args.image_disable:
             if self.args.image_verbose:
-                print('ENCODER OUT: visual_prelogits %s' %
-                      (str(visual_prelogits.shape)))
+                if visual_prelogits != None:
+                    print('ENCODER OUT: visual_prelogits %s' %
+                        (str(visual_prelogits.shape)))
 
         return encoder_out_dict
 

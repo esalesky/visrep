@@ -1,5 +1,5 @@
 
-2019-11-07
+2020-03-14
 
 Train and evaluate visual word embeddings
 
@@ -11,7 +11,7 @@ The model uses ResNet18 and the AdaptiveAvgPool2d layer to provide a 512-dim fea
 
 Code
 train.py - Train a word embedding model
-model.py - ResNet18
+models.py - ResNet18
 dataset.py - Generate synthetic word images from seed text
 augment.py - Add random augmentations (noise, pixel dropout) during training 
 
