@@ -159,12 +159,10 @@ def train(args, trainer, task, epoch_itr):
             print('DATA: prev_output_tokens',
                   samples[0]['net_input']['prev_output_tokens'].shape)
 
-            if i % 10 == 0:
+            if args.image_type == "line" and i % 10 == 0:
                 if type(samples[0]['net_input']['src_images']) != type(None):
-                    image_list = samples[0]['net_input']['src_images'].cpu(
-                    ).numpy()
-                    tokens_list = samples[0]['net_input']['src_tokens'].cpu(
-                    ).numpy()
+                    image_list = samples[0]['net_input']['src_images'].cpu().numpy()
+                    tokens_list = samples[0]['net_input']['src_tokens'].cpu().numpy()
                     # print(image_list.shape)
                     # print(tokens_list.shape)
 
