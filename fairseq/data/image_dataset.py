@@ -88,6 +88,9 @@ def image_collate(
             #print(f"BATCH max width is {max_sentence_width}", file=sys.stderr)
 
             # pad sentences to maximum width observed
+            # Shape: (batch, "words"=1, channels=3, height, width)
+            # (when doing word-based image processing, words is the actual number of words;
+            #  we need to keep the same shape, but effectively have just one word at this point)
             src_images_tensor = torch.zeros(
                 len(samples), 1, num_channels, word_height, max_sentence_width)
 
@@ -385,7 +388,14 @@ class ImageGenerator():
                  surf_width=1500, surf_height=250,
                  start_x=50, start_y=50, dpi=120,
                  image_height=128, image_width=32,
+                 bkg_color="white",
+                 font_color="black",
+                 font_style=1,
                  font_size=8,
+                 font_rotation=0,
+                 pad_top=3,
+                 pad_bottom=3,
+                 pad_left=1,
                  pad_right=None):
 
         pygame.freetype.init()
@@ -397,18 +407,19 @@ class ImageGenerator():
         self.start_y = start_y
         self.dpi = dpi
 
-        self.font_rotation = [-6, -4, -2, 0, 2, 4, 6]
-        self.pad_top = [0]
-        self.pad_bottom = [0]
-        self.pad_left = [0]
-        self.pad_right = [0]
+        self.font_rotation = [font_rotation] if font_rotation is not None else [-6, -4, -2, 0, 2, 4, 6]
+        self.pad_top = [pad_top]
+        self.pad_bottom = [pad_bottom]
+        self.pad_left = [pad_left]
+        self.pad_right = pad_right if pad_right else 0
 #        self.pad_top = [0, 2, 4, 6, 8]
 #        self.pad_bottom = [0, 2, 4, 6, 8]
 #        self.pad_left = [0, 2, 4, 6, 8]
 #        self.pad_right = pad_right if pad_right else random.choice([0, 2, 4, 6, 8])
         self.font_sizes = [font_size] if font_size else [10, 14, 18, 24, 32]
-        self.font_color = ['black']
-        self.bkg_color = ['white']
+        self.font_style = font_style
+        self.font_color = [font_color]
+        self.bkg_color = [bkg_color]
 
         self.image_height = image_height
         self.image_width = image_width
@@ -494,7 +505,7 @@ class ImageGenerator():
 
     def get_image(self, line_text,
                   font_name=None, font_size=None, font_style=None,
-                  font_color=None, bkg_color=None, font_rotate=None,
+                  font_color=None, bkg_color=None, font_rotation=None,
                   pad_top=None, pad_bottom=None, pad_left=None, pad_right=None):
         ''' Create pygame surface '''
 
@@ -516,8 +527,10 @@ class ImageGenerator():
             font = pygame.freetype.Font(
                 font_name, random.choice(self.font_sizes))
 
-        if font_style:
+        if font_style is not None:
             font_style = font_style
+        elif self.font_style is not None:
+            font_style = self.font_style
         else:
             font_style = random.randint(1, 6)
 
@@ -536,18 +549,15 @@ class ImageGenerator():
             font.fgcolor = pygame.color.THECOLORS[random.choice(
                 self.font_color)]
 
-        if font_rotate:
-            font.rotation = font_rotate
+        if font_rotation is not None:
+            font.rotation = font_rotation
         else:
-            if font_rotate != 0:
-                font_rotate_val = random.choice(self.font_rotation)
-                if font_rotate != 0:
-                    font.rotation = font_rotate_val
+            font.rotation = random.choice(self.font_rotation)
 
         if bkg_color:
             surf.fill(pygame.color.THECOLORS[bkg_color])
         else:
-            surf.fill(pygame.color.THECOLORS[random.choice(self.font_color)])
+            surf.fill(pygame.color.THECOLORS[random.choice(self.bkg_color)])
 
         text_rect = font.render_to(
             surf, (self.start_x, self.start_y), line_text)
@@ -607,12 +617,12 @@ class ImageDataset(FairseqDataset):
                  image_type="",
                  image_font_path=None,
                  image_height=30,
-                 image_width=120,
+                 image_width=None,
                  image_pretrain_path=None,
                  image_verbose=False,
                  image_pad_right=5,
-                 image_cache=None,
-                 image_use_cache=False
+                 image_use_cache=False,
+                 image_samples_path=None,
                  ):
 
         self.tokens_list = []
@@ -628,17 +638,27 @@ class ImageDataset(FairseqDataset):
         self.image_width = image_width
         self.transform = transform
         self.font_size = font_size
-        self.image_cache = image_cache
-        if self.image_cache is None:
-            self.image_cache = {}
         self.image_use_cache = image_use_cache
+        self.image_samples_path = image_samples_path
+        # always created, just zeroed out every time if not actually caching
+        self.image_cache = {}
         self.image_pretrain_path = image_pretrain_path
         self.image_verbose = image_verbose
         self.image_pad_right = image_pad_right
 
-        self.image_generator = ImageGenerator(font_file_path=image_font_path,
-                                              image_width=image_width,
-                                              image_height=image_height)
+        if self.image_type is not None:
+            self.image_generator = ImageGenerator(font_file_path=image_font_path,
+                                                  image_width=image_width,
+                                                  image_height=image_height,
+                                                  font_color="black",
+                                                  bkg_color="white",
+                                                  font_size=font_size,
+                                                  font_style=1,
+                                                  font_rotation=0,
+                                                  pad_top=3,
+                                                  pad_bottom=3,
+                                                  pad_left=1,
+                                                  pad_right=image_pad_right)
 
     def read_data(self, path, dictionary):
         with open(path, 'r', encoding='utf-8') as f:
@@ -664,94 +684,74 @@ class ImageDataset(FairseqDataset):
             'index': i,
             'image_type': self.image_type,
         }
+        # reset cache if needed
+        if not self.image_use_cache:
+            self.image_cache = {}
 
-        img_data_list = None
-        if self.image_type == "word":
-            img_data_list = []
-            for id in self.tokens_list[i]:
-                if self.image_use_cache:
-                    word = self.dictionary[id]
-                    if word in self.image_cache:
-                        img_data = self.image_cache[word]
-                    else:
-                        print('...MISSING word in cache', word)
-                        img_data_list.append(torch.zeros(
-                            3, self.image_height, self.image_width))
+        # generate all images not in the cache
+        for id_ in self.tokens_list[i]:
+            if not int(id_) in self.image_cache:
+                word = self.dictionary[id_]
+                img_data = self.image_generator.get_image(
+                    word, 
+                    font_name=self.image_generator.font_list[0]
+                )
+                if self.image_type == "line":
+                    img_data = self.image_generator.resize_or_pad(
+                        img_data, height=self.image_height)
                 else:
-                    img_data = self.image_generator.get_image(
-                        word, font_color='black', font_size=self.font_size,
-                        height=self.image_height, bkg_color='white')
                     img_data = self.image_generator.resize_or_pad(
                         img_data, height=self.image_height, width=self.image_width)
 
-                # print(cv_resize_image.shape) # (32, 128, 3) H, W, C
-                # print('image dataset resize', img_data.shape)
+                self.image_cache[int(id_)] = img_data
 
-                img_tensor = self.transform(img_data)
+                # dump 
+                if self.image_samples_path:
+                    image_dir = os.path.join(self.image_samples_path, 'dict')
+                    if not os.path.exists(image_dir):
+                        os.makedirs(image_dir)
+                    image_path = os.path.join(image_dir, f'{id_}_{word}.png')
+                    if not os.path.exists(image_path):
+                        print(f'* Dumping {word} to {image_path}', file=sys.stderr)
+                        cv2.imwrite(image_path, img_data)
+                    
+        # Resnet expects shape (C x H x W)
+        # cv2 gen image (34, 43, 3) (H X W X C)
+        # image resize (32, 128, 3)  (H X W X C)
+        # image tensor torch.Size([3, 32, 128]) (C x H x W)
+        img_data_list = [self.transform(self.image_cache[int(id_)]) for id_ in self.tokens_list[i]]
 
-                # Resnet expects shape (C x H x W)
-                # cv2 gen image (34, 43, 3) (H X W X C)
-                # image resize (32, 128, 3)  (H X W X C)
-                # image tensor torch.Size([3, 32, 128]) (C x H x W)
+        if self.image_type == "line" and self.image_pretrain_path:
+            meta_path = os.path.join(
+                self.image_pretrain_path, str(i) + '.npz')
 
-                img_data_list.append(img_tensor)
+            sent_list = []
+            for word_idx in self.tokens_list[i]:
+                sent_list.append(self.dictionary[word_idx])
 
-        elif self.image_type == "line":
-            #assert self.image_use_cache
+            np_embedding = np.load(meta_path, allow_pickle=True)
+            decode_metadata = np_embedding['metadata'].item()
 
-            if self.image_pretrain_path:
-                meta_path = os.path.join(
-                    self.image_pretrain_path, str(i) + '.npz')
+            image_metadata['src_pretrain_embedding'] = decode_metadata['embedding']
 
-                sent_list = []
-                for word_idx in self.tokens_list[i]:
-                    sent_list.append(self.dictionary[word_idx])
+            if self.image_verbose:
+                # only add these for debug
+                image_metadata['src_pretrain_text'] = decode_metadata['utf8_ref_text']
+                image_metadata['src_pretrain_image'] = decode_metadata['image']
 
-                np_embedding = np.load(meta_path, allow_pickle=True)
-                decode_metadata = np_embedding['metadata'].item()
+                print('\n\nGETITEM: sentence %s' % (''.join(sent_list)))
+                print('GETITEM: pretrain image_id %s ' %
+                      decode_metadata['image_id'])
+                print('GETITEM: pretrain utf8 %s' %
+                      decode_metadata['utf8_ref_text'])
+                print('GETITEM: pretrain uxxxx %s' %
+                      decode_metadata['uxxxx_ref_text'])
+                print('GETITEM: pretrain image',
+                      decode_metadata['image'].shape)
+                print('GETITEM: pretrain embedding',
+                      decode_metadata['embedding'].shape)
 
-                image_metadata['src_pretrain_embedding'] = decode_metadata['embedding']
-
-                if self.image_verbose:
-                    # only add these for debug
-                    image_metadata['src_pretrain_text'] = decode_metadata['utf8_ref_text']
-                    image_metadata['src_pretrain_image'] = decode_metadata['image']
-
-                    print('\n\nGETITEM: sentence %s' % (''.join(sent_list)))
-                    print('GETITEM: pretrain image_id %s ' %
-                          decode_metadata['image_id'])
-                    print('GETITEM: pretrain utf8 %s' %
-                          decode_metadata['utf8_ref_text'])
-                    print('GETITEM: pretrain uxxxx %s' %
-                          decode_metadata['uxxxx_ref_text'])
-                    print('GETITEM: pretrain image',
-                          decode_metadata['image'].shape)
-                    print('GETITEM: pretrain embedding',
-                          decode_metadata['embedding'].shape)
-            else:
-                img_data_list = []
-                for id in self.tokens_list[i]:
-                    word = self.dictionary[id]
-                    if word in self.image_cache:
-                        img_data = self.image_cache[word]
-                    else:
-                        img_data = self.image_generator.get_image(word,
-                                                                  font_name=self.image_generator.font_list[0],
-                                                                  font_size=self.font_size, font_style=1,
-                                                                  font_color='black', bkg_color='white', font_rotate=0,
-                                                                  pad_top=3, pad_bottom=3, pad_left=1,
-                                                                  pad_right=self.image_pad_right)
-                        img_data = self.image_generator.resize_or_pad(
-                            img_data, height=self.image_height)
-
-                        if self.image_use_cache:
-                            self.image_cache[word] = img_data
-
-                    img_tensor = self.transform(img_data)
-                    img_data_list.append(img_tensor)
-
-                image_metadata['src_img_list'] = img_data_list
-
+        image_metadata['src_img_list'] = img_data_list
         image_metadata['src_item'] = self.tokens_list[i]
 
         return image_metadata

@@ -108,7 +108,6 @@ def load_visual_dataset(
     left_pad_source, left_pad_target, max_source_positions,
     max_target_positions, prepend_bos=False, load_alignments=False,
     args=None,
-    image_cache=None
 ):
     """
     Loads the visual dataset.
@@ -157,11 +156,12 @@ def load_visual_dataset(
                                    image_font_path=args.image_font_path,
                                    image_height=args.image_height,
                                    image_width=args.image_width,
+                                   image_pad_right=args.image_pad_right,
                                    image_pretrain_path=args.image_pretrain_path,
                                    image_verbose=args.image_verbose,
-                                   image_pad_right=args.image_pad_right,
-                                   image_cache=image_cache,
-                                   image_use_cache=args.image_use_cache)
+                                   image_use_cache=args.image_use_cache,
+                                   image_samples_path=args.image_samples_path,
+                               )
         src_datasets.append(
             img_dataset
         )
@@ -279,9 +279,7 @@ class VisualMTTask(FairseqTask):
         parser.add_argument('--image-samples-path', default=None, type=str,
                             help='Image Samples path')
         parser.add_argument("--image-use-cache", action='store_true',
-                            help='Cache image dictionary')
-        parser.add_argument("--image-preload-cache", action='store_true',
-                            help='Preload cache image dictionary')
+                            help='Cache word images after generating the first time')
         parser.add_argument("--image-augment", action='store_true',
                             help='Apply image noisification for robustness purposes')
         parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
@@ -318,11 +316,10 @@ class VisualMTTask(FairseqTask):
         parser.add_argument('--image-layer', default='avgpool', type=str,
                             help='If using backbone ResNet: layer [avgpool, layer4, fc]')
 
-    def __init__(self, args, src_dict, tgt_dict, image_cache):
+    def __init__(self, args, src_dict, tgt_dict):
         super().__init__(args)
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
-        self.image_cache = image_cache
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -365,48 +362,7 @@ class VisualMTTask(FairseqTask):
         print('| [{}] dictionary: {} types'.format(
             args.target_lang, len(tgt_dict)))
 
-        image_cache = None
-        print('image_preload_cache', args.image_preload_cache)
-        if args.image_preload_cache:
-            image_generator = ImageGenerator(font_file_path=args.image_font_path,
-                                             image_width=args.image_width,
-                                             image_height=args.image_height)
-            image_cache = {}
-            print('BUILDING CACHE...', end="")
-            for index in range(len(src_dict)):
-                word = src_dict[index]
-                img_data = image_generator.get_image(word,
-                                                     font_name=image_generator.font_list[0],
-                                                     font_size=args.image_font_size, font_style=1,
-                                                     font_color='black', bkg_color='white', font_rotate=0,
-                                                     pad_top=3, pad_bottom=3, pad_left=1, pad_right=args.image_pad_right)
-                if args.image_type == "line":
-                    img_data = image_generator.resize_or_pad(
-                        img_data, height=args.image_height)
-                else:
-                    img_data = image_generator.resize_or_pad(
-                        img_data, height=args.image_height, width=args.image_width)
-
-                if args.image_use_cache:
-                    image_cache[word] = img_data
-            print('CACHE GENERATION COMPLETE', len(image_cache))
-
-        if args.image_samples_path and args.image_preload_cache:
-            image_dir = os.path.join(args.image_samples_path, 'dict')
-            if os.path.exists(image_dir):
-                print(
-                    f'* Not dumping dictionary since {image_dir} exists', file=sys.stderr)
-            else:
-                print(
-                    f'* Dumping {len(src_dict)} word images to {image_dir}', file=sys.stderr)
-                os.makedirs(image_dir)
-                for index in range(len(src_dict)):
-                    word = src_dict[index]
-                    img_data = image_cache[word]
-                    image_path = os.path.join(image_dir, f'{index}_{word}.png')
-                    cv2.imwrite(image_path, img_data)
-
-        return cls(args, src_dict, tgt_dict, image_cache)
+        return cls(args, src_dict, tgt_dict)
 
     def load_dataset(self, split, epoch=0, combine=False, **kwargs):
         """Load a given dataset split.
@@ -431,7 +387,6 @@ class VisualMTTask(FairseqTask):
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
             args=self.args,
-            image_cache=self.image_cache,
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
