@@ -159,6 +159,7 @@ def train(args, trainer, task, epoch_itr):
             print('DATA: prev_output_tokens',
                   samples[0]['net_input']['prev_output_tokens'].shape)
 
+            # dump sentence-level images randomly
             if args.image_type == "line" and i % 10 == 0:
                 if type(samples[0]['net_input']['src_images']) != type(None):
                     image_list = samples[0]['net_input']['src_images'].cpu().numpy()
