@@ -3,6 +3,28 @@
 
 Fairseq for Visual Machine Translation
 
+## Supported training modes
+
+Fairseq-ocr supports a number of experimental variables:
+
+- *granularity*: supervised (token-based) or unsupervised (sentence-based); and
+- *training*: pretrained, end-to-end, and multitask.
+
+The supervised approach generates images at the token level; these
+token-level representations are computed at run-time and replace the
+embedding lookup. In the unsupervised setting, the entire sentence is
+visualized, and embeddings are generated for each "frame". There is no
+alignment between these frames and the input tokens unless generated
+by CTC loss or some other technique.
+
+For training, there are three modes. We can start with pretrained word
+embeddings, which then become the input to the computation graph. We
+can also train in an end-to-end fashion, where the OCR code is
+actually run, but there is only the downstrain loss of
+(target-language) cross-entropy. Finally, we can do multitask, in
+which we add a loss function that reconstructs the original input
+tokens in addition to computing normal cross-entropy loss.
+
 ### What's New:
 
 Mar 14, 2020:  
@@ -22,9 +44,11 @@ Visual line and token concat (visual_transformer.py line 578)
 - Sentence visual training  
 
 ### Scripts:
+
 - pretrain  
 train zh - pretrain/scripts/sentence/vismt/train_zh.sh   
 extract zh -  pretrain/scripts/sentence/vismt/train_zh.sh  
+
 - train vismt  
 concat with pretrain embedding - grid_scripts/dave_scripts/train_pretrain_concat.sh  
 visonly with pretrain embedding - grid_scripts/dave_scripts/train_pretrain_visonly.sh  
