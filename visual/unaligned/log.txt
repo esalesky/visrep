@@ -1,0 +1,38 @@
+
+unaligned log output
+
+
+========= decode log ===========
+
+DEBUG: GETITEM: group 5
+DEBUG: GETITEM: image_id 859
+DEBUG: GETITEM: width (transcription) 4
+DEBUG: GETITEM: image shape torch.Size([1, 32, 136])
+DEBUG: GETITEM: seed text 后来呢</s>
+DEBUG: GETITEM: src_ids (transcription) [66, 23, 284, 2]
+DEBUG: GETITEM: src_length 4
+DEBUG: GETITEM: src_tokens ['后', '来', '呢', '</s>']
+
+DEBUG: COLLATE: group_id 5
+DEBUG: COLLATE: src_tokens torch.Size([1, 1, 32, 136])
+DEBUG: COLLATE: target_length tensor([4], dtype=torch.int32)
+DEBUG: COLLATE: target tensor([ 66,  23, 284,   2], dtype=torch.int32)
+DEBUG: COLLATE: seed_text ['后来呢</s>']
+DEBUG: COLLATE: batch_shape torch.Size([1, 1, 32, 136])
+DEBUG: COLLATE: image_id [859]
+
+DEBUG: ENCODER: forward input torch.Size([1, 1, 32, 136])
+DEBUG: ENCODER: forward cnn features out (b, c, h, w) torch.Size([1, 256, 8, 12])
+DEBUG: ENCODER: permute (w, b, c, h) torch.Size([12, 1, 256, 8])
+DEBUG: ENCODER: view (w*b, c*h) torch.Size([12, 2048])
+DEBUG: ENCODER: forward bridge out torch.Size([12, 512])
+DEBUG: ENCODER: forward bridge view torch.Size([12, 1, 512])
+
+DEBUG: DECODER: embeddings torch.Size([12, 1, 512])
+DEBUG: DECODER: lstm output torch.Size([12, 1, 512])
+DEBUG: DECODER: lstm view torch.Size([12, 512])
+DEBUG: DECODER: logits torch.Size([12, 4832])
+DEBUG: DECODER: logits view torch.Size([12, 1, 4832])
+
+DEBUG: logits torch.Size([12, 1, 4832])
+DEBUG: embeddings  torch.Size([12, 512])

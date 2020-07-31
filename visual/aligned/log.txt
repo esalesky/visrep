@@ -1,0 +1,104 @@
+
+aligned log output
+
+DEBUG: GETITEM: group 5
+DEBUG: GETITEM: image_id 78174
+DEBUG: GETITEM: width (transcription) 3
+DEBUG: GETITEM: image shape 3
+DEBUG: GETITEM: seed text 谢谢</s>
+DEBUG: GETITEM: src_ids (transcription) [237, 237, 2]
+DEBUG: GETITEM: src_length 3
+DEBUG: GETITEM: src_tokenss ['谢', '谢', '</s>']
+DEBUG: GETITEM: group 5
+DEBUG: GETITEM: image_id 168291
+DEBUG: GETITEM: width (transcription) 3
+DEBUG: GETITEM: image shape 3
+DEBUG: GETITEM: seed text 嘿。</s>
+DEBUG: GETITEM: src_ids (transcription) [1813, 7, 2]
+DEBUG: GETITEM: src_length 3
+DEBUG: GETITEM: src_tokenss ['嘿', '。', '</s>']
+DEBUG: GETITEM: group 5
+DEBUG: GETITEM: image_id 91211
+DEBUG: GETITEM: width (transcription) 3
+DEBUG: GETITEM: image shape 3
+DEBUG: GETITEM: seed text 谢谢</s>
+DEBUG: GETITEM: src_ids (transcription) [237, 237, 2]
+DEBUG: GETITEM: src_length 3
+DEBUG: GETITEM: src_tokenss ['谢', '谢', '</s>']
+DEBUG: GETITEM: group 5
+DEBUG: GETITEM: image_id 132026
+DEBUG: GETITEM: width (transcription) 4
+DEBUG: GETITEM: image shape 4
+DEBUG: GETITEM: seed text 谢谢。</s>
+DEBUG: GETITEM: src_ids (transcription) [237, 237, 7, 2]
+DEBUG: GETITEM: src_length 4
+DEBUG: GETITEM: src_tokenss ['谢', '谢', '。', '</s>']
+
+DEBUG: COLLATE: group_id 5
+DEBUG: COLLATE: src_tokens torch.Size([4, 4, 1, 32, 32])
+DEBUG: COLLATE: target_length tensor([4, 3, 3, 3], dtype=torch.int32)
+DEBUG: COLLATE: target tensor([ 237,  237,    7,    2,  237,  237,    2,    1, 1813,    7,    2,    1, 237,  237,    2,    1])
+DEBUG: COLLATE: seed_text ['谢谢。</s>', '谢谢</s>', '嘿。</s>', '谢谢</s>']
+DEBUG: COLLATE: batch_shape torch.Size([4, 4, 1, 32, 32])
+DEBUG: COLLATE: image_id [132026, 78174, 168291, 91211]
+
+DEBUG: ENCODER: forward input torch.Size([4, 4, 1, 32, 32])
+DEBUG: ENCODER: forward cnn features out (b, c, h, w) torch.Size([16, 256, 8, 8])
+DEBUG: ENCODER: avg pool torch.Size([16, 256, 8, 1])
+DEBUG: ENCODER: permute (w, b, c, h) torch.Size([1, 16, 256, 8])
+DEBUG: ENCODER: view (w*b, c*h) torch.Size([16, 2048])
+DEBUG: ENCODER: forward bridge out torch.Size([16, 512])
+DEBUG: ENCODER: forward bridge view torch.Size([1, 16, 512])
+
+DEBUG: DECODER: embeddings torch.Size([16, 512])
+DEBUG: DECODER: logits torch.Size([16, 4832])
+
+
+========= decode log =============
+
+DEBUG: GETITEM: group 15
+DEBUG: GETITEM: image_id 678
+DEBUG: GETITEM: width (transcription) 12
+DEBUG: GETITEM: image shape 12
+DEBUG: GETITEM: seed text 他们需要学习尊重自己。</s>
+DEBUG: GETITEM: src_ids (transcription) [19, 9, 171, 32, 70, 546, 1257, 147, 68, 180, 7, 2]
+DEBUG: GETITEM: src_length 12
+DEBUG: GETITEM: src_tokens ['他', '们', '需', '要', '学', '习', '尊', '重', '自', '己', '。', '</s>']
+
+DEBUG: GETITEM: group 15
+DEBUG: GETITEM: image_id 1524
+DEBUG: GETITEM: width (transcription) 13
+DEBUG: GETITEM: image shape 13
+DEBUG: GETITEM: seed text 在城市里可以享受得到教育</s>
+DEBUG: GETITEM: src_ids (transcription) [12, 504, 322, 45, 29, 21, 683, 257, 65, 20, 254, 569, 2]
+DEBUG: GETITEM: src_length 13
+DEBUG: GETITEM: src_tokens ['在', '城', '市', '里', '可', '以', '享', '受', '得', '到', '教', '育', '</s>']
+
+DEBUG: COLLATE: group_id 15
+DEBUG: COLLATE: src_tokens torch.Size([2, 13, 1, 32, 32])
+DEBUG: COLLATE: target_length tensor([13, 12], dtype=torch.int32)
+DEBUG: COLLATE: target tensor([  12,  504,  322,   45,   29,   21,  683,  257,   65,   20,  254,  569,
+           2,   19,    9,  171,   32,   70,  546, 1257,  147,   68,  180,    7,
+           2,    1])
+DEBUG: COLLATE: seed_text ['在城市里可以享受得到教育</s>', '他们需要学习尊重自己。</s>']
+DEBUG: COLLATE: batch_shape torch.Size([2, 13, 1, 32, 32])
+DEBUG: COLLATE: image_id [1524, 678]
+
+DEBUG: batch (img_cnt, sub_cnt, c, h, w)[2, 13, 1, 32, 32]
+
+DEBUG: ENCODER: forward input torch.Size([2, 13, 1, 32, 32])
+DEBUG: ENCODER: forward cnn features out (b, c, h, w) torch.Size([26, 256, 8, 8])
+DEBUG: ENCODER: avg pool torch.Size([26, 256, 8, 1])
+DEBUG: ENCODER: permute (w, b, c, h) torch.Size([1, 26, 256, 8])
+DEBUG: ENCODER: view (w*b, c*h) torch.Size([26, 2048])
+DEBUG: ENCODER: forward bridge out torch.Size([26, 512])
+DEBUG: ENCODER: forward bridge view torch.Size([1, 26, 512])
+
+DEBUG: DECODER: embeddings torch.Size([26, 512])
+DEBUG: DECODER: logits torch.Size([26, 4832])
+
+DEBUG: logits (batch * image_cnt, vocab) torch.Size([26, 4832])
+DEBUG: embeddings (batch * image_cnt, embed_size) torch.Size([26, 512])
+DEBUG: logits view (batch, image_cnt, vocab) torch.Size([2, 13, 4832])
+DEBUG: embeddings view (batch, image_cnt, vocab) torch.Size([2, 13, 512])
+
