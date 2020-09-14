@@ -1,6 +1,11 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
+#$ -S /bin/bash -q gpu.q@@2080 -cwd 
+#$ -l h_rt=48:00:00,gpu=1 
+#$ -N extract
+# num_proc=16,mem_free=32G,
+#
 # 2020-07-30
 # 
 # Extract aligned embeddings 
@@ -16,23 +21,40 @@ if [ ! -z $SGE_HGR_gpu ]; then
 fi
 
 source deactivate
-source activate /expscratch/detter/tools/anaconda3
+source activate ocr
 
-EXP_DIR=/expscratch/detter/vismt/zh/20200730/aligned/chars
-CKPT_PATH=/expscratch/detter/vismt/zh/20200730/aligned/chars/checkpoints/model_ckpt_best.pth
 
-SRC_PATH=/home/hltcoe/detter/src/pytorch
+SRC_LANG=${1}
+SEG=5k
+DATA_TYPE=${2} #train (170341) valid (1958) test (1982) -- numbers for zh
 
-DATA_TYPE=test #train (170341) valid (1958) test (1982)
-TEST_DATA=/expscratch/detter/mt/multitarget-ted/en-zh/dave/zh_char_en_10k/${DATA_TYPE}.zh-en.zh
-DICT=/expscratch/detter/mt/multitarget-ted/en-zh/dave/zh_char_en_10k/dict.zh.txt
+TGT_LANG=en
+LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
-#DATA_TYPE=train #train valid test
-#TEST_DATA=/exp/esalesky/mtocr19/zh-en/data/chars/${DATA_TYPE}.zh-en.zh
-#DICT=/exp/esalesky/mtocr19/zh-en/data/chars/dict.zh.txt
+SRC_PATH=/exp/esalesky/mtocr19
+EXP_DIR=/exp/esalesky/mtocr19/exps/aligned/${SRC_LANG}/
+TMPDIR=${EXP_DIR}/tmp
+CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
 
-TEST_FONT=/exp/ocr/fonts/all/noto_zh/NotoSansCJKjp-hinted/NotoSansCJKjp-Regular.otf
+EXTRACT_DATA=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}/${DATA_TYPE}.${LANG_PAIR}.${SRC_LANG}
+DICT=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}/dict.${SRC_LANG}.txt
 
+case ${SRC_LANG} in
+  de | fr | en )
+    EXTRACT_FONT=/exp/ocr/fonts/all/noto/NotoMono-Regular.ttf
+    ;;
+  zh | ja | ko )
+    EXTRACT_FONT=/exp/ocr/fonts/all/noto_zh/NotoSansCJKjp-hinted/NotoSansCJKjp-Regular.otf
+    ;;
+  *)
+    echo "no font set for src language ${SRC_LANG} -- check and try again!"
+    exit 0
+    ;;
+esac
+
+
+echo " ${DATA_TYPE} "
+echo "------"
 echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
 echo "PYTHONPATH - ${PYTHONPATH}"
@@ -40,8 +62,8 @@ echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
 echo "TMPDIR - ${TMPDIR}"
 echo "EXP_DIR - ${EXP_DIR}"
 echo "DICT - ${DICT}"
-echo "TEST_DATA - ${TEST_DATA}"
-echo "TEST_FONT - ${TEST_FONT}"
+echo "EXTRACT_DATA - ${EXTRACT_DATA}"
+echo "EXTRACT_FONT - ${EXTRACT_FONT}"
 echo "SRC_PATH - ${SRC_PATH}"
 echo "CKPT_PATH - ${CKPT_PATH}"
 
@@ -49,18 +71,19 @@ echo "CKPT_PATH - ${CKPT_PATH}"
 nvidia-smi
 
 mkdir -p ${TMPDIR}/${DATA_TYPE}
-
 mkdir -p $EXP_DIR
+mkdir -p ${EXP_DIR}/${DATA_TYPE}
+
 cd $EXP_DIR
 
 python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/decode.py \
 --output ${TMPDIR}/${DATA_TYPE} \
 --dict ${DICT} \
---test ${TEST_DATA} \
---test-font ${TEST_FONT} \
+--test ${EXTRACT_DATA} \
+--test-font ${EXTRACT_FONT} \
 --image-height 32 \
 --image-width 32 \
---font-size 14 \
+--font-size 16 \
 --batch-size 1 \
 --num-workers 0 \
 --write-image-samples \
@@ -70,11 +93,11 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/decode.py \
 #\
 #--image-verbose
 
-tar -cf ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz -C ${TMPDIR}/${DATA_TYPE}/embeddings encoder
-tar -cf ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz -C ${TMPDIR}/${DATA_TYPE}/embeddings images
+tar -cf ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz -C ${EXP_DIR}/${DATA_TYPE}/embeddings encoder
+tar -cf ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz -C ${EXP_DIR}/${DATA_TYPE}/embeddings images
 
-cp ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz ${EXP_DIR}
-cp ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz ${EXP_DIR}
+#cp ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz ${EXP_DIR}
+#cp ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz ${EXP_DIR}
 
 echo "COMPLETE"
 
