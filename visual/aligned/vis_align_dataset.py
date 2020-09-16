@@ -372,10 +372,12 @@ class ImageSynthDataset(Dataset):
             self.image_cache[seed_idx] = cv_image
 
             if self.cache_output:
-                outpath = self.cache_output + '/' + \
-                    str(seed_idx) + '_' + seed_char + '.png'
-                cv2.imwrite(outpath, cv_image)
-                write_cnt += 1
+                outpath = os.path.join(self.cache_output, f"{seed_idx}_{seed_char}.png")
+                try:
+                    cv2.imwrite(outpath, cv_image)
+                    write_cnt += 1
+                except:
+                    print(f"Can't write image to file {outpath}")
 
             if seed_idx > 0 and seed_idx % 1000 == 0:
                 LOG.info('.. loaded images: {}, current cache size {}'.format(
