@@ -9,7 +9,7 @@
 #
 # 2020-09-15
 # 
-# Train tokonly (with aligned/pretrain arch, though vis not used)
+# Train pretrain e2e 
 #
 
 module load cuda10.1/toolkit/10.1.105
@@ -25,19 +25,20 @@ source deactivate
 source activate ocr
 
 SRC_LANG=${1}
-SEG=${2}
+TYPE=${2}
 
-TYPE=tokonly
+SEG=5k
+TRAIN_TYPE=e2e
 TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
 SRC_PATH=/exp/esalesky/mtocr19
 DATA_DIR=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}
-EXP_DIR=/exp/esalesky/mtocr19/exps/baseline/${SRC_LANG}
+EXP_DIR=/exp/esalesky/mtocr19/exps/aligned/${SRC_LANG}
 TMPDIR=${EXP_DIR}/${SRC_LANG}-${TRAIN_TYPE}-${TYPE}-tmp
 IMGTMP=${EXP_DIR}/tmp
-IMG_CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
-CKPT_PATH=${EXP_DIR}/checkpoints/baseline-${TYPE}-${SEG}
+CKPT_PATH=${EXP_DIR}/checkpoints/pretrain-${TRAIN_TYPE}-${TYPE}
+
 
 echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
@@ -46,8 +47,8 @@ echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
 echo "DATA_DIR - ${DATA_DIR}"
 echo "SRC_PATH - ${SRC_PATH}"
 echo "EXP_DIR - ${EXP_DIR}"
-echo "CKPT_PATH - ${CKPT_PATH}"
 echo "TYPE - ${TYPE}"
+
 
 nvidia-smi
 
@@ -80,13 +81,13 @@ ${DATA_DIR} \
 --user-dir ${SRC_PATH} \
 --save-dir ${EXP_DIR}/${TYPE} \
 --arch 'vis_align_transformer_iwslt_de_en' \
---image-pretrain-path ${TMPDIR}/vismt \
---image-checkpoint-path ${CKPT_PATH} \
+--image-pretrain-path $TMPDIR/vismt \
+--image-samples-path ${EXP_DIR}/${TYPE}/samples \
 --image-embed-type ${TYPE} \
---image-samples-path ${TMDIR}/samples \
---image-pretrain-eval-only \
+--image-enable-src-loss \
+--image-embedding-normalize \
 --source-lang ${SRC_LANG} \
---target-lang ${TGT_LANG} \
+--target-lang ${SRC_LANG} \
 --left-pad-source 0 \
 --left-pad-target 0 \
 --task 'visaligntranslation' \
@@ -120,13 +121,12 @@ ${DATA_DIR} \
 --share-decoder-input-output-embed \
 --warmup-updates 4000 \
 --weight-decay 0.0001 \
---update-freq=8 \
---log-format=simple \
---log-interval=10 2>&1 | tee ${CKPT_PATH}/${TRAIN_TYPE}-${TYPE}-train.log
+--update-freq=8
 
 #--layernorm-embedding \
 #--image-embedding-normalize \
 #--no-token-positional-embeddings \
+
 
 # -----
 # SCORE

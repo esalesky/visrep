@@ -72,7 +72,6 @@ nvidia-smi
 
 mkdir -p ${TMPDIR}/${DATA_TYPE}
 mkdir -p $EXP_DIR
-mkdir -p ${EXP_DIR}/${DATA_TYPE}
 
 cd $EXP_DIR
 
@@ -93,11 +92,10 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/decode.py \
 #\
 #--image-verbose
 
-tar -cf ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz -C ${EXP_DIR}/${DATA_TYPE}/embeddings encoder
-tar -cf ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz -C ${EXP_DIR}/${DATA_TYPE}/embeddings images
+tar -cf ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz -C ${TMPDIR}/${DATA_TYPE}/embeddings encoder
+tar -cf ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz -C ${TMPDIR}/${DATA_TYPE}/embeddings images
 
-#cp ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz ${EXP_DIR}
-#cp ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz ${EXP_DIR}
+mv ${TMPDIR}/decode_embeddings_${DATA_TYPE}.tar.gz ${EXP_DIR}
+mv ${TMPDIR}/decode_images_${DATA_TYPE}.tar.gz ${EXP_DIR}
 
-echo "COMPLETE"
-
+echo "-- COMPLETE --"

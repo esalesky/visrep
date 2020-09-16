@@ -9,7 +9,7 @@
 #
 # 2020-09-15
 # 
-# Train tokonly (with aligned/pretrain arch, though vis not used)
+# Train pretrain update
 #
 
 module load cuda10.1/toolkit/10.1.105
@@ -25,20 +25,23 @@ source deactivate
 source activate ocr
 
 SRC_LANG=${1}
-SEG=${2}
+TYPE=${2}
 
-TYPE=tokonly
+SEG=5k
+TRAIN_TYPE=update
 TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
 SRC_PATH=/exp/esalesky/mtocr19
 DATA_DIR=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}
-EXP_DIR=/exp/esalesky/mtocr19/exps/baseline/${SRC_LANG}
+EXP_DIR=/exp/esalesky/mtocr19/exps/aligned/${SRC_LANG}
 TMPDIR=${EXP_DIR}/${SRC_LANG}-${TRAIN_TYPE}-${TYPE}-tmp
 IMGTMP=${EXP_DIR}/tmp
 IMG_CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
-CKPT_PATH=${EXP_DIR}/checkpoints/baseline-${TYPE}-${SEG}
+CKPT_PATH=${EXP_DIR}/checkpoints/pretrain-${TRAIN_TYPE}-${TYPE}
 
+echo "SRC - ${SRC_LANG}"
+echo "TYPE - ${TYPE}"
 echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
 echo "PYTHONPATH - ${PYTHONPATH}"
@@ -46,8 +49,8 @@ echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
 echo "DATA_DIR - ${DATA_DIR}"
 echo "SRC_PATH - ${SRC_PATH}"
 echo "EXP_DIR - ${EXP_DIR}"
+echo "IMG_CKPT_PATH - ${IMG_CKPT_PATH}"
 echo "CKPT_PATH - ${CKPT_PATH}"
-echo "TYPE - ${TYPE}"
 
 nvidia-smi
 
@@ -78,13 +81,13 @@ popd
 python -u ${SRC_PATH}/fairseq-ocr/train_align.py \
 ${DATA_DIR} \
 --user-dir ${SRC_PATH} \
---save-dir ${EXP_DIR}/${TYPE} \
 --arch 'vis_align_transformer_iwslt_de_en' \
 --image-pretrain-path ${TMPDIR}/vismt \
---image-checkpoint-path ${CKPT_PATH} \
+--image-checkpoint-path ${IMG_CKPT_PATH} \
+--save-dir=${CKPT_PATH} \
 --image-embed-type ${TYPE} \
---image-samples-path ${TMDIR}/samples \
---image-pretrain-eval-only \
+--image-samples-path ${TMPDIR}/samples \
+--image-embedding-normalize \
 --source-lang ${SRC_LANG} \
 --target-lang ${TGT_LANG} \
 --left-pad-source 0 \
@@ -110,10 +113,9 @@ ${DATA_DIR} \
 --max-epoch 100 \
 --max-source-positions 1024 \
 --max-target-positions 1024 \
---max-tokens 2000 \
---max-tokens-valid 2000 \
+--max-tokens 4000 \
+--max-tokens-valid 4000 \
 --min-loss-scale 0.0001 \
---no-epoch-checkpoints \
 --num-workers 0 \
 --optimizer 'adam' \
 --raw-text \
@@ -121,6 +123,7 @@ ${DATA_DIR} \
 --warmup-updates 4000 \
 --weight-decay 0.0001 \
 --update-freq=8 \
+--no-epoch-checkpoints \
 --log-format=simple \
 --log-interval=10 2>&1 | tee ${CKPT_PATH}/${TRAIN_TYPE}-${TYPE}-train.log
 
