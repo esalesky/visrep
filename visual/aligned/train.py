@@ -25,7 +25,7 @@ import os
 import unicodedata
 
 from fairseq.data import Dictionary
-from vis_align_ocr import AlignOcrModel
+from fairseq.modules import AlignOcrModel
 
 import logging
 LOG = logging.getLogger(__name__)

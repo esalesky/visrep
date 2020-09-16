@@ -1,5 +1,5 @@
 
-# Introduduction
+# Introduction
 
 Fairseq for Visual Machine Translation
 
