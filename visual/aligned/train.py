@@ -84,6 +84,8 @@ def parse_arguments(argv):
 
     parser.add_argument("--encoder-dim", type=int,
                         default=512, help="encoder dimension")
+    parser.add_argument("--image-embed-dim", type=int,
+                        default=512, help="image embedding dimension")
 
     parser.add_argument("--load-checkpoint-path", type=str,
                         default=None, help="Input checkpoint path")
