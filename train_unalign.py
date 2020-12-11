@@ -116,8 +116,8 @@ def main(args, init_distributed=False):
     print('| done training in {:.1f} seconds'.format(train_meter.sum))
 
 
-def decode(alphabet, model_output, batch_actual_timesteps, is_uxxxx=False):
-    min_prob_thresh = 3 * 1 / len(alphabet)
+def decode(vocab, model_output, batch_actual_timesteps, is_uxxxx=False):
+    min_prob_thresh = 3 * 1 / len(vocab)
 
     T = model_output.size()[0]
     B = model_output.size()[1]
@@ -142,7 +142,7 @@ def decode(alphabet, model_output, batch_actual_timesteps, is_uxxxx=False):
                 continue
 
             # Heuristic
-            # If model is predicting very low probability for all letters in alphabet, treat that the
+            # If model is predicting very low probability for all letters in vocab, treat that the
             # samed as a CTC blank
             #
             # This check may cause unalign e2e to predict nothing
@@ -152,7 +152,7 @@ def decode(alphabet, model_output, batch_actual_timesteps, is_uxxxx=False):
             #    prev_char[b] = ''
             #    continue
 
-            char = alphabet[argmax_idxs[b]]
+            char = vocab[argmax_idxs[b]]
 
             if prev_char[b] == char:
                 continue

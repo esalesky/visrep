@@ -184,7 +184,7 @@ class ImageSynthDataset(Dataset):
                  image_height=None,
                  image_width=None,
                  transform=None,
-                 alphabet=None,
+                 vocab=None,
                  max_text_width=3000,
                  min_text_width=1,
                  image_cache=None,
@@ -207,7 +207,7 @@ class ImageSynthDataset(Dataset):
         self.transform = transform
         self.font_file = font_file
         self.font_size = font_size
-        self.alphabet = alphabet
+        self.vocab = vocab
         self.cache_output = cache_output
 
         self.tokens_list = []
@@ -215,7 +215,7 @@ class ImageSynthDataset(Dataset):
         self.sizes = []
         self.append_eos = True
         self.reverse_order = False
-        self.read_data(text_file_path, self.alphabet)
+        self.read_data(text_file_path, self.vocab)
         self.size = len(self.tokens_list)
 
         self.size_group_limits = [2, 5, 10, 15, 20, 30, 40,
@@ -389,7 +389,7 @@ class ImageSynthDataset(Dataset):
         transcription = self.tokens_list[idx].tolist()
         sent_list = []
         for word_idx in transcription:
-            sent_list.append(self.alphabet[word_idx])
+            sent_list.append(self.vocab[word_idx])
 
         seed_text = ''.join(sent_list)
 

@@ -226,7 +226,7 @@ def save_checkpoint(args, save_best, acc,
         torch.save({'epoch': epoch,
                     'loss': loss,
                     'acc': acc,
-                    'alphabet': train_dataset.alphabet,
+                    'vocab': train_dataset.vocab,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict()
                     },
@@ -235,7 +235,7 @@ def save_checkpoint(args, save_best, acc,
     torch.save({'epoch': epoch,
                 'loss': loss,
                 'acc': acc,
-                'alphabet': train_dataset.alphabet,
+                'vocab': train_dataset.vocab,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict()
                 },
@@ -244,13 +244,13 @@ def save_checkpoint(args, save_best, acc,
 
 def get_datasets(args, cache_output):
 
-    alphabet = Dictionary.load(args.dict)
+    vocab = Dictionary.load(args.dict)
 
     LOG.info('loading dictionary %s', args.dict)
-    for idx, char in enumerate(alphabet.symbols):
-        if idx < 10 or idx > len(alphabet.symbols) - 10 - 1:
-            LOG.info('...indicies %d, symbol %s, count %d', alphabet.indices[alphabet.symbols[idx]],
-                     alphabet.symbols[idx], alphabet.count[idx])
+    for idx, char in enumerate(vocab.symbols):
+        if idx < 10 or idx > len(vocab.symbols) - 10 - 1:
+            LOG.info('...indicies %d, symbol %s, count %d', vocab.indices[vocab.symbols[idx]],
+                     vocab.symbols[idx], vocab.count[idx])
 
     if args.augment:
         train_transform = transforms.Compose([
@@ -275,7 +275,7 @@ def get_datasets(args, cache_output):
         text_file_path=args.train,
         font_file=args.train_font,
         transform=train_transform,
-        alphabet=alphabet,
+        vocab=vocab,
         max_text_width=args.train_max_text_width,
         min_text_width=args.train_min_text_width,
         image_height=args.image_height,
@@ -301,7 +301,7 @@ def get_datasets(args, cache_output):
         text_file_path=args.valid,
         font_file=args.valid_font,
         transform=valid_transform,
-        alphabet=alphabet,
+        vocab=vocab,
         max_text_width=args.valid_max_text_width,
         min_text_width=args.valid_min_text_width,
         image_height=args.image_height,
@@ -362,7 +362,7 @@ def train(args, model, train_loader, optimizer, device, classification_loss,
             asci_target = []
             for curr_target_item in curr_target:
                 asci_target.append(
-                    model.alphabet[curr_target_item])
+                    model.vocab[curr_target_item])
             for image_idx in range(image_list.shape[1]):
                 image = np.uint8(
                     image_list[logit_idx][image_idx].transpose((1, 2, 0)) * 255)
@@ -470,13 +470,13 @@ def validate(args, model, valid_loader, epoch, samples_valid_output):
                     asci_pred = []
                     for curr_pred_item in curr_pred[0]:  # .data.numpy():
                         asci_pred.append(
-                            model.alphabet[curr_pred_item])
+                            model.vocab[curr_pred_item])
                     LOG.info('predict %s', ''.join(asci_pred))
 
                     asci_target = []
                     for curr_target_item in curr_target:  # .data.numpy():
                         asci_target.append(
-                            model.alphabet[curr_target_item])
+                            model.vocab[curr_target_item])
                     LOG.info(' target %s', ''.join(asci_target))
 
                     if args.write_image_samples:
@@ -489,7 +489,7 @@ def validate(args, model, valid_loader, epoch, samples_valid_output):
                             asci_target = []
                             for curr_target_item in curr_target:
                                 asci_target.append(
-                                    model.alphabet[curr_target_item])
+                                    model.vocab[curr_target_item])
                             for image_idx in range(image_list.shape[1]):
                                 image = np.uint8(
                                     image_list[logit_idx][image_idx].transpose((1, 2, 0)) * 255)
@@ -558,7 +558,7 @@ def main(args):
     train_dataset, train_loader, valid_dataset, valid_loader = get_datasets(
         args, cache_output)
 
-    model = AlignOcrModel(args, train_dataset.alphabet)
+    model = AlignOcrModel(args, train_dataset.vocab)
     model.to(device)
 
     classification_loss = torch.nn.CrossEntropyLoss()

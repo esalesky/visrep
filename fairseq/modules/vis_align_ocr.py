@@ -34,15 +34,15 @@ class AlignOCR(nn.Module):
 
 
 class AlignOcrModel(torch.nn.Module):
-    def __init__(self, args, alphabet, eval_only=False):
+    def __init__(self, args, vocab, eval_only=False):
         super().__init__()
         self.args = args
 
         self.eval_only = eval_only
 
-        self.alphabet = alphabet
+        self.vocab = vocab
         self.encoder = AlignOcrEncoder(args)
-        self.decoder = AlignOcrDecoder(args, alphabet)
+        self.decoder = AlignOcrDecoder(args, vocab)
 
         LOG.info('AlignOcrModel eval_only %s', self.eval_only)
         LOG.info(repr(self))
@@ -132,14 +132,14 @@ class AlignOcrEncoder(torch.nn.Module):
 
 
 class AlignOcrDecoder(torch.nn.Module):
-    def __init__(self, args, alphabet):
+    def __init__(self, args, vocab):
         super().__init__()
 
         self.args = args
-        self.alphabet = alphabet
+        self.vocab = vocab
 
         self.classifier = nn.Sequential(
-            nn.Linear(self.args.image_embed_dim, len(self.alphabet))
+            nn.Linear(self.args.image_embed_dim, len(self.vocab))
         )
 
     def forward(self, encoder_output):

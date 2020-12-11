@@ -123,12 +123,12 @@ def move_to_cuda(sample):
 
 def get_datasets(args):
 
-    alphabet = Dictionary.load(args.dict)
+    vocab = Dictionary.load(args.dict)
 
-    for idx, char in enumerate(alphabet.symbols):
-        if idx < 10 or idx > len(alphabet.symbols) - 10 - 1:
-            LOG.info('...indicies %d, symbol %s, count %d', alphabet.indices[alphabet.symbols[idx]],
-                     alphabet.symbols[idx], alphabet.count[idx])
+    for idx, char in enumerate(vocab.symbols):
+        if idx < 10 or idx > len(vocab.symbols) - 10 - 1:
+            LOG.info('...indicies %d, symbol %s, count %d', vocab.indices[vocab.symbols[idx]],
+                     vocab.symbols[idx], vocab.count[idx])
 
     test_transform = transforms.Compose([
         transforms.ToPILImage(),
@@ -140,7 +140,7 @@ def get_datasets(args):
         text_file_path=args.test,
         font_file=args.test_font,
         transform=test_transform,
-        alphabet=alphabet,
+        vocab=vocab,
         max_text_width=args.test_max_text_width,
         min_text_width=args.test_min_text_width,
         image_height=args.image_height,
@@ -202,8 +202,8 @@ def main(args):
         LOG.info(' loss %f', checkpoint['loss'])
     if 'acc' in checkpoint:
         LOG.info(' acc %f', checkpoint['acc'])
-    if 'alphabet' in checkpoint:
-        LOG.info(' alphabet %f', len(checkpoint['alphabet']))
+    if 'vocab' in checkpoint:
+        LOG.info(' vocab %f', len(checkpoint['vocab']))
     if 'state_dict' in checkpoint:
         LOG.info(' state_dict %f', len(checkpoint['state_dict']))
     if 'model_hyper_params' in checkpoint:
@@ -212,7 +212,7 @@ def main(args):
 
     test_dataset, test_loader = get_datasets(args)
 
-    model = UnAlignOcrModel(args, test_dataset.alphabet)
+    model = UnAlignOcrModel(args, test_dataset.vocab)
     model.load_state_dict(checkpoint['state_dict'], strict=True)
     model.to(device)
     model.eval()
@@ -327,7 +327,7 @@ def main(args):
 
                 utf8_target = []
                 for curr_target_item in curr_target:  # .data.numpy():
-                    utf8_target.append(model.alphabet[curr_target_item])
+                    utf8_target.append(model.vocab[curr_target_item])
                 utf8_ref_text = ''.join(utf8_target)
 
                 if args.write_metadata:

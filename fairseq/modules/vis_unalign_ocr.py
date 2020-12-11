@@ -41,15 +41,15 @@ class UnAlignOCR(nn.Module):
 
 
 class UnAlignOcrModel(torch.nn.Module):
-    def __init__(self, args, alphabet, eval_only=False):
+    def __init__(self, args, vocab, eval_only=False):
         super().__init__()
         self.args = args
 
         self.eval_only = eval_only
 
-        self.alphabet = alphabet
+        self.vocab = vocab
         self.encoder = UnAlignOcrEncoder(args)
-        self.decoder = UnAlignOcrDecoder(args, alphabet)
+        self.decoder = UnAlignOcrDecoder(args, vocab)
 
         LOG.info("UnAlignOcrModel eval_only %s", self.eval_only)
         LOG.info(repr(self))
@@ -71,7 +71,7 @@ class UnAlignOcrModel(torch.nn.Module):
         return self
 
     # def decode(self, model_output, batch_actual_timesteps, is_uxxxx=False):
-    #     min_prob_thresh = 3 * 1 / len(self.alphabet)
+    #     min_prob_thresh = 3 * 1 / len(self.vocab)
 
     #     T = model_output.size()[0]
     #     B = model_output.size()[1]
@@ -96,14 +96,14 @@ class UnAlignOcrModel(torch.nn.Module):
     #                 continue
 
     #             # Heuristic
-    #             # If model is predicting very low probability for all letters in alphabet, treat that the
+    #             # If model is predicting very low probability for all letters in vocab, treat that the
     #             # samed as a CTC blank
     #             if argmaxs[b] < min_prob_thresh:
     #                 prev_char[b] = ''
     #                 continue
 
-    #             # char = self.alphabet.idx_to_char[argmax_idxs[b]]
-    #             char = self.alphabet[argmax_idxs[b]]
+    #             # char = self.vocab.idx_to_char[argmax_idxs[b]]
+    #             char = self.vocab[argmax_idxs[b]]
 
     #             if prev_char[b] == char:
     #                 continue
@@ -190,11 +190,11 @@ class UnAlignOcrEncoder(torch.nn.Module):
 
 
 class UnAlignOcrDecoder(torch.nn.Module):
-    def __init__(self, args, alphabet):
+    def __init__(self, args, vocab):
         super().__init__()
 
         self.args = args
-        self.alphabet = alphabet
+        self.vocab = vocab
 
         self.lstm = nn.LSTM(
             self.args.image_embed_dim,
@@ -205,7 +205,7 @@ class UnAlignOcrDecoder(torch.nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(2 * self.args.decoder_lstm_units, len(self.alphabet))
+            nn.Linear(2 * self.args.decoder_lstm_units, len(self.vocab))
         )
 
         for param in self.parameters():

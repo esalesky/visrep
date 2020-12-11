@@ -237,7 +237,7 @@ def save_checkpoint(args, save_best, acc,
         torch.save({'epoch': epoch,
                     'loss': loss,
                     'acc': acc,
-                    'alphabet': train_dataset.alphabet,
+                    'vocab': train_dataset.vocab,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict()
                     },
@@ -246,7 +246,7 @@ def save_checkpoint(args, save_best, acc,
     torch.save({'epoch': epoch,
                 'loss': loss,
                 'acc': acc,
-                'alphabet': train_dataset.alphabet,
+                'vocab': train_dataset.vocab,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict()
                 },
@@ -255,13 +255,13 @@ def save_checkpoint(args, save_best, acc,
 
 def get_datasets(args, cache_output):
 
-    alphabet = Dictionary.load(args.dict)
+    vocab = Dictionary.load(args.dict)
 
     LOG.info('loading dictionary %s', args.dict)
-    for idx, char in enumerate(alphabet.symbols):
-        if idx < 10 or idx > len(alphabet.symbols) - 10 - 1:
-            LOG.info('...indicies %d, symbol %s, count %d', alphabet.indices[alphabet.symbols[idx]],
-                     alphabet.symbols[idx], alphabet.count[idx])
+    for idx, char in enumerate(vocab.symbols):
+        if idx < 10 or idx > len(vocab.symbols) - 10 - 1:
+            LOG.info('...indicies %d, symbol %s, count %d', vocab.indices[vocab.symbols[idx]],
+                     vocab.symbols[idx], vocab.count[idx])
 
     if args.augment:
         train_transform = transforms.Compose([
@@ -281,7 +281,7 @@ def get_datasets(args, cache_output):
         text_file_path=args.train,
         font_file=args.train_font,
         transform=train_transform,
-        alphabet=alphabet,
+        vocab=vocab,
         max_text_width=args.train_max_text_width,
         min_text_width=args.train_min_text_width,
         image_height=args.image_height,
@@ -307,7 +307,7 @@ def get_datasets(args, cache_output):
         text_file_path=args.valid,
         font_file=args.valid_font,
         transform=valid_transform,
-        alphabet=alphabet,
+        vocab=vocab,
         max_text_width=args.valid_max_text_width,
         min_text_width=args.valid_min_text_width,
         image_height=args.image_height,
@@ -552,7 +552,7 @@ def main(args):
     train_dataset, train_loader, valid_dataset, valid_loader = get_datasets(
         args, cache_output)
 
-    model = UnAlignOcrModel(args, train_dataset.alphabet)
+    model = UnAlignOcrModel(args, train_dataset.vocab)
     model.to(device)
 
     optimizer = torch.optim.Adam(
