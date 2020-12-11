@@ -358,9 +358,9 @@ class ImageSynthDataset(Dataset):
 
             # sometimes pad is off by a pixel in height or width
             (h, w) = cv_image.shape[:2]
-            if h != 32 or w != 32:
+            if h != self.image_height or w != self.image_width:
                 cv_image = cv2.resize(
-                    cv_image, (32, 32), interpolation=cv2.INTER_AREA)
+                    cv_image, (self.image_height, self.image_width), interpolation=cv2.INTER_AREA)
 
             (h, w) = cv_image.shape[:2]
             widths.append(w)
