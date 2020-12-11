@@ -17,14 +17,10 @@ class UnAlignOCR(nn.Module):
 
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(1, 64),
-            *self.ConvBNReLU(64, 64),
             nn.FractionalMaxPool2d(2, output_ratio=out_ratio),
             *self.ConvBNReLU(64, 128),
-            *self.ConvBNReLU(128, 128),
             nn.FractionalMaxPool2d(2, output_ratio=out_ratio),
-            *self.ConvBNReLU(128, 256),
-            *self.ConvBNReLU(256, 256),
-            *self.ConvBNReLU(256, 256)
+            *self.ConvBNReLU(128, 256)
         )
 
     def forward(self, x):

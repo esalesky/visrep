@@ -13,14 +13,10 @@ class AlignOCR(nn.Module):
 
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(1, 64),
-            *self.ConvBNReLU(64, 64),
             nn.MaxPool2d(2, 2),
             *self.ConvBNReLU(64, 128),
-            *self.ConvBNReLU(128, 128),
             nn.MaxPool2d(2, 2),
-            *self.ConvBNReLU(128, 256),
-            *self.ConvBNReLU(256, 256),
-            *self.ConvBNReLU(256, 256)
+            *self.ConvBNReLU(128, 256)
         )
 
     def forward(self, x):
