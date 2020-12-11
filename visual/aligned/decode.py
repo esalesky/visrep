@@ -15,6 +15,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 import logging
 import unicodedata
+import csv
 
 from fairseq.data import Dictionary
 from fairseq.modules.vis_align_ocr import AlignOcrModel
@@ -47,9 +48,10 @@ def parse_arguments(argv):
                         default=32, help="Image width")
     parser.add_argument("--font-size", type=int,
                         default=16, help="Font size")
-
-    parser.add_argument("--batch-size", type=int,
-                        default=8, help="Mini-batch size")
+    
+# no longer exposed: built for batch-size=1
+#    parser.add_argument("--batch-size", type=int,
+#                        default=1, help="Mini-batch size")
     parser.add_argument("--num-workers", type=int,
                         default=8, help="Nbr dataset workers")
 
@@ -64,11 +66,6 @@ def parse_arguments(argv):
     parser.add_argument("--test-display-mod", type=int,
                         default=10000, help="test display mod")
 
-    parser.add_argument('--write-image-samples', action='store_true',
-                        help='write image samples')
-    parser.add_argument('--write-metadata', action='store_true',
-                        help='write metadata')
-
     parser.add_argument('--image-verbose', action='store_true',
                         help='more debug info')
 
@@ -82,6 +79,14 @@ def parse_arguments(argv):
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
+
+
+def np_norm(np_embed_norm):
+    np_embed_norm_copy = np.copy(np_embed_norm)
+    np_norm_val = np.linalg.norm(np_embed_norm_copy,
+                                 keepdims=True)
+    np_embed_norm_copy /= np_norm_val
+    return np_embed_norm_copy
 
 
 def apply_to_sample(f, sample):
@@ -114,12 +119,12 @@ def move_to_cuda(sample):
 
 def get_datasets(args):
 
-    alphabet = Dictionary.load(args.dict)
+    vocab = Dictionary.load(args.dict)
 
-    for idx, char in enumerate(alphabet.symbols):
-        if idx < 10 or idx > len(alphabet.symbols) - 10 - 1:
-            LOG.info('...indicies %d, symbol %s, count %d', alphabet.indices[alphabet.symbols[idx]],
-                     alphabet.symbols[idx], alphabet.count[idx])
+    for idx, char in enumerate(vocab.symbols):
+        if idx < 10 or idx > len(vocab.symbols) - 10 - 1:
+            LOG.info('...indicies %d, symbol %s, count %d', vocab.indices[vocab.symbols[idx]],
+                     vocab.symbols[idx], vocab.count[idx])
 
     test_transform = transforms.Compose([
         transforms.ToPILImage(),
@@ -131,14 +136,14 @@ def get_datasets(args):
         text_file_path=args.test,
         font_file=args.test_font,
         transform=test_transform,
-        alphabet=alphabet,
+        vocab=vocab,
         max_text_width=args.test_max_text_width,
         min_text_width=args.test_min_text_width,
         image_height=args.image_height,
         image_width=args.image_width,
         image_cache=None)
 
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size,
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1,
                                               sampler=ImageGroupSampler(
                                                   test_dataset, rand=True),
                                               collate_fn=lambda b: image_collater(
@@ -168,19 +173,6 @@ def main(args):
     LOG.info('__CUDA_VISIBLE_DEVICES %s ',
              str(os.environ["CUDA_VISIBLE_DEVICES"]))
 
-    if args.write_metadata:
-        embeddings_images_output = args.output + '/embeddings/images'
-        if not os.path.exists(embeddings_images_output):
-            os.makedirs(embeddings_images_output)
-
-        embeddings_encoder_output = args.output + '/embeddings/encoder'
-        if not os.path.exists(embeddings_encoder_output):
-            os.makedirs(embeddings_encoder_output)
-
-    if args.write_image_samples:
-        images_output = args.output + '/images'
-        if not os.path.exists(images_output):
-            os.makedirs(images_output)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -192,8 +184,8 @@ def main(args):
         LOG.info(' loss %f', checkpoint['loss'])
     if 'acc' in checkpoint:
         LOG.info(' acc %f', checkpoint['acc'])
-    if 'alphabet' in checkpoint:
-        LOG.info(' alphabet %f', len(checkpoint['alphabet']))
+    if 'vocab' in checkpoint:
+        LOG.info(' vocab %f', len(checkpoint['vocab']))
     if 'state_dict' in checkpoint:
         LOG.info(' state_dict %f', len(checkpoint['state_dict']))
     if 'model_hyper_params' in checkpoint:
@@ -202,7 +194,7 @@ def main(args):
 
     test_dataset, test_loader = get_datasets(args)
 
-    model = AlignOcrModel(args, test_dataset.alphabet)
+    model = AlignOcrModel(args, test_dataset.vocab)
     model.load_state_dict(checkpoint['state_dict'], strict=True)
     model.to(device)
     model.eval()
@@ -214,10 +206,23 @@ def main(args):
     correct_total = 0
     correct_total_view = 0
 
+    all_embeds = []
+    all_labels = []
+
+    embed_file = open(args.output + "/embeddings.txt", "w")
+    norm_file  = open(args.output + "/norm_embeddings.txt", "w")
+    embed_file_writer = csv.writer(embed_file, delimiter=' ')
+    norm_file_writer  = csv.writer(norm_file, delimiter=' ')
+    text_row = [len(test_dataset.vocab.symbols), args.image_embed_dim]
+    embed_file_writer.writerow(text_row)
+    norm_file_writer.writerow(text_row)
+    
+    
+    # each sample should be a entry in the vocab, plus </s> because.
     with torch.no_grad():
         t = tqdm(iter(test_loader), leave=False, total=len(test_loader))
         for sample_ctr, sample in enumerate(t):
-
+            
             if sample_ctr % args.test_display_mod == 0:
                 display_hyp = True
 
@@ -233,124 +238,51 @@ def main(args):
             batch_shape = sample['batch_shape']
             LOG.debug('batch (img_cnt, sub_cnt, c, h, w)%s', batch_shape)
 
-            net_meta = model(
-                sample['net_input']['src_tokens'])
+            net_meta = model(sample['net_input']['src_tokens'])
 
+            # label
+            label = sample['seed_text'][0].strip('</s>')
+            
+            # prediction
             logits = net_meta['logits']
             LOG.debug('logits (batch * image_cnt, vocab) %s', logits.shape)
 
+            # the meat
             encoder_out = net_meta['embeddings']  # .squeeze()
             LOG.debug('embeddings (batch * image_cnt, embed_size) %s',
                       encoder_out.shape)
-
             encoder_out = encoder_out.squeeze()
-            if len(logits.shape) == 1:
-                logits = logits.unsqueeze(0)
-                encoder_out = encoder_out.unsqueeze(0)
 
-            logits_view = logits.view(
-                batch_shape[0], batch_shape[1], logits.size(-1))
-            LOG.debug('logits view (batch, image_cnt, vocab) %s',
-                      logits_view.shape)
+            # the money
+            encoder_out = encoder_out.squeeze()
+            embed = encoder_out[0].cpu().numpy()
+            norm_embed = np_norm(embed)
 
-            encoder_out_view = encoder_out.view(
-                batch_shape[0], batch_shape[1], encoder_out.size(-1))
-            LOG.debug('embeddings view (batch, image_cnt, vocab) %s',
-                      encoder_out_view.shape)
+            # write to embed txt files
+            text_row = [label]
+            text_row = text_row + embed.tolist()
+            embed_file_writer.writerow(text_row)
 
-            image_list = sample['net_input']['src_tokens'].cpu().numpy()
+            text_row = [label]
+            text_row = text_row + norm_embed.tolist()
+            norm_file_writer.writerow(text_row)
+            
+            # append
+            all_embeds.append(embed)
+            all_labels.append(label)
 
-            for logit_idx in range(batch_shape[0]):
-                image_id = sample['image_id'][logit_idx]
-                curr_logit = logits_view[logit_idx:logit_idx+1].squeeze()
-                curr_encoder = encoder_out_view[logit_idx:logit_idx +
-                                                1].squeeze()
-                if len(curr_logit.shape) == 1:
-                    curr_logit = curr_logit.unsqueeze(0)
-                    curr_encoder = curr_encoder.unsqueeze(0)
+    embed_file.close()
+    norm_file.close()
 
-                curr_target = targets[logit_idx *
-                                      batch_shape[1]: logit_idx *
-                                      batch_shape[1] + batch_shape[1]]
 
-                _, curr_pred = curr_logit.topk(1, 1, True, True)
-                curr_pred = curr_pred.t()
-
-                utf8_target = []
-                for curr_target_item in curr_target:  # .data.numpy():
-                    utf8_target.append(model.alphabet[curr_target_item])
-                utf8_ref_text = ''.join(utf8_target)
-
-                if args.write_metadata:
-                    decode_encoder_metadata = {}
-                    decode_encoder_metadata['image_id'] = str(image_id)
-                    decode_encoder_metadata['utf8_ref_text'] = utf8_ref_text
-                    decode_encoder_metadata['target'] = curr_target.cpu(
-                    ).numpy()
-                    decode_encoder_metadata['encoder'] = curr_encoder.cpu(
-                    ).numpy()
-                    np.savez_compressed(os.path.join(embeddings_encoder_output, str(image_id) + '.npz'),
-                                        allow_pickle=True,
-                                        metadata=decode_encoder_metadata)
-
-                    decode_images_metadata = {}
-                    decode_images_metadata['image_id'] = str(image_id)
-                    decode_images_metadata['utf8_ref_text'] = utf8_ref_text
-                    decode_images_metadata['target'] = curr_target.cpu(
-                    ).numpy()
-                    decode_images_metadata['image'] = image_list[logit_idx]
-                    np.savez_compressed(os.path.join(embeddings_images_output, str(image_id) + '.npz'),
-                                        allow_pickle=True,
-                                        metadata=decode_images_metadata)
-
-                if display_hyp and logit_idx < 5:
-                    LOG.info('batch %d, item %d', sample_ctr, logit_idx)
-                    LOG.info('image_id %s', image_id)
-                    LOG.info('utf8_ref_text %s', utf8_ref_text)
-                    LOG.info('target %s', curr_target)
-                    LOG.info('image %s', image_list[logit_idx].shape)
-                    LOG.info('encoder %s', curr_encoder.shape)
-                    LOG.info('logit %s', curr_logit.shape)
-
-                    asci_pred = []
-                    for curr_pred_item in curr_pred[0]:  # .data.numpy():
-                        asci_pred.append(model.alphabet[curr_pred_item])
-                    LOG.info('predict %s', ''.join(asci_pred))
-
-                    asci_target = []
-                    for curr_target_item in curr_target:  # .data.numpy():
-                        asci_target.append(model.alphabet[curr_target_item])
-                    LOG.info(' target %s', ''.join(asci_target))
-
-                    if args.write_image_samples:
-                        for logit_idx in range(image_list.shape[0]):
-                            curr_target = targets[logit_idx *
-                                                  batch_shape[1]: logit_idx *
-                                                  batch_shape[1] + batch_shape[1]]
-                            asci_target = []
-                            for curr_target_item in curr_target:
-                                asci_target.append(
-                                    model.alphabet[curr_target_item])
-                            for image_idx in range(image_list.shape[1]):
-                                image = np.uint8(
-                                    image_list[logit_idx][image_idx].transpose((1, 2, 0)) * 255)
-                                # rgb to bgr
-                                image = image[:, :, ::-1].copy()
-                                curr_out_path = os.path.join(images_output, str(sample_ctr) + '_' +
-                                                             str(logit_idx) + '_' + str(image_idx) +
-                                                             '_' + asci_target[image_idx] + '.png')
-                                cv2.imwrite(curr_out_path, image)
-
-                correct_view = curr_pred.eq(
-                    curr_target.view(1, -1).expand_as(curr_pred))
-                correct_k_view = correct_view[:1].view(
-                    -1).float().sum(0, keepdim=True)
-                correct_total_view += int(correct_k_view)
-
-            display_hyp = False
-
-        LOG.info('Test images %d, correct %d, accuracy %.2f',
-                 batch_size_total, correct_total_view, (correct_total_view/batch_size_total))
+    # write to npz file
+    all_embeds = np.array(all_embeds)
+    all_labels = np.array(all_labels)
+    print('feature shape {}, labels shape {}'.format(
+        all_embeds.shape, all_labels.shape))
+    np.savez_compressed(args.output + "/embeddings.npz",
+                        features=all_embeds, labels=all_labels)
+    
 
     LOG.info('...complete, time %s', time.process_time() - start_time)
 

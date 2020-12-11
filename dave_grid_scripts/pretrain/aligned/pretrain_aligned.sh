@@ -1,14 +1,16 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
-#$ -S /bin/bash -q gpu.q@@2080 -cwd 
+#$ -S /bin/bash -q gpu.q@@RTX -cwd 
 #$ -l h_rt=48:00:00,gpu=1 
 #$ -N pretrain
+#$ -j y -o /exp/esalesky/mtocr19/exps/ocr/logs/
 # num_proc=16,mem_free=32G,
 #
 # 2020-07-30
 # 
 # Train aligned embeddings 
+# -----------------------
 
 module load cuda10.1/toolkit/10.1.105
 module load cudnn/7.6.1_cuda10.1
@@ -19,17 +21,17 @@ if [ ! -z $SGE_HGR_gpu ]; then
     sleep 3
 fi
 
-source deactivate
+source deactivate; source deactivate
 source activate ocr
 
 SRC_LANG=${1}
-SEG=5k
+SEG=${2}
 
 TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
 SRC_PATH=/exp/esalesky/mtocr19
-EXP_DIR=/exp/esalesky/mtocr19/exps/aligned/${SRC_LANG}/
+EXP_DIR=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}/
 TMPDIR=${EXP_DIR}/tmp
 CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
 
@@ -90,3 +92,4 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/train.py \
 
 echo "COMPLETE"
 
+#--write-image-samples \
