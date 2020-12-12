@@ -3,7 +3,7 @@
 #
 #$ -S /bin/bash -q gpu.q@@RTX -cwd 
 #$ -l h_rt=48:00:00,gpu=1 
-#$ -N base
+#$ -N frozen
 #$ -j y -o logs/
 # num_proc=16,mem_free=32G,
 
@@ -55,7 +55,7 @@ $DATA_DIR \
 --arch=transformer_iwslt_de_en \
 --save-dir=$CKPT_DIR \
 --share-decoder-input-output-embed \
---encoder-embed-path=/exp/esalesky/mtocr19/exps/ocr/$SRC_LANG-$TGT_LANG/checkpoints/embeddings.txt \
+--encoder-embed-path=/exp/esalesky/mtocr19/exps/ocr/$SRC_LANG-$SEG/checkpoints/embeddings.txt \
 --freeze-encoder-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
@@ -68,6 +68,7 @@ $DATA_DIR \
 --encoder-attention-heads=4 \
 --encoder-embed-dim=512 \
 --encoder-ffn-embed-dim=1024 \
+--encoder-normalize-before \
 --encoder-layers=6 \
 --criterion=label_smoothed_cross_entropy \
 --label-smoothing=0.2 \

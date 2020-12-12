@@ -145,13 +145,19 @@ def get_datasets(args):
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1,
                                               sampler=ImageGroupSampler(
-                                                  test_dataset, rand=True),
+                                                  test_dataset, rand=False),
                                               collate_fn=lambda b: image_collater(
                                                   b),
                                               num_workers=args.num_workers, pin_memory=True,
                                               drop_last=True)
 
     return test_dataset, test_loader
+
+
+def print_row(x, ff):
+    tmp = ' '.join(map(str, x))
+    ff.write(tmp + '\n')
+    return
 
 
 def main(args):
@@ -211,14 +217,39 @@ def main(args):
 
     embed_file = open(args.output + "/embeddings.txt", "w")
     norm_file  = open(args.output + "/norm_embeddings.txt", "w")
-    embed_file_writer = csv.writer(embed_file, delimiter=' ')
-    norm_file_writer  = csv.writer(norm_file, delimiter=' ')
+
     text_row = [len(test_dataset.vocab.symbols), args.image_embed_dim]
-    embed_file_writer.writerow(text_row)
-    norm_file_writer.writerow(text_row)
+    print_row(text_row, embed_file)
+    print_row(text_row, norm_file)
     
+    counter = 0
+
+    # 4 special tokens dropped by test_loader, also add to embeddings
+    # vocab -- 0:<s>,1:<pad>,2:</s>,3:<unk>
+    with torch.no_grad():
+        for v,label in zip([0,1,2,3],['<s>','<pad>','</s>','<unk>']):
+            tensor_img = test_dataset.transform(test_dataset.image_cache[v])
+            fwd = model.encoder(tensor_img.unsqueeze(0).unsqueeze(0).cuda())
+            encoder_out = fwd['encoder_out']
+            # encoder_out.shape should be 1,1,512
+            embed = encoder_out.squeeze().cpu().numpy()
+            norm_embed = np_norm(embed)
+            
+            # write to embed txt files
+            text_row = [label]
+            text_row = text_row + embed.tolist()
+            print_row(text_row, embed_file)
+            
+            text_row = [label]
+            text_row = text_row + norm_embed.tolist()
+            print_row(text_row, norm_file)
+            
+            # append
+            all_embeds.append(embed)
+            all_labels.append(label)
+            counter+=1
     
-    # each sample should be a entry in the vocab, plus </s> because.
+    # each sample should be a entry in the vocab
     with torch.no_grad():
         t = tqdm(iter(test_loader), leave=False, total=len(test_loader))
         for sample_ctr, sample in enumerate(t):
@@ -241,35 +272,40 @@ def main(args):
             net_meta = model(sample['net_input']['src_tokens'])
 
             # label
-            label = sample['seed_text'][0].strip('</s>')
+            label = sample['seed_text'][0]
+            tgt   = test_dataset.vocab[sample['target'][0]]
+            if tgt != label:
+                print("-- tgt=/=seed --")
             
             # prediction
             logits = net_meta['logits']
             LOG.debug('logits (batch * image_cnt, vocab) %s', logits.shape)
 
             # the meat
-            encoder_out = net_meta['embeddings']  # .squeeze()
+            encoder_out = net_meta['embeddings']
             LOG.debug('embeddings (batch * image_cnt, embed_size) %s',
                       encoder_out.shape)
-            encoder_out = encoder_out.squeeze()
 
             # the money
-            encoder_out = encoder_out.squeeze()
-            embed = encoder_out[0].cpu().numpy()
+            # encoder_out = encoder_out.squeeze() #no longer necessary; one token at a time
+            embed = encoder_out.cpu().numpy()
             norm_embed = np_norm(embed)
 
             # write to embed txt files
             text_row = [label]
             text_row = text_row + embed.tolist()
-            embed_file_writer.writerow(text_row)
+            print_row(text_row, embed_file)
 
             text_row = [label]
             text_row = text_row + norm_embed.tolist()
-            norm_file_writer.writerow(text_row)
+            print_row(text_row, norm_file)
             
             # append
             all_embeds.append(embed)
             all_labels.append(label)
+            counter+=1
+
+    print(counter, len(test_dataset.vocab.symbols), len(checkpoint['vocab']))
 
     embed_file.close()
     norm_file.close()

@@ -36,6 +36,9 @@ EXP_DIR=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}/
 TMPDIR=${EXP_DIR}/tmp
 CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
 
+mkdir -p $EXP_DIR
+mkdir -p $TMPDIR
+
 DICT=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}/dict.${SRC_LANG}.txt
 VOCAB=${TMPDIR}/vocab
 cut -d" " -f1 ${DICT} > ${VOCAB}
@@ -67,10 +70,9 @@ echo "EXTRACT_FONT - ${EXTRACT_FONT}"
 echo "SRC_PATH - ${SRC_PATH}"
 echo "CKPT_PATH - ${CKPT_PATH}"
 
-
 nvidia-smi
 
-mkdir -p $EXP_DIR
+
 cd $EXP_DIR
 
 python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/decode.py \

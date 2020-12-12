@@ -82,7 +82,7 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/train.py \
 --valid ${VALID_DATA} \
 --valid-font ${TRAIN_FONT} \
 --image-height 32 \
---image-width 32 \
+--image-width 160 \
 --train-max-text-width 40 \
 --font-size 16 \
 --batch-size 64 \

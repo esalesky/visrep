@@ -146,7 +146,8 @@ def image_collater(batch):
     for sample_idx, sentence_sample in enumerate(batch):
         for word_idx, word_sample in enumerate(sentence_sample[0]):
             word_sample = sentence_sample[0][word_idx]
-            width = word_sample.shape[2]  # 32, 32, 3
+
+            width = word_sample.shape[2]  # e.g. chars: 1, 32, 32
             input_tensor[sample_idx, word_idx, :, :, :width] = word_sample
 
     batch = {
@@ -214,7 +215,7 @@ class ImageSynthDataset(Dataset):
         self.tokens_list = []
         self.lines = []
         self.sizes = []
-        self.append_eos = True
+        self.append_eos = False
         self.reverse_order = False
         self.read_data(text_file_path, self.vocab)
         self.size = len(self.tokens_list)
