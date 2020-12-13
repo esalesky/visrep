@@ -134,7 +134,7 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
 
-    if self.image_samples_path:
+    if task.args.image_samples_path:
         samples_train_output = os.path.join(
             task.args.image_samples_path, 'train')
         if not os.path.exists(samples_train_output):
@@ -190,19 +190,20 @@ def train(args, trainer, task, epoch_itr):
                         asci_pred.append(task.src_dict[curr_pred_item])
                     LOG.info('RESULT OCR hyp: %s', ''.join(asci_pred))
 
-                    for image_idx in range(image_list.shape[1]):
-                        image = np.uint8(
-                            image_list[token_idx][image_idx].transpose((1, 2, 0)) * 255)
-                        # rgb to bgr
-                        image = image[:, :, ::-1].copy()
-                        curr_out_path = os.path.join(samples_train_output, str(i) + '_' + str(img_idx) + '_' +
-                                                     str(token_idx) + '_' + str(image_idx) +
-                                                     '_' + sent_list[image_idx] + '.png')
-                        cv2.imwrite(curr_out_path, image)
+                    if task.args.image_samples_path:
+                        for image_idx in range(image_list.shape[1]):
+                            image = np.uint8(
+                                image_list[token_idx][image_idx].transpose((1, 2, 0)) * 255)
+                            # rgb to bgr
+                            image = image[:, :, ::-1].copy()
+                            curr_out_path = os.path.join(samples_train_output, str(i) + '_' + str(img_idx) + '_' +
+                                                         str(token_idx) + '_' + str(image_idx) +
+                                                         '_' + sent_list[image_idx] + '.png')
+                            cv2.imwrite(curr_out_path, image)
 
-                        if image_idx < 3:
-                            task.tensorboard_writer.add_image(
-                                'images/train/{}_{}_{}_{}'.format(str(i), str(img_idx), str(token_idx), str(image_idx)), F.to_tensor(image), 0)
+                            if image_idx < 3:
+                                task.tensorboard_writer.add_image(
+                                    'images/train/{}_{}_{}_{}'.format(str(i), str(img_idx), str(token_idx), str(image_idx)), F.to_tensor(image), 0)
 
                     break  # display 1 and then break
                 break
@@ -315,7 +316,7 @@ def get_training_stats(trainer):
 def validate(args, trainer, task, epoch_itr, subsets):
     """Evaluate the model on the validation set(s) and return the losses."""
 
-    if self.image_samples_path:
+    if task.args.image_samples_path:
         samples_valid_output = os.path.join(
             task.args.image_samples_path, 'valid')
         if not os.path.exists(samples_valid_output):
@@ -427,19 +428,20 @@ def validate(args, trainer, task, epoch_itr, subsets):
                         asci_pred.append(task.src_dict[curr_pred_item])
                     LOG.info('RESULT OCR hyp: %s', ''.join(asci_pred))
 
-                    for image_idx in range(image_list.shape[1]):
-                        image = np.uint8(
-                            image_list[token_idx][image_idx].transpose((1, 2, 0)) * 255)
-                        # rgb to bgr
-                        image = image[:, :, ::-1].copy()
-                        curr_out_path = os.path.join(samples_valid_output, str(valid_batch_ctr) + '_' +
-                                                     str(token_idx) + '_' + str(image_idx) +
-                                                     '_' + sent_list[image_idx] + '.png')
-                        cv2.imwrite(curr_out_path, image)
+                    if task.args.image_samples_path:
+                        for image_idx in range(image_list.shape[1]):
+                            image = np.uint8(
+                                image_list[token_idx][image_idx].transpose((1, 2, 0)) * 255)
+                            # rgb to bgr
+                            image = image[:, :, ::-1].copy()
+                            curr_out_path = os.path.join(samples_valid_output, str(valid_batch_ctr) + '_' +
+                                                         str(token_idx) + '_' + str(image_idx) +
+                                                         '_' + sent_list[image_idx] + '.png')
+                            cv2.imwrite(curr_out_path, image)
 
-                        if image_idx < 3:
-                            task.tensorboard_writer.add_image(
-                                'images/valid/{}_{}_{}_{}'.format(str(valid_batch_ctr), str(token_idx), str(image_idx), str(sent_list[image_idx])), F.to_tensor(image), 0)
+                            if image_idx < 3:
+                                task.tensorboard_writer.add_image(
+                                    'images/valid/{}_{}_{}_{}'.format(str(valid_batch_ctr), str(token_idx), str(image_idx), str(sent_list[image_idx])), F.to_tensor(image), 0)
 
                     break  # display 1 and then break
 

@@ -194,7 +194,7 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
 
-    if self.image_samples_path:
+    if task.args.image_samples_path:
         samples_train_output = os.path.join(
             task.args.image_samples_path, 'train')
         if not os.path.exists(samples_train_output):
@@ -271,13 +271,14 @@ def train(args, trainer, task, epoch_itr):
                     image = np.uint8(
                         image_list[token_idx].transpose((1, 2, 0)) * 255)
                     # rgb to bgr
-                    image = image[:, :, ::-1].copy()
-                    curr_out_path = os.path.join(samples_train_output, str(i) + '_' + str(img_idx) + '_' +
-                                                 str(token_idx) + '.png')
-                    cv2.imwrite(curr_out_path, image)
+                    if task.args.image_samples_path:
+                        image = image[:, :, ::-1].copy()
+                        curr_out_path = os.path.join(samples_train_output, str(i) + '_' + str(img_idx) + '_' +
+                                                     str(token_idx) + '.png')
+                        cv2.imwrite(curr_out_path, image)
 
-                    task.tensorboard_writer.add_image(
-                        'images/valid/{}_{}_{}'.format(str(i), str(img_idx), str(token_idx)), F.to_tensor(image), 0)
+                        task.tensorboard_writer.add_image(
+                            'images/valid/{}_{}_{}'.format(str(i), str(img_idx), str(token_idx)), F.to_tensor(image), 0)
 
                     break  # display 1 and then break
                 break
@@ -392,7 +393,7 @@ def get_training_stats(trainer):
 def validate(args, trainer, task, epoch_itr, subsets):
     """Evaluate the model on the validation set(s) and return the losses."""
 
-    if self.image_samples_path:
+    if task.args.image_samples_path:
         samples_valid_output = os.path.join(
             task.args.image_samples_path, 'valid')
         if not os.path.exists(samples_valid_output):
@@ -505,13 +506,14 @@ def validate(args, trainer, task, epoch_itr, subsets):
                     image = np.uint8(
                         image_list[hyp_ctr].transpose((1, 2, 0)) * 255)
                     # rgb to bgr
-                    image = image[:, :, ::-1].copy()
-                    curr_out_path = os.path.join(samples_valid_output, str(valid_batch_ctr) + '_' +
-                                                 str(hyp_ctr) + '.png')
-                    cv2.imwrite(curr_out_path, image)
+                    if task.args.image_samples_path:
+                        image = image[:, :, ::-1].copy()
+                        curr_out_path = os.path.join(samples_valid_output, str(valid_batch_ctr) + '_' +
+                                                     str(hyp_ctr) + '.png')
+                        cv2.imwrite(curr_out_path, image)
 
-                    task.tensorboard_writer.add_image(
-                        'images/valid/{}_{}'.format(str(valid_batch_ctr), str(hyp_ctr)), F.to_tensor(image), 0)
+                        task.tensorboard_writer.add_image(
+                            'images/valid/{}_{}'.format(str(valid_batch_ctr), str(hyp_ctr)), F.to_tensor(image), 0)
 
             valid_batch_ctr += 1
 
