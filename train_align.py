@@ -134,10 +134,11 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
 
-    samples_train_output = os.path.join(
-        task.args.image_samples_path, 'train')
-    if not os.path.exists(samples_train_output):
-        os.makedirs(samples_train_output)
+    if self.image_samples_path:
+        samples_train_output = os.path.join(
+            task.args.image_samples_path, 'train')
+        if not os.path.exists(samples_train_output):
+            os.makedirs(samples_train_output)
 
     for i, samples in enumerate(progress, start=epoch_itr.iterations_in_epoch):
         if args.image_verbose:
@@ -314,10 +315,11 @@ def get_training_stats(trainer):
 def validate(args, trainer, task, epoch_itr, subsets):
     """Evaluate the model on the validation set(s) and return the losses."""
 
-    samples_valid_output = os.path.join(
-        task.args.image_samples_path, 'valid')
-    if not os.path.exists(samples_valid_output):
-        os.makedirs(samples_valid_output)
+    if self.image_samples_path:
+        samples_valid_output = os.path.join(
+            task.args.image_samples_path, 'valid')
+        if not os.path.exists(samples_valid_output):
+            os.makedirs(samples_valid_output)
 
     if args.fixed_validation_seed is not None:
         # set fixed seed for every validation
