@@ -3,8 +3,8 @@
 #
 #$ -S /bin/bash -q gpu.q@@RTX -cwd 
 #$ -l h_rt=48:00:00,gpu=1 
-#$ -N frozen
-#$ -j y -o logs/frozen.vold/
+#$ -N base
+#$ -j y -o logs/
 # num_proc=16,mem_free=32G,
 
 # Train Transformer model
@@ -19,6 +19,7 @@ if [ ! -z $SGE_HGR_gpu ]; then
     sleep 3
 fi
 
+#source activate /home/hltcoe/esalesky/anaconda3/envs/fs
 source deactivate
 source activate ocr
 
@@ -31,12 +32,12 @@ nvidia-smi
 SRC_LANG=$1
 SEG=$2
 TGT_LANG=en
-TRAIN_TYPE=frozen
+TRAIN_TYPE=baseline
 
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 DATA_DIR=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}
-EXP_DIR=/exp/esalesky/mtocr19/exps/oldvisemb/${SRC_LANG}
-CKPT_DIR=${EXP_DIR}/checkpoints/${SEG}
+EXP_DIR=/exp/esalesky/mtocr19/exps/baseline-16k/${SRC_LANG}
+CKPT_DIR=${EXP_DIR}/checkpoints/baseline-${SEG}
 FAIRSEQ_PATH=/exp/esalesky/mtocr19/fairseq-ocr
 
 echo $FAIRSEQ_PATH
@@ -55,8 +56,6 @@ $DATA_DIR \
 --arch=transformer_iwslt_de_en \
 --save-dir=$CKPT_DIR \
 --share-decoder-input-output-embed \
---encoder-embed-path=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/$SEG/norm_word_embeddings.txt \
---freeze-encoder-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
 --adam-eps=1e-08 \
@@ -68,7 +67,6 @@ $DATA_DIR \
 --encoder-attention-heads=4 \
 --encoder-embed-dim=512 \
 --encoder-ffn-embed-dim=1024 \
---encoder-normalize-before \
 --encoder-layers=6 \
 --criterion=label_smoothed_cross_entropy \
 --label-smoothing=0.2 \
@@ -90,9 +88,6 @@ $DATA_DIR \
 --update-freq=4 \
 --log-format=simple \
 --log-interval=10 2>&1 | tee $CKPT_DIR/train.log
-
-#--encoder-embed-path=/exp/esalesky/mtocr19/exps/ocr/$SRC_LANG-$SEG/checkpoints/embeddings.txt \
-#--encoder-embed-path=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/$SEG/norm_word_embeddings.txt \
 
 # only store last and best checkpoints
 
@@ -129,4 +124,3 @@ ${DATA_DIR} \
 --target-lang ${TGT_LANG} 
 
 echo "--COMPLETE--"
-

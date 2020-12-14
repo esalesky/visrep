@@ -1,15 +1,15 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
-#$ -S /bin/bash -q gpu.q@@2080 -cwd 
-#$ -l h_rt=48:00:00,gpu=1 
-#$ -N vismt-pretrain-update
-#$ -j y -o logs/
+#$ -S /bin/bash -q gpu.q@@rtx -cwd 
+#$ -l h_rt=120:00:00,gpu=1 
+#$ -N update
+#$ -j y -o logs/update-avg/
 # num_proc=16,mem_free=32G,
 #
 # 2020-09-15
 # 
-# Train tokonly (with aligned/pretrain arch, though vis not used)
+# Train pretrain update no src loss
 #
 
 module load cuda10.1/toolkit/10.1.105
@@ -25,20 +25,52 @@ source deactivate
 source activate ocr
 
 SRC_LANG=${1}
-SEG=${2}
+SEG=${2} #5k or chars
+TYPE=${3} #add, avg, concat, visonly
 
-TYPE=tokonly
+TRAIN_TYPE=update
 TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
 SRC_PATH=/exp/esalesky/mtocr19
 DATA_DIR=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}
-EXP_DIR=/exp/esalesky/mtocr19/exps/baseline/${SRC_LANG}
-TMPDIR=${EXP_DIR}/${SRC_LANG}-${TRAIN_TYPE}-${TYPE}-tmp
-IMGTMP=${EXP_DIR}/tmp
-IMG_CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
-CKPT_PATH=${EXP_DIR}/checkpoints/baseline-${TYPE}-${SEG}
+EXP_DIR=/exp/esalesky/mtocr19/exps/update-${TYPE}/${SRC_LANG}-${SEG}
+TMPDIR=${EXP_DIR}/tmp
+OCR_CKPT_PATH=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}/checkpoints/model_ckpt_best.pth
+CKPT_PATH=${EXP_DIR}/checkpoints/
 
+case ${SRC_LANG} in
+  de | fr | en )
+    FONT_PATH=/exp/ocr/fonts/all/noto/NotoMono-Regular.ttf
+    ;;
+  zh | ja | ko )
+    FONT_PATH=/exp/ocr/fonts/all/noto_zh/NotoSansCJKjp-hinted/NotoSansCJKjp-Regular.otf
+    ;;
+  *)
+    echo "no font set for src language ${SRC_LANG} -- check and try again!"
+    exit 0
+    ;;
+esac
+
+case ${SEG} in
+  5k )
+    WIDTH=64
+    ;;
+  chars )
+    WIDTH=32
+    ;;
+  words )
+    WIDTH=160
+    ;;
+  *)
+    echo "unexpected ${SEG} -- check and try again!"
+    exit 0
+    ;;
+esac
+
+
+echo "SRC - ${SRC_LANG}"
+echo "TYPE - ${TYPE}"
 echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
 echo "PYTHONPATH - ${PYTHONPATH}"
@@ -46,45 +78,28 @@ echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
 echo "DATA_DIR - ${DATA_DIR}"
 echo "SRC_PATH - ${SRC_PATH}"
 echo "EXP_DIR - ${EXP_DIR}"
+echo "OCR_CKPT_PATH - ${OCR_CKPT_PATH}"
 echo "CKPT_PATH - ${CKPT_PATH}"
-echo "TYPE - ${TYPE}"
 
 nvidia-smi
+
 
 mkdir -p ${EXP_DIR}
 mkdir -p ${CKPT_PATH}
 mkdir -p ${TMPDIR}
-cd ${TMPDIR}
-
-mkdir -p ${TMPDIR}/vismt/train
-pushd ${TMPDIR}/vismt/train
-ln -s ${IMGTMP}/train/embeddings/images .
-#tar --extract --skip-old-files --file=${IMGTMP}/decode_images_train.tar.gz
-popd
-
-mkdir -p ${TMPDIR}/vismt/valid
-pushd ${TMPDIR}/vismt/valid
-ln -s ${IMGTMP}/valid/embeddings/images .
-#tar --extract --skip-old-files --file=${IMGTMP}/decode_images_valid.tar.gz
-popd
-
-mkdir -p ${TMPDIR}/vismt/test
-pushd ${TMPDIR}/vismt/test
-ln -s ${IMGTMP}/test/embeddings/images .
-#tar --extract --skip-old-files --file=${IMGTMP}/decode_images_test.tar.gz
-popd
 
 
 python -u ${SRC_PATH}/fairseq-ocr/train_align.py \
 ${DATA_DIR} \
 --user-dir ${SRC_PATH} \
---save-dir ${EXP_DIR}/${TYPE} \
 --arch 'vis_align_transformer_iwslt_de_en' \
---image-pretrain-path ${TMPDIR}/vismt \
---image-checkpoint-path ${CKPT_PATH} \
+--image-checkpoint-path ${OCR_CKPT_PATH} \
+--image-font-path ${FONT_PATH} \
+--save-dir=${CKPT_PATH} \
 --image-embed-type ${TYPE} \
---image-samples-path ${TMDIR}/samples \
---image-pretrain-eval-only \
+--image-embedding-normalize \
+--image-height 32 \
+--image-width ${WIDTH} \
 --source-lang ${SRC_LANG} \
 --target-lang ${TGT_LANG} \
 --left-pad-source 0 \
@@ -110,22 +125,23 @@ ${DATA_DIR} \
 --max-epoch 100 \
 --max-source-positions 1024 \
 --max-target-positions 1024 \
---max-tokens 2000 \
---max-tokens-valid 2000 \
 --min-loss-scale 0.0001 \
---no-epoch-checkpoints \
 --num-workers 0 \
 --optimizer 'adam' \
 --raw-text \
+--seed 42 \
 --share-decoder-input-output-embed \
---warmup-updates 4000 \
---weight-decay 0.0001 \
 --update-freq=8 \
+--warmup-updates 2000 \
+--max-tokens 2000 \
+--max-tokens-valid 2000 \
+--weight-decay 0.0001 \
+--no-epoch-checkpoints \
 --log-format=simple \
---log-interval=10 2>&1 | tee ${CKPT_PATH}/${TRAIN_TYPE}-${TYPE}-train.log
+--log-interval=10 
 
+#--image-enable-src-loss False \
 #--layernorm-embedding \
-#--image-embedding-normalize \
 #--no-token-positional-embeddings \
 
 # -----
@@ -142,32 +158,37 @@ python -u ${SRC_PATH}/fairseq-ocr/generate.py \
 ${DATA_DIR} \
 --path=${CKPT_PATH}/checkpoint_best.pt \
 --user-dir=${SRC_PATH} \
+--image-font-path ${FONT_PATH} \
+--image-width ${WIDTH} \
+--image-embedding-normalize \
 --gen-subset=test \
 --batch-size=4 \
 --raw-text \
+--seed=42 \
 --beam=5 \
 --source-lang ${SRC_LANG} \
 --target-lang ${TGT_LANG} \
---task 'visaligntranslation' \
---image-pretrain-path ${TMPDIR}/vismt
+--task 'visaligntranslation' 
 
-#--image-font-path ${FONT_PATH} \
 
 # -- DEV -- 
 python -u ${SRC_PATH}/fairseq-ocr/generate.py \
 ${DATA_DIR} \
 --path=${CKPT_PATH}/checkpoint_best.pt \
 --user-dir=${SRC_PATH} \
+--image-font-path ${FONT_PATH} \
+--image-width ${WIDTH} \
+--image-embedding-normalize \
 --gen-subset=valid \
 --batch-size=4 \
 --raw-text \
+--seed=42 \
 --beam=5 \
 --source-lang ${SRC_LANG} \
 --target-lang ${TGT_LANG} \
---task 'visaligntranslation' \
---image-pretrain-path ${TMPDIR}/vismt
+--task 'visaligntranslation' 
 
-#--image-font-path ${FONT_PATH} \
+
 
 
 echo "--COMPLETE--"

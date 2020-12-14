@@ -1,11 +1,16 @@
 #!/bin/bash
 #. /etc/profile.d/modules.sh
 #
-# 2020-07-30
-# 
-# Score pretrain align
+#$ -S /bin/bash -q gpu.q@@rtx -cwd 
+#$ -l h_rt=2:00:00,gpu=1 
+#$ -N generate
+#$ -j y -o logs/generate/
+# num_proc=16,mem_free=32G,
 #
-
+# 2020-09-15
+# 
+# Score
+#
 
 module load cuda10.1/toolkit/10.1.105
 module load cudnn/7.6.1_cuda10.1
@@ -17,47 +22,68 @@ if [ ! -z $SGE_HGR_gpu ]; then
 fi
 
 source deactivate
-source activate /expscratch/detter/tools/anaconda3
+source activate ocr
 
-TYPE=concat # concat add avg tokonly
-EXP_DIR=/expscratch/detter/vismt/zh/20200730/aligned/chars
+SRC_LANG=${1}
+SEG=${2} #5k or chars
+TYPE=${3} #add, avg, concat, visonly
 
-SRC_PATH=/home/hltcoe/detter/src/pytorch
+TRAIN_TYPE=update
+TGT_LANG=en
+LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
-DATA_DIR=/expscratch/detter/mt/multitarget-ted/en-zh/dave/zh_char_en_10k
+SRC_PATH=/exp/esalesky/mtocr19
+DATA_DIR=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}
+EXP_DIR=/exp/esalesky/mtocr19/exps/update-${TYPE}/${SRC_LANG}-${SEG}
+TMPDIR=${EXP_DIR}/tmp
+CKPT_PATH=${EXP_DIR}/checkpoints/
 
-echo "PATH - ${PATH}"
-echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
-echo "PYTHONPATH - ${PYTHONPATH}"
-echo "CUDA_VISIBLE_DEVICES - ${CUDA_VISIBLE_DEVICES}"
-echo "DATA_DIR - ${DATA_DIR}"
-echo "SRC_PATH - ${SRC_PATH}"
-echo "EXP_DIR - ${EXP_DIR}"
-echo "TYPE - ${TYPE}"
+case ${SRC_LANG} in
+  de | fr | en )
+    FONT_PATH=/exp/ocr/fonts/all/noto/NotoMono-Regular.ttf
+    ;;
+  zh | ja | ko )
+    FONT_PATH=/exp/ocr/fonts/all/noto_zh/NotoSansCJKjp-hinted/NotoSansCJKjp-Regular.otf
+    ;;
+  *)
+    echo "no font set for src language ${SRC_LANG} -- check and try again!"
+    exit 0
+    ;;
+esac
 
-nvidia-smi
+case ${SEG} in
+  5k )
+    WIDTH=64
+    ;;
+  chars )
+    WIDTH=32
+    ;;
+  words )
+    WIDTH=160
+    ;;
+  *)
+    echo "unexpected ${SEG} -- check and try again!"
+    exit 0
+    ;;
+esac
 
-mkdir -p $TMPDIR/vismt/test
-pushd $TMPDIR/vismt/test
-tar xf ${EXP_DIR}/decode_images_test.tar.gz
-popd
 
 cd $EXP_DIR
 
+# -- TEST --
 python -u ${SRC_PATH}/fairseq-ocr/generate.py \
 ${DATA_DIR} \
---path=${EXP_DIR}/${TYPE}/checkpoint_last.pt \
+--path=${CKPT_PATH}/checkpoint_best.pt \
 --user-dir=${SRC_PATH} \
+--image-font-path ${FONT_PATH} \
+--image-width $WIDTH \
 --gen-subset=test \
 --batch-size=4 \
 --raw-text \
 --beam=5 \
---source-lang 'zh' \
---target-lang 'en' \
---task 'visaligntranslation' \
---image-pretrain-path ${TMPDIR}/vismt
+--seed=42 \
+--source-lang ${SRC_LANG} \
+--target-lang ${TGT_LANG} \
+--task 'visaligntranslation' 
 
-#--image-font-path ${FONT_PATH} \
-
-
-echo "COMPLETE"
+echo "--COMPLETE--"
