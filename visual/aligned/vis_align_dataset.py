@@ -132,7 +132,7 @@ def image_collater(batch):
 
     # batch, sentence, word image
     num_channels, word_height, word_width = batch[0][0][0].shape
-
+    
     target_transcription = torch.ones(
         len(batch), target_transcription_widths[0], dtype=torch.long)
     for idx, (tensor, transcript, metadata) in enumerate(batch):
@@ -147,7 +147,7 @@ def image_collater(batch):
         for word_idx, word_sample in enumerate(sentence_sample[0]):
             word_sample = sentence_sample[0][word_idx]
 
-            width = word_sample.shape[2]  # e.g. chars: 1, 32, 32
+            width = word_sample.shape[2]  ## e.g. chars: 1, 32, 32
             input_tensor[sample_idx, word_idx, :, :, :width] = word_sample
 
     batch = {
@@ -349,10 +349,10 @@ class ImageSynthDataset(Dataset):
             (h, w) = cv_image.shape[:2]
             if h > self.image_height:
                 cv_image = self.image_resize(
-                    cv_image, height=self.image_height)
+                    cv_image, height=self.image_height, width=self.image_width)
             if w > self.image_width:
                 cv_image = self.image_resize(
-                    cv_image, width=self.image_width)
+                    cv_image, height=self.image_height, width=self.image_width)
 
             cv_image = self.image_pad(
                 cv_image, input_pad_height=self.image_height, input_pad_width=self.image_width)
@@ -360,8 +360,9 @@ class ImageSynthDataset(Dataset):
             # sometimes pad is off by a pixel in height or width
             (h, w) = cv_image.shape[:2]
             if h != self.image_height or w != self.image_width:
+                #NOTE: cv2.resize expects dim (width,height)
                 cv_image = cv2.resize(
-                    cv_image, (self.image_height, self.image_width), interpolation=cv2.INTER_AREA)
+                    cv_image, (self.image_width, self.image_height), interpolation=cv2.INTER_AREA)
 
             (h, w) = cv_image.shape[:2]
             widths.append(w)
