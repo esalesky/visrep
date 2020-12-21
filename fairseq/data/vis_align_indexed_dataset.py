@@ -557,7 +557,7 @@ class VisAlignIndexedRawTextDataset(FairseqDataset):
             (h, w) = cv_image.shape[:2]
             if h != self.image_height or w != self.image_width:
                 cv_image = cv2.resize(
-                    cv_image, (self.image_height, self.image_width), interpolation=cv2.INTER_AREA)
+                    cv_image, (self.image_width, self.image_height), interpolation=cv2.INTER_AREA)
 
             (h, w) = cv_image.shape[:2]
             widths.append(w)
