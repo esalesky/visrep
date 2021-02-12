@@ -55,7 +55,7 @@ def parse_arguments(argv):
     parser.add_argument("--num-workers", type=int,
                         default=8, help="Nbr dataset workers")
 
-    parser.add_argument("--encoder-dim", type=int,
+    parser.add_argument("--encoder-embed-dim", type=int,
                         default=512, help="encoder dimension")
     parser.add_argument("--image-embed-dim", type=int,
                         default=512, help="image embedding dimension")
