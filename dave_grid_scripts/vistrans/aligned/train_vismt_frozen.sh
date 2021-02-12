@@ -4,7 +4,7 @@
 #$ -S /bin/bash -q gpu.q@@RTX -cwd 
 #$ -l h_rt=48:00:00,gpu=1 
 #$ -N frozen
-#$ -j y -o logs/frozen.vold/
+#$ -j y -o logs/
 # num_proc=16,mem_free=32G,
 
 # Train Transformer model
@@ -35,7 +35,7 @@ TRAIN_TYPE=frozen
 
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 DATA_DIR=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}
-EXP_DIR=/exp/esalesky/mtocr19/exps/oldvisemb/${SRC_LANG}
+EXP_DIR=/exp/esalesky/mtocr19/exps/7layers/${SRC_LANG}
 CKPT_DIR=${EXP_DIR}/checkpoints/${SEG}
 FAIRSEQ_PATH=/exp/esalesky/mtocr19/fairseq-ocr
 
@@ -55,7 +55,7 @@ $DATA_DIR \
 --arch=transformer_iwslt_de_en \
 --save-dir=$CKPT_DIR \
 --share-decoder-input-output-embed \
---encoder-embed-path=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/$SEG/norm_word_embeddings.txt \
+--encoder-embed-path=/exp/esalesky/mtocr19/exps/ocr/$SRC_LANG-$SEG.7layers/checkpoints/norm_embeddings.txt \
 --freeze-encoder-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \

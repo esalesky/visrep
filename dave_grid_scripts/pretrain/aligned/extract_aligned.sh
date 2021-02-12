@@ -56,6 +56,21 @@ case ${SRC_LANG} in
     ;;
 esac
 
+case ${SEG} in
+  5k )
+    WIDTH=32
+    ;;
+  chars )
+    WIDTH=16
+    ;;
+  words )
+    WIDTH=80
+    ;;
+  *)
+    echo "unexpected ${SEG} -- check and try again!"
+    exit 0
+    ;;
+esac
 
 echo " ${DATA_TYPE} "
 echo "------"
@@ -70,8 +85,8 @@ echo "EXTRACT_FONT - ${EXTRACT_FONT}"
 echo "SRC_PATH - ${SRC_PATH}"
 echo "CKPT_PATH - ${CKPT_PATH}"
 
+hostname
 nvidia-smi
-
 
 cd $EXP_DIR
 
@@ -80,9 +95,11 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/decode.py \
 --dict ${DICT} \
 --test ${VOCAB} \
 --test-font ${EXTRACT_FONT} \
---image-height 32 \
---image-width 32 \
---font-size 16 \
+--image-height 16 \
+--image-width ${WIDTH} \
+--font-size 8 \
+--encoder-dim 512 \
+--image-embed-dim 512 \
 --num-workers 0 \
 --load-checkpoint-path ${CKPT_PATH} 
 

@@ -31,7 +31,7 @@ TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
 SRC_PATH=/exp/esalesky/mtocr19
-EXP_DIR=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}/
+EXP_DIR=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}.7layers/
 TMPDIR=${EXP_DIR}/tmp
 CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
 
@@ -53,6 +53,21 @@ case ${SRC_LANG} in
 esac
 VALID_FONT=${TRAIN_FONT}
 
+case ${SEG} in
+  5k )
+    WIDTH=32
+    ;;
+  chars )
+    WIDTH=16
+    ;;
+  words )
+    WIDTH=80
+    ;;
+  *)
+    echo "unexpected ${SEG} -- check and try again!"
+    exit 0
+    ;;
+esac
 
 echo "FONT - ${TRAIN_FONT}"
 echo "PATH - ${PATH}"
@@ -68,8 +83,8 @@ echo "TRAIN_FONT - ${TRAIN_FONT}"
 echo "VALID_FONT - ${VALID_FONT}"
 echo "SRC_PATH - ${SRC_PATH}"
 
+hostname
 nvidia-smi
-
 
 mkdir -p $EXP_DIR
 cd $EXP_DIR
@@ -81,11 +96,13 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/train.py \
 --train-font ${TRAIN_FONT} \
 --valid ${VALID_DATA} \
 --valid-font ${TRAIN_FONT} \
---image-height 32 \
---image-width 160 \
---train-max-text-width 40 \
---font-size 16 \
---batch-size 64 \
+--image-height 16 \
+--image-width ${WIDTH} \
+--train-max-text-width 35 \
+--encoder-dim 512 \
+--image-embed-dim 512 \
+--font-size 8 \
+--batch-size 32 \
 --num-workers 8 \
 --epochs 2 \
 --lr 1e-3 
