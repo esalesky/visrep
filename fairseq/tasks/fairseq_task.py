@@ -9,7 +9,6 @@ import warnings
 from argparse import Namespace
 from typing import Any, Callable, Dict, List
 
-import numpy as np
 import torch
 from fairseq import metrics, search, tokenizer, utils
 from fairseq.data import Dictionary, FairseqDataset, data_utils, encoders, iterators

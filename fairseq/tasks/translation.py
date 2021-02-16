@@ -432,9 +432,6 @@ class TranslationTask(FairseqTask):
 
                 metrics.log_derived("bleu", compute_bleu)
 
-    def build_dataset_for_inference(self, src_tokens, src_lengths):
-        return LanguagePairDataset(src_tokens, src_lengths, self.source_dictionary)
-
     def max_positions(self):
         """Return the max sentence length allowed by the task."""
         return (self.cfg.max_source_positions, self.cfg.max_target_positions)

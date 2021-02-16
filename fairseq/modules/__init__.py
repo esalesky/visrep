@@ -24,8 +24,6 @@ from .layer_norm import Fp32LayerNorm, LayerNorm
 from .learned_positional_embedding import LearnedPositionalEmbedding
 from .lightweight_convolution import LightweightConv, LightweightConv1dTBC
 from .linearized_convolution import LinearizedConvolution
-from .logsumexp_moe import LogSumExpMoE
-from .mean_pool_gating_network import MeanPoolGatingNetwork
 from .multihead_attention import MultiheadAttention
 from .positional_embedding import PositionalEmbedding
 from .same_pad import SamePad

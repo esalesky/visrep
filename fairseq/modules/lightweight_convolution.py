@@ -179,8 +179,6 @@ class LightweightConv1dTBC(nn.Module):
         self.reset_parameters()
         self.onnx_trace = False
 
-        self.onnx_trace = False
-
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.weight)
         if self.bias is not None:

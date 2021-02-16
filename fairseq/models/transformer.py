@@ -535,16 +535,6 @@ class TransformerEncoder(FairseqEncoder):
             return self.max_source_positions
         return min(self.max_source_positions, self.embed_positions.max_positions)
 
-    def buffered_future_mask(self, tensor):
-        dim = tensor.size(0)
-        if not hasattr(self, '_future_mask') or self._future_mask is None or self._future_mask.device != tensor.device:
-            self._future_mask = torch.triu(
-                utils.fill_with_neg_inf(tensor.new(dim, dim)), 1)
-            if self._future_mask.size(0) < dim:
-                self._future_mask = torch.triu(utils.fill_with_neg_inf(
-                    self._future_mask.resize_(dim, dim)), 1)
-        return self._future_mask[:dim, :dim]
-
     def upgrade_state_dict_named(self, state_dict, name):
         """Upgrade a (possibly old) state dict for new versions of fairseq."""
         if isinstance(self.embed_positions, SinusoidalPositionalEmbedding):

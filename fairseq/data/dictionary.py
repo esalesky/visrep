@@ -14,10 +14,6 @@ from fairseq.data import data_utils
 from fairseq.file_io import PathManager
 from fairseq.tokenizer import tokenize_line
 
-from fairseq.tokenizer import tokenize_line
-from fairseq.binarizer import safe_readline
-from fairseq.data import data_utils
-
 
 class Dictionary:
     """A mapping from symbols to consecutive integers"""

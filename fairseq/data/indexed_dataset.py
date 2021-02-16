@@ -121,7 +121,6 @@ def data_file_path(prefix_path):
 
 class IndexedDataset(FairseqDataset):
     """Loader for TorchNet IndexedDataset"""
-    _HDR_MAGIC = b'TNTIDX\x00\x00'
 
     _HDR_MAGIC = b"TNTIDX\x00\x00"
 
@@ -218,7 +217,7 @@ class IndexedCachedDataset(IndexedDataset):
         for i in indices:
             self.cache_index[i] = ptx
             size = self.data_offsets[i + 1] - self.data_offsets[i]
-            a = self.cache[ptx: ptx + size]
+            a = self.cache[ptx : ptx + size]
             self.data_file.seek(self.data_offsets[i] * self.element_size)
             self.data_file.readinto(a)
             ptx += size
@@ -233,7 +232,7 @@ class IndexedCachedDataset(IndexedDataset):
         tensor_size = self.sizes[self.dim_offsets[i] : self.dim_offsets[i + 1]]
         a = np.empty(tensor_size, dtype=self.dtype)
         ptx = self.cache_index[i]
-        np.copyto(a, self.cache[ptx: ptx + a.size])
+        np.copyto(a, self.cache[ptx : ptx + a.size])
         item = torch.from_numpy(a).long()
         if self.fix_lua_indexing:
             item -= 1  # subtract 1 for 0-based indexing

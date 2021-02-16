@@ -192,18 +192,8 @@ def parse_embedding(embed_path):
 def load_embedding(embed_dict, vocab, embedding):
     for idx in range(len(vocab)):
         token = vocab[idx]
-
-        # if idx < 100:
-        #    print(idx, token)
         if token in embed_dict:
             embedding.weight.data[idx] = embed_dict[token]
-
-            if idx < 25:
-                np.set_printoptions(precision=6, linewidth=120)
-                print('%s, %s, %s' %
-                      (idx, token, embed_dict[token].numpy()[0:10]))
-        else:
-            print('...NOT FOUND %s' % token)
     return embedding
 
 
