@@ -12,8 +12,10 @@ from libc.math cimport ceil
 cimport cython
 cimport numpy as np
 
+from libc.stdint cimport int32_t, int64_t
+
 DTYPE = np.int64
-ctypedef np.int64_t DTYPE_t
+ctypedef int64_t DTYPE_t
 
 
 @cython.boundscheck(False)
@@ -96,7 +98,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] _get_slice_indices_fast(np.ndarray[DTYPE_t, nd
     elif break_mode == 'eos':
         slice_indices = np.zeros((len(sizes), 2), dtype=DTYPE)
         cumsum = sizes.cumsum(axis=0)
-        slice_indices[1:, 0] = cumsum[:-1]
+        slice_indices[1:, 0] = cumsum[:cumsum.shape[0] - 1]
         slice_indices[:, 1] = cumsum
     else:
         raise ValueError('Invalid break_mode: ' + break_mode)
@@ -168,7 +170,7 @@ cdef class DatasetSearcher(object):
                 self.current_offset += to_consume
                 self.current_i += to_consume
             else:
-                assert remaining > 0
+                assert remaining >= 0
                 self.current_i += remaining
                 self.current_index += 1
                 self.current_offset = 0

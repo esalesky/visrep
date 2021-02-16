@@ -14,7 +14,25 @@ Model | Description | Download
 `transformer_lm.wmt19.de` | De Language Model | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/lm/wmt19.de.tar.gz)
 `transformer_lm.wmt19.ru` | Ru Language Model | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/lm/wmt19.ru.tar.gz)
 
+## Pre-trained single models before finetuning
+
+Model | Description | Download
+---|---|---
+`transformer.wmt19.en-de` | En->De Single, no finetuning | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-de.ffn8192.tar.gz)
+`transformer.wmt19.de-en` | De->En Single, no finetuning  | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/wmt19.de-en.ffn8192.tar.gz)
+`transformer.wmt19.en-ru` | En->Ru Single, no finetuning | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-ru.ffn8192.tar.gz)
+`transformer.wmt19.ru-en` | Ru->En Single, no finetuning  | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/wmt19.ru-en.ffn8192.tar.gz)
+
 ## Example usage (torch.hub)
+
+#### Requirements
+
+We require a few additional Python dependencies for preprocessing:
+```bash
+pip install fastBPE sacremoses
+```
+
+#### Translation
 
 ```python
 import torch
@@ -38,17 +56,21 @@ en2ru.translate("Machine learning is great!")  # 'Машинное обучен�
 ru2en = torch.hub.load('pytorch/fairseq', 'transformer.wmt19.ru-en', checkpoint_file='model1.pt:model2.pt:model3.pt:model4.pt',
                        tokenizer='moses', bpe='fastbpe')
 ru2en.translate("Машинное обучение - это здорово!")  # 'Machine learning is great!'
+```
 
+#### Language Modeling
+
+```python
 # Sample from the English LM
-en_lm = torch.hub.load('pytorch.fairseq', 'transformer_lm.wmt19.en', tokenizer='moses', bpe='fastbpe')
+en_lm = torch.hub.load('pytorch/fairseq', 'transformer_lm.wmt19.en', tokenizer='moses', bpe='fastbpe')
 en_lm.sample("Machine learning is")  # 'Machine learning is the future of computing, says Microsoft boss Satya Nadella ...'
 
 # Sample from the German LM
-de_lm = torch.hub.load('pytorch.fairseq', 'transformer_lm.wmt19.de', tokenizer='moses', bpe='fastbpe')
+de_lm = torch.hub.load('pytorch/fairseq', 'transformer_lm.wmt19.de', tokenizer='moses', bpe='fastbpe')
 de_lm.sample("Maschinelles lernen ist")  # 'Maschinelles lernen ist das A und O (neues-deutschland.de) Die Arbeitsbedingungen für Lehrerinnen und Lehrer sind seit Jahren verbesserungswürdig ...'
 
 # Sample from the Russian LM
-ru_lm = torch.hub.load('pytorch.fairseq', 'transformer_lm.wmt19.ru', tokenizer='moses', bpe='fastbpe')
+ru_lm = torch.hub.load('pytorch/fairseq', 'transformer_lm.wmt19.ru', tokenizer='moses', bpe='fastbpe')
 ru_lm.sample("машинное обучение это")  # 'машинное обучение это то, что мы называем "искусственным интеллектом".'
 ```
 

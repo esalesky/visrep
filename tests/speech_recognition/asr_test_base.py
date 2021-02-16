@@ -7,6 +7,7 @@ from inspect import currentframe, getframeinfo
 
 import numpy as np
 import torch
+from examples.speech_recognition.data.data_utils import lengths_to_encoder_padding_mask
 from fairseq.data import data_utils as fairseq_data_utils
 from fairseq.data.dictionary import Dictionary
 from fairseq.models import (
@@ -17,8 +18,7 @@ from fairseq.models import (
     FairseqEncoderModel,
     FairseqModel,
 )
-from fairseq.tasks.fairseq_task import FairseqTask
-from examples.speech_recognition.data.data_utils import lengths_to_encoder_padding_mask
+from fairseq.tasks.fairseq_task import LegacyFairseqTask
 
 
 DEFAULT_TEST_VOCAB_SIZE = 100
@@ -37,7 +37,7 @@ def get_dummy_dictionary(vocab_size=DEFAULT_TEST_VOCAB_SIZE):
     return dummy_dict
 
 
-class DummyTask(FairseqTask):
+class DummyTask(LegacyFairseqTask):
     def __init__(self, args):
         super().__init__(args)
         self.dictionary = get_dummy_dictionary()
@@ -77,13 +77,13 @@ def get_dummy_input(T=100, D=80, B=5, K=100):
     # this (B, T, D) layout is just a convention, you can override it by
     # write your own _prepare_forward_input function
     src_lengths = torch.from_numpy(
-        np.random.randint(low=1, high=T, size=B).astype(np.int64)
+        np.random.randint(low=1, high=T, size=B, dtype=np.int64)
     )
     src_lengths[0] = T  # make sure the maximum length matches
     prev_output_tokens = []
     for b in range(B):
         token_length = np.random.randint(low=1, high=src_lengths[b].item() + 1)
-        tokens = np.random.randint(low=0, high=K, size=token_length)
+        tokens = np.random.randint(low=0, high=K, size=token_length, dtype=np.int64)
         prev_output_tokens.append(torch.from_numpy(tokens))
 
     prev_output_tokens = fairseq_data_utils.collate_tokens(
@@ -172,9 +172,8 @@ def check_encoder_output(encoder_output, batch_size=None):
                 "encoder_padding_mask must be a torch.Tensor" + _current_postion_info()
             )
             return False, msg
-        if (
-            mask.dtype != torch.uint8
-            and (not hasattr(torch, 'bool') or mask.dtype != torch.bool)
+        if mask.dtype != torch.uint8 and (
+            not hasattr(torch, "bool") or mask.dtype != torch.bool
         ):
             msg = (
                 "encoder_padding_mask must have dtype of uint8"
@@ -273,6 +272,7 @@ class TestFairseqEncoderDecoderModelBase(TestBaseFairseqModelBase):
         model_cls.add_args(parser)
 
         args = parser.parse_args([])
+
         if extra_args_setters is not None:
             for args_setter in extra_args_setters:
                 args_setter(args)
@@ -485,6 +485,11 @@ class DummyEncoderModel(FairseqEncoderModel):
             torch.div(net_output["encoder_out"], 1 - net_output["encoder_out"])
         )
 
+    def get_normalized_probs(self, net_output, log_probs, sample=None):
+        lprobs = super().get_normalized_probs(net_output, log_probs, sample=sample)
+        lprobs.batch_first = True
+        return lprobs
+
 
 class DummyEncoder(FairseqEncoder):
     def __init__(self):
@@ -511,14 +516,14 @@ class CrossEntropyCriterionTestBase(unittest.TestCase):
     def setUp(self):
         args = self.setUpArgs()
         self.model = DummyEncoderModel(encoder=DummyEncoder())
-        self.criterion = self.criterion_cls(args=args, task=DummyTask(args))
+        self.criterion = self.criterion_cls.build_criterion(args, task=DummyTask(args))
 
     def get_src_tokens(self, correct_prediction, aggregate):
         """
-            correct_prediction: True if the net_output (src_tokens) should
-            predict the correct target
-            aggregate: True if the criterion expects net_output (src_tokens)
-            aggregated across time axis
+        correct_prediction: True if the net_output (src_tokens) should
+        predict the correct target
+        aggregate: True if the criterion expects net_output (src_tokens)
+        aggregated across time axis
         """
         predicted_idx = 0 if correct_prediction else 1
         if aggregate:

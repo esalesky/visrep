@@ -11,7 +11,7 @@ This model uses a `Byte Pair Encoding (BPE)
 vocabulary <https://arxiv.org/abs/1508.07909>`__, so we'll have to apply
 the encoding to the source text before it can be translated. This can be
 done with the
-`apply\_bpe.py <https://github.com/rsennrich/subword-nmt/blob/master/apply_bpe.py>`__
+`apply\_bpe.py <https://github.com/rsennrich/subword-nmt/blob/master/subword_nmt/apply_bpe.py>`__
 script using the ``wmt14.en-fr.fconv-cuda/bpecodes`` file. ``@@`` is
 used as a continuation marker and the original text can be easily
 recovered with e.g. ``sed s/@@ //g`` or by passing the ``--remove-bpe``
@@ -46,6 +46,9 @@ with *O* is a copy of the original source sentence; *H* is the
 hypothesis along with an average log-likelihood; and *P* is the
 positional score per token position, including the
 end-of-sentence marker which is omitted from the text.
+
+Other types of output lines you might see are *D*, the detokenized hypothesis,
+*T*, the reference target, *A*, alignment info, *E* the history of generation steps.
 
 See the `README <https://github.com/pytorch/fairseq#pre-trained-models>`__ for a
 full list of pre-trained models available.
@@ -87,7 +90,7 @@ well for the IWSLT 2014 dataset:
 
     > mkdir -p checkpoints/fconv
     > CUDA_VISIBLE_DEVICES=0 fairseq-train data-bin/iwslt14.tokenized.de-en \
-        --lr 0.25 --clip-norm 0.1 --dropout 0.2 --max-tokens 4000 \
+        --optimizer nag --lr 0.25 --clip-norm 0.1 --dropout 0.2 --max-tokens 4000 \
         --arch fconv_iwslt_de_en --save-dir checkpoints/fconv
 
 By default, :ref:`fairseq-train` will use all available GPUs on your machine. Use the
@@ -158,14 +161,6 @@ Fairseq supports FP16 training with the ``--fp16`` flag:
 
     > fairseq-train --fp16 (...)
 
-Lazily loading large training datasets
---------------------------------------
-
-By default fairseq loads the entire training set into system memory. For large
-datasets, the ``--lazy-load`` option can be used to instead load batches on-demand.
-For optimal performance, use the ``--num-workers`` option to control the number
-of background processes that will load batches.
-
 Distributed training
 --------------------
 
@@ -175,18 +170,47 @@ The easiest way to launch jobs is with the `torch.distributed.launch
 
 For example, to train a large English-German Transformer model on 2 nodes each
 with 8 GPUs (in total 16 GPUs), run the following command on each node,
-replacing ``node_rank=0`` with ``node_rank=1`` on the second node:
+replacing ``node_rank=0`` with ``node_rank=1`` on the second node and making
+sure to update ``--master_addr`` to the IP address of the first node:
 
 .. code-block:: console
 
     > python -m torch.distributed.launch --nproc_per_node=8 \
         --nnodes=2 --node_rank=0 --master_addr="192.168.1.1" \
-        --master_port=1234 \
+        --master_port=12345 \
         $(which fairseq-train) data-bin/wmt16_en_de_bpe32k \
         --arch transformer_vaswani_wmt_en_de_big --share-all-embeddings \
         --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \
         --lr-scheduler inverse_sqrt --warmup-init-lr 1e-07 --warmup-updates 4000 \
-        --lr 0.0005 --min-lr 1e-09 \
+        --lr 0.0005 \
         --dropout 0.3 --weight-decay 0.0 --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \
         --max-tokens 3584 \
-        --fp16  --distributed-no-spawn 
+        --max-epoch 70 \
+        --fp16
+
+On SLURM clusters, fairseq will automatically detect the number of nodes and
+GPUs, but a port number must be provided:
+
+.. code-block:: console
+
+    > salloc --gpus=16 --nodes 2 (...)
+    > srun fairseq-train --distributed-port 12345 (...).
+
+Sharding very large datasets
+----------------------------
+
+It can be challenging to train over very large datasets, particularly if your
+machine does not have much system RAM. Most tasks in fairseq support training
+over "sharded" datasets, in which the original dataset has been preprocessed
+into non-overlapping chunks (or "shards").
+
+For example, instead of preprocessing all your data into a single "data-bin"
+directory, you can split the data and create "data-bin1", "data-bin2", etc.
+Then you can adapt your training command like so:
+
+.. code-block:: console
+
+    > fairseq-train data-bin1:data-bin2:data-bin3 (...)
+
+Training will now iterate over each shard, one by one, with each shard
+corresponding to an "epoch", thus reducing system memory usage.

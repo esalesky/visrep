@@ -1,5 +1,6 @@
 # Pay Less Attention with Lightweight and Dynamic Convolutions (Wu et al., 2019)
-This page contains pointers to pre-trained models as well as instructions on how to train new models for [our paper](https://arxiv.org/abs/1901.10430)
+
+This page contains pointers to pre-trained models as well as instructions on how to train new models for [our paper](https://arxiv.org/abs/1901.10430).
 
 ## Citation:
 ```bibtex
@@ -17,20 +18,18 @@ This page contains pointers to pre-trained models as well as instructions on how
 ### Pre-trained models
 For some datasets we release models without GLUs which are faster at inference.
 
-Description | Dataset | Model | Test set(s)
+Model | Description | Dataset | Download
 ---|---|---|---
-LightConv (without GLUs) | [IWSLT14 German-English](https://wit3.fbk.eu/archive/2014-01/texts/de/en/de-en.tgz) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/iwslt14.de-en.lightconv.tar.bz2) | IWSLT14 test: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/iwslt14.de-en.test.tar.bz2)
-DynamicConv (without GLUs) | [IWSLT14 German-English](https://wit3.fbk.eu/archive/2014-01/texts/de/en/de-en.tgz) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/iwslt14.de-en.dynamicconv.tar.bz2) | IWSLT14 test: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/iwslt14.de-en.test.tar.bz2)
-LightConv (without GLUs) | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.lightconv.tar.bz2) | newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
-DynamicConv (without GLUs) | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.dynamicconv.tar.bz2) | newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
-LightConv | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.lightconv-glu.tar.bz2) | newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
-DynamicConv | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.dynamicconv-glu.tar.bz2) | newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
-LightConv | [WMT14 English-French](http://statmt.org/wmt14/translation-task.html#Download) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt14.en-fr.joined-dict.lightconv-glu.tar.bz2) | newstest2014: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt14.en-fr.joined-dict.newstest2014.tar.bz2)
-DynamicConv | [WMT14 English-French](http://statmt.org/wmt14/translation-task.html#Download) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt14.en-fr.joined-dict.dynamicconv-glu.tar.bz2) | newstest2014: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt14.en-fr.joined-dict.newstest2014.tar.bz2)
-LightConv | [WMT17 Chinese-English](http://statmt.org/wmt17/translation-task.html#Download) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt17.zh-en.lightconv-glu.tar.bz2) | newstest2017: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt17.zh-en.newstest2017.tar.bz2)
-DynamicConv | [WMT17 Chinese-English](http://statmt.org/wmt17/translation-task.html#Download) | [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt17.zh-en.dynamicconv-glu.tar.bz2) | newstest2017: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt17.zh-en.newstest2017.tar.bz2)
-LightConv (CUDA module) | [WMT17 English-German](http://statmt.org/wmt17/translation-task.html#Download) | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt17.en-de.joined-dict.transformer.light-conv-cuda-glu.tar.gz) | newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
-DynamicConv (CUDA module) | [WMT17 English-German](http://statmt.org/wmt17/translation-task.html#Download) | [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt17.en-de.joined-dict.transformer.dynamic-conv-cuda-glu.tar.gz) | newstest2014: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
+`lightconv.no_glu.iwslt14.de-en` | LightConv (without GLUs) | [IWSLT14 German-English](https://wit3.fbk.eu/archive/2014-01/texts/de/en/de-en.tgz) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/iwslt14.de-en.lightconv.tar.gz) <br> IWSLT14 test: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/iwslt14.de-en.test.tar.bz2)
+`dynamicconv.no_glu.iwslt14.de-en` | DynamicConv (without GLUs) | [IWSLT14 German-English](https://wit3.fbk.eu/archive/2014-01/texts/de/en/de-en.tgz) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/iwslt14.de-en.dynamicconv.tar.gz) <br> IWSLT14 test: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/iwslt14.de-en.test.tar.bz2)
+`lightconv.no_glu.wmt16.en-de` | LightConv (without GLUs) | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.lightconv.tar.gz) <br> newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
+`dynamicconv.no_glu.wmt16.en-de` | DynamicConv (without GLUs) | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.dynamicconv.tar.gz) <br> newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
+`lightconv.glu.wmt16.en-de` | LightConv | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.lightconv-glu.tar.gz) <br> newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
+`dynamicconv.glu.wmt16.en-de` | DynamicConv | [WMT16 English-German](https://drive.google.com/uc?export=download&id=0B_bZck-ksdkpM25jRUN2X2UxMm8) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt16.en-de.joined-dict.dynamicconv-glu.tar.gz) <br> newstest2014 (shared vocab): <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt16.en-de.joined-dict.newstest2014.tar.bz2)
+`lightconv.glu.wmt14.en-fr` | LightConv | [WMT14 English-French](http://statmt.org/wmt14/translation-task.html#Download) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt14.en-fr.joined-dict.lightconv-glu.tar.gz) <br> newstest2014: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt14.en-fr.joined-dict.newstest2014.tar.bz2)
+`dynamicconv.glu.wmt14.en-fr` | DynamicConv | [WMT14 English-French](http://statmt.org/wmt14/translation-task.html#Download) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt14.en-fr.joined-dict.dynamicconv-glu.tar.gz) <br> newstest2014: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt14.en-fr.joined-dict.newstest2014.tar.bz2)
+`lightconv.glu.wmt17.zh-en` | LightConv | [WMT17 Chinese-English](http://statmt.org/wmt17/translation-task.html#Download) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt17.zh-en.lightconv-glu.tar.gz) <br> newstest2017: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt17.zh-en.newstest2017.tar.bz2)
+`dynamicconv.glu.wmt17.zh-en` | DynamicConv | [WMT17 Chinese-English](http://statmt.org/wmt17/translation-task.html#Download) | model: <br> [download (.tar.gz)](https://dl.fbaipublicfiles.com/fairseq/models/dynamicconv/wmt17.zh-en.dynamicconv-glu.tar.gz) <br> newstest2017: <br> [download (.tar.bz2)](https://dl.fbaipublicfiles.com/fairseq/data/wmt17.zh-en.newstest2017.tar.bz2)
 
 ### Memory-Efficient CUDA Kernels
 
@@ -50,6 +49,45 @@ python cuda_function_gen.py
 python setup.py install
 ```
 
+### Example usage (torch.hub)
+
+We require a few additional Python dependencies for preprocessing:
+```bash
+pip install sacremoses subword_nmt
+```
+
+Interactive translation via PyTorch Hub:
+```python
+import torch
+
+# List available models
+torch.hub.list('pytorch/fairseq')  # [..., 'lightconv.glu.wmt17.zh-en', ... ]
+
+# Load a transformer trained on WMT'16 En-De
+zh2en = torch.hub.load('pytorch/fairseq', 'lightconv.glu.wmt17.zh-en', tokenizer='moses', bpe='subword_nmt')
+
+# The underlying model is available under the *models* attribute
+assert isinstance(zh2en.models[0], fairseq.models.lightconv.LightConvModel)
+
+# Translate a sentence
+zh2en.translate('你好 世界')
+# 'Hello World'
+```
+
+Loading custom models:
+```python
+from fairseq.models.lightconv import LightConvModel
+en2fr = LightConvModel.from_pretrained(
+  '/path/to/checkpoints',
+  checkpoint_file='checkpoint_best.pt',
+  data_name_or_path='data-bin/wmt14_en_fr',
+  bpe='subword_nmt',
+  bpe_codes='data-bin/wmt14_en_fr/en.code'
+)
+en2fr.translate('Hello world!')
+# 'Bonjour le monde'
+```
+
 ### Preprocessing the training datasets
 
 Please follow the instructions in [`examples/translation/README.md`](../translation/README.md) to preprocess the data.
@@ -59,17 +97,9 @@ To use the model without GLU, please set `--encoder-glu 0 --decoder-glu 0`.
 For LightConv, please use `--encoder-conv-type lightweight --decoder-conv-type lightweight`, otherwise the default is DynamicConv.
 For best BLEU results, lenpen may need to be manually tuned.
 
-To use the CUDA kernels, first install the PyTorch modules using the commands below
-```sh
-# to install lightconv
-python fairseq/modules/lightconv_layer/cuda_function_gen.py
-python fairseq/modules/lightconv_layer/setup.py install
-
-# to install dynamicconv
-python fairseq/modules/dynamicconv_layer/cuda_function_gen.py
-python fairseq/modules/dynamicconv_layer/setup.py install
-```
-Once the CUDA modules are installed, they will automatically be used instead of the PyTorch modules.
+To use the CUDA kernels, first install the PyTorch modules using the commands
+above. Once the CUDA modules are installed, they will automatically be used
+instead of the PyTorch modules.
 
 ### IWSLT14 De-En
 Training and evaluating DynamicConv (without GLU) on a GPU:
@@ -80,10 +110,10 @@ mkdir -p $SAVE
 CUDA_VISIBLE_DEVICES=0 $(which fairseq-train) data-bin/iwslt14.tokenized.de-en \
     --clip-norm 0 --optimizer adam --lr 0.0005 \
     --source-lang de --target-lang en --max-tokens 4000 --no-progress-bar \
-    --log-interval 100 --min-lr '1e-09' --weight-decay 0.0001 \
+    --log-interval 100 --stop-min-lr '1e-09' --weight-decay 0.0001 \
     --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \
     --lr-scheduler inverse_sqrt \
-    --ddp-backend=no_c10d \
+    --ddp-backend=legacy_ddp \
     --max-update 50000 --warmup-updates 4000 --warmup-init-lr '1e-07' \
     --adam-betas '(0.9, 0.98)' --keep-last-epochs 10 \
     -a lightconv_iwslt_de_en --save-dir $SAVE \
@@ -107,10 +137,10 @@ python -m torch.distributed.launch --nproc_per_node 8 $(which fairseq-train) \
     --max-update 30000 --share-all-embeddings --optimizer adam \
     --adam-betas '(0.9, 0.98)' --clip-norm 0.0 --weight-decay 0.0 \
     --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \
-    --min-lr 1e-09 --update-freq 16 --attention-dropout 0.1 --keep-last-epochs 10 \
-    --ddp-backend=no_c10d --max-tokens 3584 \
+    --stop-min-lr 1e-09 --update-freq 16 --attention-dropout 0.1 --keep-last-epochs 10 \
+    --ddp-backend=legacy_ddp --max-tokens 3584 \
     --lr-scheduler cosine --warmup-init-lr 1e-7 --warmup-updates 10000 \
-    --lr-shrink 1 --max-lr 0.001 --lr 1e-7 --min-lr 1e-9 --warmup-init-lr 1e-07 \
+    --lr-shrink 1 --lr 0.001 --min-lr 1e-7 --warmup-init-lr 1e-07 \
     --t-mult 1 --lr-period-updates 20000 \
     --arch lightconv_wmt_en_de_big --save-dir $SAVE \
     --dropout 0.3 --attention-dropout 0.1 --weight-dropout 0.1 \
@@ -132,10 +162,10 @@ python -m torch.distributed.launch --nproc_per_node 8 $(which fairseq-train) \
     --max-update 30000 --share-all-embeddings --optimizer adam \
     --adam-betas '(0.9, 0.98)' --clip-norm 0.0 --weight-decay 0.0 \
     --criterion label_smoothed_cross_entropy --label-smoothing 0.1 \
-    --min-lr 1e-09 --update-freq 16 --attention-dropout 0.1 --keep-last-epochs 10 \
-    --ddp-backend=no_c10d --max-tokens 3584 \
+    --stop-min-lr 1e-09 --update-freq 16 --attention-dropout 0.1 --keep-last-epochs 10 \
+    --ddp-backend=legacy_ddp --max-tokens 3584 \
     --lr-scheduler cosine --warmup-init-lr 1e-7 --warmup-updates 10000 \
-    --lr-shrink 1 --max-lr 0.001 --lr 1e-7 --min-lr 1e-9 --warmup-init-lr 1e-07 \
+    --lr-shrink 1 --lr 0.001 --min-lr 1e-7 --warmup-init-lr 1e-07 \
     --t-mult 1 --lr-period-updates 70000 \
     --arch lightconv_wmt_en_fr_big --save-dir $SAVE \
     --dropout 0.1 --attention-dropout 0.1 --weight-dropout 0.1 \

@@ -15,16 +15,16 @@ The model is trained with online responsibility assignment and shared parameteri
 
 The following command will train a `hMoElp` model with `3` experts:
 ```bash
-fairseq-train --ddp-backend='no_c10d' \
+fairseq-train --ddp-backend='legacy_ddp' \
     data-bin/wmt17_en_de \
     --max-update 100000 \
-    --task translation_moe \
+    --task translation_moe --user-dir examples/translation_moe/translation_moe_src \
     --method hMoElp --mean-pool-gating-network \
     --num-experts 3 \
     --arch transformer_wmt_en_de --share-all-embeddings \
     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \
     --lr-scheduler inverse_sqrt --warmup-init-lr 1e-07 --warmup-updates 4000 \
-    --lr 0.0007 --min-lr 1e-09 \
+    --lr 0.0007 \
     --dropout 0.1 --weight-decay 0.0 --criterion cross_entropy \
     --max-tokens 3584
 ```
@@ -37,7 +37,7 @@ For example, to generate from expert 0:
 fairseq-generate data-bin/wmt17_en_de \
     --path checkpoints/checkpoint_best.pt \
     --beam 1 --remove-bpe \
-    --task translation_moe \
+    --task translation_moe --user-dir examples/translation_moe/translation_moe_src \
     --method hMoElp --mean-pool-gating-network \
     --num-experts 3 \
     --gen-expert 0
@@ -52,7 +52,6 @@ wget dl.fbaipublicfiles.com/fairseq/data/wmt14-en-de.extra_refs.tok
 
 Next apply BPE on the fly and run generation for each expert:
 ```bash
-BPEROOT=examples/translation/subword-nmt/
 BPE_CODE=examples/translation/wmt17_en_de/code
 for EXPERT in $(seq 0 2); do \
     cat wmt14-en-de.extra_refs.tok \
@@ -62,7 +61,7 @@ for EXPERT in $(seq 0 2); do \
         --beam 1 \
         --bpe subword_nmt --bpe-codes $BPE_CODE \
         --buffer-size 500 --max-tokens 6000 \
-        --task translation_moe \
+        --task translation_moe --user-dir examples/translation_moe/translation_moe_src \
         --method hMoElp --mean-pool-gating-network \
         --num-experts 3 \
         --gen-expert $EXPERT ; \

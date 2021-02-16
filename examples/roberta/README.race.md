@@ -19,7 +19,7 @@ UPDATE_FREQ=8         # Accumulate gradients to simulate training on 8 GPUs.
 DATA_DIR=/path/to/race-output-dir
 ROBERTA_PATH=/path/to/roberta/model.pt
 
-CUDA_VISIBLE_DEVICES=0,1 fairseq-train $DATA_DIR --ddp-backend=no_c10d \
+CUDA_VISIBLE_DEVICES=0,1 fairseq-train $DATA_DIR --ddp-backend=legacy_ddp \
     --restore-file $ROBERTA_PATH \
     --reset-optimizer --reset-dataloader --reset-meters \
     --best-checkpoint-metric accuracy --maximize-best-checkpoint-metric \
@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=0,1 fairseq-train $DATA_DIR --ddp-backend=no_c10d \
     --init-token 0 --separator-token 2 \
     --max-option-length 128 \
     --max-positions 512 \
-    --truncate-sequence \
+    --shorten-method "truncate" \
     --arch roberta_large \
     --dropout 0.1 --attention-dropout 0.1 --weight-decay 0.01 \
     --criterion sentence_ranking \
@@ -36,7 +36,7 @@ CUDA_VISIBLE_DEVICES=0,1 fairseq-train $DATA_DIR --ddp-backend=no_c10d \
     --clip-norm 0.0 \
     --lr-scheduler fixed --lr $LR \
     --fp16 --fp16-init-scale 4 --threshold-loss-scale 1 --fp16-scale-window 128 \
-    --max-sentences $MAX_SENTENCES \
+    --batch-size $MAX_SENTENCES \
     --required-batch-size-multiple 1 \
     --update-freq $UPDATE_FREQ \
     --max-epoch $MAX_EPOCH
@@ -46,6 +46,23 @@ CUDA_VISIBLE_DEVICES=0,1 fairseq-train $DATA_DIR --ddp-backend=no_c10d \
 
 a) As contexts in RACE are relatively long, we are using smaller batch size per GPU while increasing update-freq to achieve larger effective batch size.
 
-b) Above cmd-args and hyperparams are tested on one Nvidia `V100` GPU with `32gb` of memory for each task. Depending on the GPU memory resources available to you, you can use increase `--update-freq` and reduce `--max-sentences`.
+b) Above cmd-args and hyperparams are tested on one Nvidia `V100` GPU with `32gb` of memory for each task. Depending on the GPU memory resources available to you, you can use increase `--update-freq` and reduce `--batch-size`.
 
 c) The setting in above command is based on our hyperparam search within a fixed search space (for careful comparison across models). You might be able to find better metrics with wider hyperparam search.  
+
+### 4) Evaluation:
+
+```
+DATA_DIR=/path/to/race-output-dir       # data directory used during training
+MODEL_PATH=/path/to/checkpoint_best.pt  # path to the finetuned model checkpoint
+PREDS_OUT=preds.tsv                     # output file path to save prediction
+TEST_SPLIT=test                         # can be test (Middle) or test1 (High)
+fairseq-validate \
+    $DATA_DIR \
+    --valid-subset $TEST_SPLIT \
+    --path $MODEL_PATH \
+    --batch-size 1 \
+    --task sentence_ranking \
+    --criterion sentence_ranking \
+    --save-predictions $PREDS_OUT
+```

@@ -212,7 +212,7 @@ following contents::
 
 
   @register_task('simple_classification')
-  class SimpleClassificationTask(FairseqTask):
+  class SimpleClassificationTask(LegacyFairseqTask):
 
       @staticmethod
       def add_args(parser):
@@ -282,8 +282,6 @@ following contents::
               tgt_sizes=torch.ones(len(labels)),  # targets have length 1
               tgt_dict=self.label_vocab,
               left_pad_source=False,
-              max_source_positions=self.args.max_positions,
-              max_target_positions=1,
               # Since our target is a single class label, there's no need for
               # teacher forcing. If we set this to ``True`` then our Model's
               # ``forward()`` method would receive an additional argument called
@@ -315,7 +313,8 @@ following contents::
       # def get_batch_iterator(
       #     self, dataset, max_tokens=None, max_sentences=None, max_positions=None,
       #     ignore_invalid_inputs=False, required_batch_size_multiple=1,
-      #     seed=1, num_shards=1, shard_id=0,
+      #     seed=1, num_shards=1, shard_id=0, num_workers=0, epoch=1,
+      #     data_buffer_size=0, disable_iterator_cache=False,
       # ):
       #     (...)
 
