@@ -82,7 +82,7 @@ def parse_arguments(argv):
     parser.add_argument("--patience", type=int,
                         default=5, help="patience before lr reduce")
 
-    parser.add_argument("--encoder-dim", type=int,
+    parser.add_argument("--encoder-embed-dim", type=int,
                         default=512, help="encoder dimension")
     parser.add_argument("--image-embed-dim", type=int,
                         default=512, help="image embedding dimension")
@@ -395,10 +395,10 @@ def train(args, model, train_loader, optimizer, device, classification_loss,
 
     max_target_len = max(target_lengths.cpu().numpy())
 
-    if batch_iter % 10 == 0 and batch_iter > 0:
+    if batch_iter % 100 == 0 and batch_iter > 0:
         data_len = len(train_loader)
         LOG.info("Epoch: %d (%d/%d), Input: %s, CNN %s, Emb %s, Logits %s, Acc_1 %.2f, Acc_5 %.2f, Loss: %.4f, LR: %.6f, ex/sec: %.1f, sec/batch: %.2f",
-                 epoch, batch_iter + 1 % data_len, data_len,  # epoch
+                 epoch, batch_iter % data_len, data_len,  # epoch
                  net_meta['input_shape'],
                  net_meta['encoder_cnn_shape'],
                  list(net_meta['embeddings'].shape),

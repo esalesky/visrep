@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+#$ -S /bin/bash -q gpu.q@@2080 -cwd
+#$ -l h_rt=48:00:00,gpu=1
+#$ -j y -o logs/
+
+module load cuda10.1/toolkit/10.1.105
+module load cudnn/7.6.1_cuda10.1
+module load gcc/7.2.0
+
+conda deactivate
+conda deactivate
+conda activate ocr
+
+if [[ -z $1 ]]; then
+   echo "Usage: qsub launch.qsub /path/to/script"
+   exit 1
+fi
+
+bash $1 "$@"
+

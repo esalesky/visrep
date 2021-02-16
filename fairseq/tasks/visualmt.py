@@ -288,8 +288,9 @@ class VisualMTTask(FairseqTask):
                             help='Image tgt loss scale')
         parser.add_argument("--image-embed-type", default='concat', type=str,
                             help='Image embed type [concat, ignore]')
-        parser.add_argument('--image-embed-dim', default=512, type=int,
-                            help='Image embed dim')
+        # Deprecated: use --encoder-dim instead
+        # parser.add_argument('--image-embed-dim', default=512, type=int,
+        #                     help='Image embed dim')
         parser.add_argument("--image-embed-path", type=str,
                             help='Load pretrained image embeddings')
         parser.add_argument("--image-verbose", action='store_true',

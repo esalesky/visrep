@@ -91,7 +91,7 @@ class AlignOcrEncoder(torch.nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d((8, 1))
 
         self.bridge_layer = nn.Sequential(
-            nn.Linear(cnn_feat_size, self.args.image_embed_dim),
+            nn.Linear(cnn_feat_size, self.args.encoder_embed_dim),
             nn.ReLU(inplace=True)
         )
 
@@ -143,7 +143,7 @@ class AlignOcrDecoder(torch.nn.Module):
         self.vocab = vocab
 
         self.classifier = nn.Sequential(
-            nn.Linear(self.args.image_embed_dim, len(self.vocab))
+            nn.Linear(self.args.encoder_embed_dim, len(self.vocab))
         )
 
     def forward(self, encoder_output):
