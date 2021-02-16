@@ -96,7 +96,6 @@ class TestLoadCheckpoint(unittest.TestCase):
         logging.disable(logging.NOTSET)
 
     def test_load_partial_checkpoint(self):
-
         with contextlib.redirect_stdout(StringIO()):
             trainer, epoch_itr = get_trainer_and_epoch_itr(2, 150, 200, 50)
             trainer.get_train_iterator = MagicMock(return_value=epoch_itr)

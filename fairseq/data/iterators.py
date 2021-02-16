@@ -41,7 +41,6 @@ class CountingIterator(object):
     def __init__(self, iterable, start=None, total=None):
         self.iterable = iterable
         self.itr = iter(self)
-        self.len = start + len(iterable)
 
         if start is None:
             self.n = getattr(iterable, "n", 0)

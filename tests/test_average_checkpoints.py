@@ -8,28 +8,11 @@ import os
 import shutil
 import tempfile
 import unittest
-import shutil
 
 import numpy as np
 import torch
 from scripts.average_checkpoints import average_checkpoints
 from torch import nn
-
-
-class ModelWithSharedParameter(nn.Module):
-    def __init__(self):
-        super(ModelWithSharedParameter, self).__init__()
-        self.embedding = nn.Embedding(1000, 200)
-        self.FC1 = nn.Linear(200, 200)
-        self.FC2 = nn.Linear(200, 200)
-        # tie weight in FC2 to FC1
-        self.FC2.weight = nn.Parameter(self.FC1.weight)
-        self.FC2.bias = nn.Parameter(self.FC1.bias)
-
-        self.relu = nn.ReLU()
-
-    def forward(self, input):
-        return self.FC2(self.ReLU(self.FC1(input))) + self.FC1(input)
 
 
 class ModelWithSharedParameter(nn.Module):
@@ -142,60 +125,6 @@ class TestAverageCheckpoints(unittest.TestCase):
             torch.equal(
                 new_model["model"]["FC2.weight"],
                 (m1.FC2.weight + m2.FC2.weight + m3.FC2.weight) / 3.0,
-            )
-        )
-        shutil.rmtree(tmpdir)
-
-    def test_average_checkpoints_with_shared_parameters(self):
-
-        def _construct_model_with_shared_parameters(path, value):
-            m = ModelWithSharedParameter()
-            nn.init.constant_(m.FC1.weight, value)
-            torch.save(
-                {'model': m.state_dict()},
-                path
-            )
-            return m
-
-        tmpdir = tempfile.mkdtemp()
-        paths = []
-        path = os.path.join(tmpdir, "m1.pt")
-        m1 = _construct_model_with_shared_parameters(path, 1.0)
-        paths.append(path)
-
-        path = os.path.join(tmpdir, "m2.pt")
-        m2 = _construct_model_with_shared_parameters(path, 2.0)
-        paths.append(path)
-
-        path = os.path.join(tmpdir, "m3.pt")
-        m3 = _construct_model_with_shared_parameters(path, 3.0)
-        paths.append(path)
-
-        new_model = average_checkpoints(paths)
-        self.assertTrue(
-            torch.equal(
-                new_model['model']['embedding.weight'],
-                (m1.embedding.weight +
-                 m2.embedding.weight +
-                 m3.embedding.weight) / 3.0
-            )
-        )
-
-        self.assertTrue(
-            torch.equal(
-                new_model['model']['FC1.weight'],
-                (m1.FC1.weight +
-                 m2.FC1.weight +
-                 m3.FC1.weight) / 3.0
-            )
-        )
-
-        self.assertTrue(
-            torch.equal(
-                new_model['model']['FC2.weight'],
-                (m1.FC2.weight +
-                 m2.FC2.weight +
-                 m3.FC2.weight) / 3.0
             )
         )
         shutil.rmtree(tmpdir)

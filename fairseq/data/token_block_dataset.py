@@ -30,27 +30,6 @@ class TokenBlockDataset(FairseqDataset):
             'complete_doc' break mode). Typically 1 if the sentences have eos
             and 0 otherwise.
     """
-    def __init__(
-        self,
-        dataset,
-        sizes,
-        block_size,
-        pad,
-        eos,
-        break_mode=None,
-        include_targets=False,
-        document_sep_len=1,
-    ):
-        try:
-            from fairseq.data.token_block_utils_fast import (
-                _get_slice_indices_fast,
-                _get_block_to_dataset_index_fast,
-            )
-        except ImportError:
-            raise ImportError(
-                'Please build Cython components with: `pip install --editable .` '
-                'or `python setup.py build_ext --inplace`'
-            )
 
     def __init__(
         self,

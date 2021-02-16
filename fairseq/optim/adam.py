@@ -171,8 +171,6 @@ class Adam(torch.optim.Optimizer):
                 if p.data.dtype in {torch.float16, torch.bfloat16}:
                     p_data_fp32 = p_data_fp32.float()
 
-                p_data_fp32 = p.data.float()
-
                 state = self.state[p]
 
                 # State initialization

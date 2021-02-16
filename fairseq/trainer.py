@@ -261,9 +261,6 @@ class Trainer(object):
             else:
                 optim.shard_(self._optimizer, self.data_parallel_process_group)
 
-        if self.args.use_bmuf:
-            self._optimizer = optim.FairseqBMUF(self.args, self._optimizer)
-
         # We should initialize the learning rate scheduler immediately after
         # building the optimizer, so that the initial learning rate is set.
         self._lr_scheduler = lr_scheduler.build_lr_scheduler(
@@ -526,9 +523,6 @@ class Trainer(object):
     @metrics.aggregate("train")
     def train_step(self, samples, raise_oom=False):
         """Do forward, backward and parameter update."""
-        if self._dummy_batch is None:
-            self._dummy_batch = samples[0]
-
         self._set_seed()
         self.model.train()
         self.criterion.train()
@@ -550,21 +544,6 @@ class Trainer(object):
                 if (
                     self.data_parallel_world_size > 1
                     and hasattr(self.model, "no_sync")
-                    and i < len(samples) - 1
-                ):
-                    return self.model.no_sync()
-                else:
-                    return contextlib.ExitStack()  # dummy contextmanager
-
-            def maybe_no_sync():
-                """
-                Whenever *samples* contains more than one mini-batch, we
-                want to accumulate gradients locally and only call
-                all-reduce in the last backwards pass.
-                """
-                if (
-                    self.args.distributed_world_size > 1
-                    and hasattr(self.model, 'no_sync')
                     and i < len(samples) - 1
                 ):
                     return self.model.no_sync()

@@ -60,31 +60,6 @@ class SequenceScorer(object):
 
         orig_target = sample["target"]
 
-        def batch_for_softmax(dec_out, target):
-            # assumes decoder_out[0] is the only thing needed (may not be correct for future models!)
-            first, rest = dec_out[0], dec_out[1:]
-            bsz, tsz, dim = first.shape
-            if bsz * tsz < self.softmax_batch:
-                yield dec_out, target, True
-            else:
-                flat = first.contiguous().view(1, -1, dim)
-                flat_tgt = target.contiguous().view(flat.shape[:-1])
-                s = 0
-                while s < flat.size(1):
-                    e = s + self.softmax_batch
-                    yield (flat[:, s:e],) + rest, flat_tgt[:, s:e], False
-                    s = e
-
-        def gather_target_probs(probs, target):
-            probs = probs.gather(
-                dim=2,
-                index=target.unsqueeze(-1),
-            )
-            return probs
-
-
-        orig_target = sample['target']
-
         # compute scores for each model in the ensemble
         avg_probs = None
         avg_attn = None

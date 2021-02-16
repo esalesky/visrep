@@ -23,7 +23,6 @@ from fairseq.data import (
     PrependTokenDataset,
     StripTokenDataset,
     TokenBlockDataset,
-    TransformEosDataset,
     TruncatedDictionary,
     data_utils,
 )
@@ -346,19 +345,6 @@ class LanguageModelingTask(LegacyFairseqTask):
             num_workers=num_workers,
             data_buffer_size=data_buffer_size,
         ).next_epoch_itr(shuffle=False)
-
-    @property
-    def source_dictionary(self):
-        """Return the :class:`~fairseq.data.Dictionary` for the language
-        model."""
-        return self.dictionary
-
-    def inference_step(self, generator, models, sample, prefix_tokens=None):
-        with torch.no_grad():
-            if prefix_tokens is None and sample["net_input"]["src_tokens"].nelement():
-                # note: EOS has already been removed in build_dataset_for_inference
-                prefix_tokens = sample["net_input"]["src_tokens"]
-            return generator.generate(models, sample, prefix_tokens=prefix_tokens)
 
     @property
     def source_dictionary(self):

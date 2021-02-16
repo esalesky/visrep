@@ -102,14 +102,6 @@ bash scripts/sacrebleu.sh wmt14/full en de gen.out
 # BLEU+case.mixed+lang.en-de+numrefs.1+smooth.exp+test.wmt14/full+tok.13a+version.1.4.3 = 28.6 59.3/34.3/22.1/14.9 (BP = 1.000 ratio = 1.016 hyp_len = 63666 ref_len = 62688)
 ```
 
-##### 4. Evaluate
-```bash
-fairseq-generate \
-    data-bin/wmt16_en_de_bpe32k \
-    --path checkpoints/checkpoint_best.pt \
-    --beam 4 --lenpen 0.6 --remove-bpe
-```
-
 ## Citation
 
 ```bibtex
