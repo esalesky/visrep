@@ -471,8 +471,8 @@ class FairseqTask(object):
                   gradient
                 - logging outputs to display while training
         """
-        if self.args.image_verbose:
-            print('FAIRSEQ_TASK: model train start')
+        # if self.cfg.image_verbose:
+        #     print('FAIRSEQ_TASK: model train start')
         model.train()
         model.set_num_updates(update_num)
         with torch.autograd.profiler.record_function("forward"):
