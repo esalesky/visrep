@@ -12,27 +12,31 @@
 # Train aligned embeddings 
 # -----------------------
 
-module load cuda10.1/toolkit/10.1.105
-module load cudnn/7.6.1_cuda10.1
-module load gcc/7.2.0
+set -eu
+
+# module load cuda10.1/toolkit/10.1.105
+# module load cudnn/7.6.1_cuda10.1
+# module load gcc/7.2.0
 
 if [ ! -z $SGE_HGR_gpu ]; then
     export CUDA_VISIBLE_DEVICES=$SGE_HGR_gpu
     sleep 3
 fi
 
-source deactivate; source deactivate
-source activate ocr
+# conda deactivate; conda deactivate
+# conda activate fairseq
 
+# SRC_LANG \in de
 SRC_LANG=${1}
+# SEG \in char 2.5k 5k 10k 15k 20k
 SEG=${2}
 
 TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
-SRC_PATH=/exp/esalesky/mtocr19
-EXP_DIR=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}.7layers/
-TMPDIR=${EXP_DIR}/tmp
+FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
+EXP_DIR=./${SRC_LANG}-${SEG}.7layers/
+TMPDIR=/expscratch/mpost
 CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
 
 TRAIN_DATA=/exp/esalesky/mtocr19/${LANG_PAIR}/data/${SEG}/train.${LANG_PAIR}.${SRC_LANG}
@@ -81,15 +85,13 @@ echo "TRAIN_DATA - ${TRAIN_DATA}"
 echo "VALID_DATA - ${VALID_DATA}"
 echo "TRAIN_FONT - ${TRAIN_FONT}"
 echo "VALID_FONT - ${VALID_FONT}"
-echo "SRC_PATH - ${SRC_PATH}"
 
 hostname
 nvidia-smi
 
 mkdir -p $EXP_DIR
-cd $EXP_DIR
 
-python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/train.py \
+PYTHONPATH=$FAIRSEQ python -u $FAIRSEQ/visual/aligned/train.py \
 --output ${EXP_DIR} \
 --dict ${DICT} \
 --train ${TRAIN_DATA} \
@@ -99,8 +101,7 @@ python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/train.py \
 --image-height 16 \
 --image-width ${WIDTH} \
 --train-max-text-width 35 \
---encoder-dim 512 \
---image-embed-dim 512 \
+--encoder-embed-dim 512 \
 --font-size 8 \
 --batch-size 32 \
 --num-workers 8 \

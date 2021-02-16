@@ -12,18 +12,12 @@
 # Extract aligned embeddings 
 #
 
-module load cuda10.1/toolkit/10.1.105
-module load cudnn/7.6.1_cuda10.1
-module load gcc/7.2.0
+set -eu
 
 if [ ! -z $SGE_HGR_gpu ]; then
     export CUDA_VISIBLE_DEVICES=$SGE_HGR_gpu
     sleep 3
 fi
-
-source deactivate; source deactivate
-source activate ocr
-
 
 SRC_LANG=${1}
 SEG=${2}
@@ -31,9 +25,9 @@ SEG=${2}
 TGT_LANG=en
 LANG_PAIR=${SRC_LANG}-${TGT_LANG}
 
-SRC_PATH=/exp/esalesky/mtocr19
-EXP_DIR=/exp/esalesky/mtocr19/exps/ocr/${SRC_LANG}-${SEG}/
-TMPDIR=${EXP_DIR}/tmp
+FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
+EXP_DIR=./${SRC_LANG}-${SEG}.7layers/
+TMPDIR=/expscratch/mpost
 CKPT_PATH=${EXP_DIR}/checkpoints/model_ckpt_best.pth
 
 mkdir -p $EXP_DIR
@@ -72,7 +66,6 @@ case ${SEG} in
     ;;
 esac
 
-echo " ${DATA_TYPE} "
 echo "------"
 echo "PATH - ${PATH}"
 echo "LD_LIBRARY_PATH - ${LD_LIBRARY_PATH}"
@@ -82,26 +75,23 @@ echo "TMPDIR - ${TMPDIR}"
 echo "EXP_DIR - ${EXP_DIR}"
 echo "DICT - ${DICT}"
 echo "EXTRACT_FONT - ${EXTRACT_FONT}"
-echo "SRC_PATH - ${SRC_PATH}"
+echo "FAIRSEQ - ${FAIRSEQ}"
 echo "CKPT_PATH - ${CKPT_PATH}"
 
 hostname
 nvidia-smi
 
-cd $EXP_DIR
-
-python -u ${SRC_PATH}/fairseq-ocr/visual/aligned/decode.py \
+PYTHONPATH=$FAIRSEQ python -u $FAIRSEQ/visual/aligned/decode.py \
 --output ${EXP_DIR}/checkpoints \
 --dict ${DICT} \
 --test ${VOCAB} \
 --test-font ${EXTRACT_FONT} \
 --image-height 16 \
 --image-width ${WIDTH} \
+--encoder-embed-dim 512 \
 --font-size 8 \
---encoder-dim 512 \
---image-embed-dim 512 \
 --num-workers 0 \
---load-checkpoint-path ${CKPT_PATH} 
+--load-checkpoint-path ${CKPT_PATH}
 
 
 echo "-- COMPLETE --"
