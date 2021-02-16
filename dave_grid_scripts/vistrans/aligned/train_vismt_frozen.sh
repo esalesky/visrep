@@ -59,7 +59,7 @@ $DATA_DIR \
 --arch=transformer_iwslt_de_en \
 --save-dir $CKPT_DIR \
 --share-decoder-input-output-embed \
---encoder-embed-path=${EXP_DIR}checkpoints/norm_embeddings.txt \
+--encoder-embed-path=${EXP_DIR}/checkpoints/norm_embeddings.txt \
 --freeze-encoder-embed \
 --optimizer=adam \
 --adam-betas='(0.9, 0.98)' \
@@ -85,7 +85,7 @@ $DATA_DIR \
 --max-tokens-valid=4000 \
 --min-loss-scale=0.0001 \
 --optimizer='adam' \
---raw-text \
+--dataset-impl raw \
 --seed 42 \
 --share-decoder-input-output-embed \
 --warmup-updates=4000 \
