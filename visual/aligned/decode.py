@@ -57,8 +57,6 @@ def parse_arguments(argv):
 
     parser.add_argument("--encoder-embed-dim", type=int,
                         default=512, help="encoder dimension")
-    parser.add_argument("--image-embed-dim", type=int,
-                        default=512, help="image embedding dimension")
 
     parser.add_argument("--load-checkpoint-path", type=str,
                         default=None, help="Input checkpoint path")
@@ -215,13 +213,13 @@ def main(args):
     all_embeds = []
     all_labels = []
 
-    embed_file = open(args.output + "/embeddings.txt", "w")
-    norm_file  = open(args.output + "/norm_embeddings.txt", "w")
+    embed_file = open(os.path.join(args.output, "embeddings.txt"), "w")
+    norm_file  = open(os.path.join(args.output, "norm_embeddings.txt"), "w")
 
-    text_row = [len(test_dataset.vocab.symbols), args.image_embed_dim]
+    text_row = [len(test_dataset.vocab.symbols), args.encoder_embed_dim]
     print_row(text_row, embed_file)
     print_row(text_row, norm_file)
-    
+
     counter = 0
 
     # 4 special tokens dropped by test_loader, also add to embeddings
@@ -234,26 +232,26 @@ def main(args):
             # encoder_out.shape should be 1,1,512
             embed = encoder_out.squeeze().cpu().numpy()
             norm_embed = np_norm(embed)
-            
+
             # write to embed txt files
             text_row = [label]
             text_row = text_row + embed.tolist()
             print_row(text_row, embed_file)
-            
+
             text_row = [label]
             text_row = text_row + norm_embed.tolist()
             print_row(text_row, norm_file)
-            
+
             # append
             all_embeds.append(embed)
             all_labels.append(label)
             counter+=1
-    
+
     # each sample should be a entry in the vocab
     with torch.no_grad():
         t = tqdm(iter(test_loader), leave=False, total=len(test_loader))
         for sample_ctr, sample in enumerate(t):
-            
+
             if sample_ctr % args.test_display_mod == 0:
                 display_hyp = True
 
@@ -276,7 +274,7 @@ def main(args):
             tgt   = test_dataset.vocab[sample['target'][0]]
             if tgt != label:
                 print("-- tgt=/=seed --")
-            
+
             # prediction
             logits = net_meta['logits']
             LOG.debug('logits (batch * image_cnt, vocab) %s', logits.shape)
@@ -299,7 +297,7 @@ def main(args):
             text_row = [label]
             text_row = text_row + norm_embed.tolist()
             print_row(text_row, norm_file)
-            
+
             # append
             all_embeds.append(embed)
             all_labels.append(label)
