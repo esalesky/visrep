@@ -447,8 +447,6 @@ class TransformerEncoder(FairseqEncoder):
 
         encoder_states = []
 
-        encoder_states = [] if return_all_hiddens else None
-
         # encoder layers
         for layer in self.layers:
             x = layer(x, encoder_padding_mask)
@@ -458,8 +456,8 @@ class TransformerEncoder(FairseqEncoder):
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
-            if return_all_hiddens:
-                encoder_states[-1] = x
+            # if return_all_hiddens:
+            #     encoder_states[-1] = x
 
         #print('transformer encoder out shape', x.shape)
 
@@ -849,7 +847,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
             )
-
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
                 attn = layer_attn.float().to(x)
