@@ -50,48 +50,48 @@ mkdir -p $EXP_DIR
 mkdir -p $CKPT_DIR
 
 PYTHONPATH=$FAIRSEQ python -u -m fairseq_cli.train \
-$DATA_DIR \
---seed 42 \
---validate-interval-updates 1000 \
---patience 10 \
---source-lang=$SRC_LANG \
---target-lang=$TGT_LANG \
---user-dir=$FAIRSEQ \
---arch=transformer_iwslt_de_en \
---save-dir $CKPT_DIR \
---share-decoder-input-output-embed \
---encoder-embed-path=${EXP_DIR}/checkpoints/norm_embeddings.txt \
---freeze-encoder-embed \
---optimizer=adam \
---adam-betas='(0.9, 0.98)' \
---adam-eps=1e-08 \
---decoder-attention-heads=4 \
---decoder-embed-dim=512 \
---decoder-ffn-embed-dim=1024 \
---decoder-layers=6 \
---dropout=0.3 \
---encoder-attention-heads=4 \
---encoder-embed-dim=512 \
---encoder-ffn-embed-dim=1024 \
---encoder-normalize-before \
---encoder-layers=6 \
---criterion=label_smoothed_cross_entropy \
---label-smoothing=0.2 \
---lr=5e-4 \
---lr-scheduler='inverse_sqrt' \
---max-epoch=100 \
---max-source-positions=1024 \
---max-target-positions=1024 \
---max-tokens 4000 \
---max-tokens-valid=16000 \
---min-loss-scale=0.0001 \
---optimizer='adam' \
---dataset-impl raw \
---share-decoder-input-output-embed \
---warmup-updates=4000 \
---weight-decay=0.0001 \
---log-format json \
---log-interval 10 > $CKPT_DIR/train.log 2>&1
+  $DATA_DIR \
+  --seed 42 \
+  --validate-interval-updates 1000 \
+  --patience 10 \
+  --source-lang=$SRC_LANG \
+  --target-lang=$TGT_LANG \
+  --user-dir=$FAIRSEQ \
+  --arch=transformer_iwslt_de_en \
+  --save-dir $CKPT_DIR \
+  --share-decoder-input-output-embed \
+  --encoder-embed-path=${EXP_DIR}/checkpoints/norm_embeddings.txt \
+  --freeze-encoder-embed \
+  --optimizer=adam \
+  --adam-betas='(0.9, 0.98)' \
+  --adam-eps=1e-08 \
+  --decoder-attention-heads=4 \
+  --decoder-embed-dim=512 \
+  --decoder-ffn-embed-dim=1024 \
+  --decoder-layers=6 \
+  --dropout=0.3 \
+  --encoder-attention-heads=4 \
+  --encoder-embed-dim=512 \
+  --encoder-ffn-embed-dim=1024 \
+  --encoder-normalize-before \
+  --encoder-layers=6 \
+  --criterion=label_smoothed_cross_entropy \
+  --label-smoothing=0.2 \
+  --lr=5e-4 \
+  --lr-scheduler='inverse_sqrt' \
+  --max-epoch=100 \
+  --max-source-positions=1024 \
+  --max-target-positions=1024 \
+  --max-tokens 4000 \
+  --max-tokens-valid=16000 \
+  --min-loss-scale=0.0001 \
+  --optimizer='adam' \
+  --dataset-impl raw \
+  --share-decoder-input-output-embed \
+  --warmup-updates=4000 \
+  --weight-decay=0.0001 \
+  --log-format json \
+  --log-interval 10 > $CKPT_DIR/train.log 2>&1
 
 #--encoder-embed-path=/exp/esalesky/mtocr19/exps/ocr/$SRC_LANG-$SEG/checkpoints/embeddings.txt \
 #--encoder-embed-path=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/$SEG/norm_word_embeddings.txt \
