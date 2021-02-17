@@ -51,6 +51,7 @@ mkdir -p $CKPT_DIR
 
 PYTHONPATH=$FAIRSEQ python -u -m fairseq_cli.train \
 $DATA_DIR \
+--seed 42 \
 --validate-interval-updates 1000 \
 --patience 10 \
 --source-lang=$SRC_LANG \
@@ -81,12 +82,11 @@ $DATA_DIR \
 --max-epoch=100 \
 --max-source-positions=1024 \
 --max-target-positions=1024 \
---max-tokens=12000 \
---max-tokens-valid=4000 \
+--max-tokens 4000 \
+--max-tokens-valid=16000 \
 --min-loss-scale=0.0001 \
 --optimizer='adam' \
 --dataset-impl raw \
---seed 42 \
 --share-decoder-input-output-embed \
 --warmup-updates=4000 \
 --weight-decay=0.0001 \
@@ -95,8 +95,6 @@ $DATA_DIR \
 
 #--encoder-embed-path=/exp/esalesky/mtocr19/exps/ocr/$SRC_LANG-$SEG/checkpoints/embeddings.txt \
 #--encoder-embed-path=/expscratch/detter/mt/multitarget-ted/visemb/$SRC_LANG-$TGT_LANG/$SEG/norm_word_embeddings.txt \
-
-# only store last and best checkpoints
 
 
 # -----
@@ -109,26 +107,28 @@ echo "-- SCORE TIME --"
 #cd $EXP_DIR
 
 # -- TEST --
-PYTHONPATH=$FAIRSEQ python -u ${FAIRSEQ}/generate.py \
-${DATA_DIR} \
---path=${CKPT_DIR}/checkpoint_best.pt \
---gen-subset=test \
---batch-size=4 \
---raw-text \
---beam=5 \
---source-lang ${SRC_LANG} \
---target-lang ${TGT_LANG} 
+PYTHONPATH=$FAIRSEQ python -um fairseq_cli.generate \
+  ${DATA_DIR} \
+  --path=${CKPT_DIR}/checkpoint_best.pt \
+  --gen-subset=test \
+  --batch-size=4 \
+  --dataset-impl raw \
+  --beam=5 \
+  -s ${SRC_LANG} \
+  -t ${TGT_LANG} \
+> $EXP_DIR/test.out
 
-# -- DEV -- 
-PYTHONPATH=$FAIRSEQ python -u ${FAIRSEQ}/generate.py \
-${DATA_DIR} \
---path=${CKPT_DIR}/checkpoint_best.pt \
---gen-subset=valid \
---batch-size=4 \
---raw-text \
---beam=5 \
---source-lang ${SRC_LANG} \
---target-lang ${TGT_LANG} 
+# -- DEV --
+PYTHONPATH=$FAIRSEQ python -um fairseq_cli.generate \
+  ${DATA_DIR} \
+  --path=${CKPT_DIR}/checkpoint_best.pt \
+  --gen-subset=valid \
+  --batch-size=4 \
+  --dataset-impl raw \
+  --beam=5 \
+  --source-lang ${SRC_LANG} \
+  --target-lang ${TGT_LANG} \
+> $EXP_DIR/valid.out
 
 echo "--COMPLETE--"
 
