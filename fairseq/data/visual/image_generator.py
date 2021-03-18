@@ -64,8 +64,8 @@ class TextImageGenerator():
         self.stride = stride
         self.overlap = overlap
 
-    def get_image(self, line_text):
-        """Creates a single image from an entire line."""
+    def get_surface(self, line_text):
+        """Creates a single image from an entire line and returns the surface."""
 
         # Replace Unicode Character 'LOWER ONE EIGHTH BLOCK' (U+2581)
         # many of the fonts can not render this code
@@ -101,23 +101,29 @@ class TextImageGenerator():
         #         max(self.image_height, text_rect.height + (pad_top + pad_bottom)))
 
         surf = surf.subsurface(crop)
+        # print(img_data.shape)
 
+        return surf
+
+    def get_image_from_surface(self, surf):
         image = pygame.surfarray.pixels3d(surf)
         image = image.swapaxes(0, 1)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-        # print(img_data.shape)
+        return image
 
-        return surf, image
+    def get_image(self, text):
+        return self.get_image_from_surface(self.get_surface(text))
 
     def get_images(self, line_text):
         ''' Create pygame surface '''
 
-        surface, image = self.get_image(line_text)
-        (height, width) = image.shape[:2]
+        surface = self.get_surface(line_text)
+        (width, height) = surface.get_size()
 
-        images = [image]
-        tensors = []
+        whole_image = self.get_image_from_surface(surface)
+
+        image_pieces = []
         for x in range(0, width, self.stride - self.overlap): 
             crop_width = self.stride
             if x + crop_width > width:
@@ -127,13 +133,11 @@ class TextImageGenerator():
             # TODO: pad last guy to self.stride
             # (best to pad original image to multiple of self.stride)
 
-            image = pygame.surfarray.pixels3d(surface.subsurface(crop_area))
-            image = image.swapaxes(0, 1)
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            images.append(image)
-            tensors.append(self.transform(image))
+            image = self.get_image_from_surface(surface.subsurface(crop_area))
+            image_pieces.append(image)
+            # tensors.append(self.transform(image))
 
-        return images, tensors
+        return whole_image, image_pieces
 
     def get_font_list(self, font_file_path):
         fontlist = []
@@ -211,17 +215,21 @@ class TextImageGenerator():
 
         return img_data
 
+
 def main(args):
     gen = TextImageGenerator(stride=args.image_stride,
                              overlap=args.image_stride_overlap,
     )
-    whole_image, image_pieces = gen.get_images(args.text)
+    whole_image = gen.get_image(args.text)
     imagepath = f"test_image.png"
+    print(f"Writing to {imagepath}", file=sys.stderr)
     cv2.imwrite(imagepath, whole_image)
 
+    whole_image, image_pieces = gen.get_images(args.text)
     for i, image in enumerate(image_pieces, 1):
         imagepath = f"test_image.{i}.png"
         cv2.imwrite(imagepath, image)
+        print(f"Writing to {imagepath}", file=sys.stderr)
 
 
 if __name__ == "__main__":
