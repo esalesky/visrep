@@ -31,6 +31,6 @@ def build_criterion(cfg: DictConfig, task):
 
 # automatically import any Python files in the criterions/ directory
 for file in os.listdir(os.path.dirname(__file__)):
-    if file.endswith(".py") and not file.startswith("_"):
+    if file.endswith(".py") and not file.startswith("_") and not file.startswith("."):
         file_name = file[: file.find(".py")]
         importlib.import_module("fairseq.criterions." + file_name)

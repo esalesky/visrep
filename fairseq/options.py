@@ -139,7 +139,7 @@ def parse_args_and_arch(
         elif args.arch in MODEL_REGISTRY:
             MODEL_REGISTRY[args.arch].add_args(model_specific_group)
         else:
-            raise RuntimeError()
+            raise RuntimeError("Did you forget --arch?")
 
     if hasattr(args, "task"):
         from fairseq.tasks import TASK_REGISTRY

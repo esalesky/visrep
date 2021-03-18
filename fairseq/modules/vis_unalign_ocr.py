@@ -1,3 +1,7 @@
+"""
+MJP: used by "visunaligntranslation" task.
+"""
+
 import torch
 import torch.nn as nn
 
@@ -6,13 +10,16 @@ import logging
 LOG = logging.getLogger(__name__)
 
 
-class UnAlignOCR(nn.Module):
-    """Vista OCR """
+class UnAlignOCR(torch.nn.Module):
+    """Vista OCR
+
+    Created by the function at the bottom, used in UnAlignOcrEncoder.
+    """
 
     def __init__(self, args):
         super(UnAlignOCR, self).__init__()
 
-        out_ratio = (0.5, args.ocr_fract_width_perc)
+        out_ratio = (0.5, 0.7)
         LOG.info("FractionalMaxPool2d output_ratio %s", out_ratio)
 
         self.cnn = nn.Sequential(
@@ -41,6 +48,11 @@ class UnAlignOCR(nn.Module):
 
 
 class UnAlignOcrModel(torch.nn.Module):
+    """
+    Has separate encoder and decoder components.
+    Encoder makes use of UnAlignOcr class above.
+    """
+
     def __init__(self, args, vocab, eval_only=False):
         super().__init__()
         self.args = args

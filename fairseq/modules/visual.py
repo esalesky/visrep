@@ -93,7 +93,7 @@ class VistaOCR(nn.Module):
                 # (width * batch * word, model_size) -> (width, batch * word, model_size)
                 x = x.view(w, b, -1)
             elif self.image_type == "line":
-                
+
                 x = x.view(b, w, -1)
 
             if self.image_verbose:
@@ -191,7 +191,7 @@ class VisualNet(torch.nn.Module):
             import sys
             print(f"No such model type '{model_name}': bad argument to --image-backbone", file=sys.stderr)
             sys.exit(1)
-            
+
         self.extract = extract
         self.image_verbose = image_verbose
 

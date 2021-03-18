@@ -199,7 +199,6 @@ class VisAlignTranslationTask(FairseqTask):
 
         parser.add_argument("--image-verbose", action='store_true',
                             help='Display verbose debug')
-
         parser.add_argument("--image-checkpoint-path", type=str,
                             default=None, help="Image checkpoint path")
         parser.add_argument("--image-pretrain-path", type=str, default=None,

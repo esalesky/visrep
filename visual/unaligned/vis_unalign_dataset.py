@@ -119,7 +119,7 @@ def image_collater(batch):
     target_transcription_widths = torch.IntTensor(len(batch))
 
     trans_ids = []
-    meta_groups = []
+    xx    meta_groups = []
     meta_seed_text = []
     meta_image_id = []
     for idx, (tensor, transcript, metadata) in enumerate(batch):

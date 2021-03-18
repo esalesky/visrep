@@ -403,7 +403,9 @@ class VisUnAlignTransformerEncoder(FairseqEncoder):
             self.layernorm_embedding_vis = None
 
     def forward_embedding(self, src_tokens):
-        # embed tokens and positions
+        """
+        Embeds tokens and positions.
+        """
         if self.args.image_verbose:
             LOG.debug('ENCODER: embed_scale %s', self.embed_scale)
             LOG.debug('ENCODER: embed_tokens %s',
@@ -422,6 +424,9 @@ class VisUnAlignTransformerEncoder(FairseqEncoder):
         return x, embed
 
     def visual_forward_embedding(self, src_embeddings, src_tokens):
+        """
+        Does visual embedding only.
+        """
         # self.embed_tokens(src_tokens)
         if getattr(self.args, "image_embedding_normalize", False):
             x_norm_src_embeddings = F.normalize(src_embeddings, p=2, dim=2)
