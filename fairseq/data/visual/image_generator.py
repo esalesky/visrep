@@ -93,8 +93,14 @@ class TextImageGenerator():
         text_rect = self.font.render_to(
             surf, (self.start_x, self.start_y), line_text)
 
+        # Make sure crop width is a multiple of the stride
+        crop_width = text_rect.width + (self.pad_left + self.pad_right)
+        # Make sure the height is consistent
+
+        if crop_width % self.stride != 0:
+            crop_width = ((crop_width // self.stride) + 1) * self.stride
         crop = (self.start_x - self.pad_left, self.start_y - self.pad_top,
-                text_rect.width + (self.pad_left + self.pad_right),
+                crop_width,
                 text_rect.height + (self.pad_top + self.pad_bottom))
         # crop = (self.start_x - pad_left, self.start_y - pad_top,
         #         text_rect.width + (pad_left + pad_right),
@@ -106,6 +112,7 @@ class TextImageGenerator():
         return surf
 
     def get_image_from_surface(self, surf):
+        """Transforms a surface containing a rendered image into a numpy image."""
         image = pygame.surfarray.pixels3d(surf)
         image = image.swapaxes(0, 1)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -113,31 +120,46 @@ class TextImageGenerator():
         return image
 
     def get_image(self, text):
+        """
+        Returns a single image from a line of text.
+        """
         return self.get_image_from_surface(self.get_surface(text))
 
     def get_images(self, line_text):
-        ''' Create pygame surface '''
+        """
+        Returns images from all pieces in a line of text.
+        """
 
         surface = self.get_surface(line_text)
         (width, height) = surface.get_size()
 
         whole_image = self.get_image_from_surface(surface)
 
+        # Move a window over the image
         image_pieces = []
-        for x in range(0, width, self.stride - self.overlap): 
+        for x in range(0, width - self.stride, self.stride - self.overlap):
             crop_width = self.stride
-            if x + crop_width > width:
-                crop_width -= (x + crop_width - width)
-            crop_area = (x, 0, crop_width, height)
+            # if x + crop_width > width:
+            #     crop_width -= (x + crop_width - width)
+            crop_region = (x, 0, crop_width, height)
 
-            # TODO: pad last guy to self.stride
-            # (best to pad original image to multiple of self.stride)
-
-            image = self.get_image_from_surface(surface.subsurface(crop_area))
+            image = self.get_image_from_surface(surface.subsurface(crop_region))
             image_pieces.append(image)
             # tensors.append(self.transform(image))
 
         return whole_image, image_pieces
+
+    def get_tensor(self, text):
+        """Returns a single representing images for all pieces in a sentence.
+        Dimension (num_pieces x *image_dims)
+        """
+        whole_image, image_pieces = self.get_images(text)
+        tensors = []
+        for image in image_pieces:
+            tensors.append(self.transform(image))
+
+        assert len(tensors) != 0, text
+        return torch.stack(tensors)
 
     def get_font_list(self, font_file_path):
         fontlist = []

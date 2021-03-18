@@ -22,9 +22,6 @@ from fairseq.data import (
 from fairseq.data.language_pair_dataset import LanguagePairDataset
 
 import cv2
-import pygame.freetype
-import torchvision.transforms as transforms
-
 
 logger = logging.getLogger(__name__)
 
@@ -206,22 +203,9 @@ class VisualTextDataset(LanguagePairDataset):
 
             source_texts.append(source)
             if not args.image_cache_path:
-                images, image_tensors = image_generator.get_images(source)
-                source_images.append(image_tensors[0])
-
-                whole_image = images.pop(0)
-                source_sizes.append(len(images))
-
-                # # the raw image dimensions
-                # (h, w) = image.shape[:2]
-                # # effective width
-                # image_width = w // args.ocr_stride_width
-
-                # image_sizes.append(w)
-                # if h > self.image_height:
-                #     image = self.image_resize(image, height=args.image_height)
-                # (h, w) = source_image.shape[:2]
-                # image = self.transform(image.squeeze())
+                image_tensor = image_generator.get_tensor(source)
+                source_images.append(image_tensor)
+                source_sizes.append(image_tensor.shape[0])
 
             target_tokens = tgt_dict.encode_line(
                 target, add_if_not_exist=False,
@@ -232,6 +216,7 @@ class VisualTextDataset(LanguagePairDataset):
 
             if args.image_samples_path and sampleno % args.image_samples_interval == 0:
                 imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.png")
+                whole_image, image_pieces = image_generator.get_images(source)
                 cv2.imwrite(imagepath, whole_image)
 
                 for i, image in enumerate(images, 1):

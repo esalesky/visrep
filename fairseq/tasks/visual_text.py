@@ -129,6 +129,9 @@ class VisualTextTask(LegacyFairseqTask):
         if self.source_lang is None or self.target_lang is None:
             raise ValueError("You have to set --source-lang and --target-lang")
 
+        assert args.image_stride > args.image_stride_overlap, "Stride must be larger than overlap"
+        assert args.image_stride % args.image_stride_overlap == 0, "overlap must be a factor of stride"
+
         # self.data_cfg = S2TDataConfig(op.join(args.data, args.config_yaml))
 
     @classmethod
