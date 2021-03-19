@@ -135,9 +135,10 @@ class TextImageGenerator():
 
         whole_image = self.get_image_from_surface(surface)
 
-        # Move a window over the image
+        # Move a window over the image. The image width is guaranteed to be at
+        # least as wide as the stride.
         image_pieces = []
-        for x in range(0, width - self.stride, self.stride - self.overlap):
+        for x in range(0, width - self.stride + 1, self.stride - self.overlap):
             crop_width = self.stride
             # if x + crop_width > width:
             #     crop_width -= (x + crop_width - width)

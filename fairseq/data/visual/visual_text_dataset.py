@@ -219,7 +219,7 @@ class VisualTextDataset(LanguagePairDataset):
                 whole_image, image_pieces = image_generator.get_images(source)
                 cv2.imwrite(imagepath, whole_image)
 
-                for i, image in enumerate(images, 1):
+                for i, image in enumerate(image_pieces, 1):
                     imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.{i}.png")
                     logger.info(f"Saving sample #{sampleno} to {imagepath}")
                     cv2.imwrite(imagepath, image)
