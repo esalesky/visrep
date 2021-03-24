@@ -17,13 +17,12 @@ class TextImageGenerator():
                  font_file=None,
                  surf_width=5000, surf_height=200,
                  start_x=25, start_y=25, dpi=120,
-                 image_height=128, image_width=32,
                  bkg_color="white",
                  font_color="black",
                  font_style=1,
                  font_size=8,
                  font_rotation=0,
-                 pad_size=2,
+                 pad_size=5,
                  stride=25,
                  overlap=5,
              ):
@@ -54,12 +53,12 @@ class TextImageGenerator():
         self.font_color = "black"
         self.bkg_color = "white"
 
-        self.image_height = image_height
-        self.image_width = image_width
-
         self.font = pygame.freetype.Font(self.font_file, self.font_size)
         self.font.style = pygame.freetype.STYLE_NORMAL
         self.font.fgcolor = pygame.color.THECOLORS[font_color]
+
+        # Get the maximum image height
+        self.image_height = self.font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
 
         self.stride = stride
         self.overlap = overlap
@@ -76,17 +75,6 @@ class TextImageGenerator():
         curr_surface_height = self.surface_height
         text_rect_size = self.font.get_rect(line_text)
 
-        if (text_rect_size.width + (self.start_x * 2) + self.pad_left + self.pad_right) > self.surface_width:
-            curr_surface_width = text_rect_size.width + \
-                (self.start_x * 2) + self.pad_left + self.pad_right + 20
-            LOG.debug('...get_default_image, expand surface width %s %s %s',
-                      self.surface_width, curr_surface_width, text_rect_size)
-        if (text_rect_size.height + (self.start_y * 2) + self.pad_top + self.pad_bottom) > self.surface_height:
-            curr_surface_height = text_rect_size.height + \
-                (self.start_y * 2) + self.pad_top + self.pad_bottom + 20
-            LOG.debug('...get_default_image, expand surface height %s %s %s',
-                      self.surface_height, curr_surface_height, text_rect_size)
-
         surf = pygame.Surface((curr_surface_width, curr_surface_height))
         surf.fill(pygame.color.THECOLORS['white'])
 
@@ -95,19 +83,15 @@ class TextImageGenerator():
 
         # Make sure crop width is a multiple of the stride
         crop_width = text_rect.width + (self.pad_left + self.pad_right)
-        # Make sure the height is consistent
-
         if crop_width % self.stride != 0:
             crop_width = ((crop_width // self.stride) + 1) * self.stride
-        crop = (self.start_x - self.pad_left, self.start_y - self.pad_top,
+
+        crop = (self.start_x - self.pad_left,
+                self.start_y - self.pad_top - self.pad_bottom,
                 crop_width,
-                text_rect.height + (self.pad_top + self.pad_bottom))
-        # crop = (self.start_x - pad_left, self.start_y - pad_top,
-        #         text_rect.width + (pad_left + pad_right),
-        #         max(self.image_height, text_rect.height + (pad_top + pad_bottom)))
+                self.image_height)
 
         surf = surf.subsurface(crop)
-        # print(img_data.shape)
 
         return surf
 
@@ -115,7 +99,7 @@ class TextImageGenerator():
         """Transforms a surface containing a rendered image into a numpy image."""
         image = pygame.surfarray.pixels3d(surf)
         image = image.swapaxes(0, 1)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
         return image
 
@@ -152,12 +136,13 @@ class TextImageGenerator():
 
     def get_tensor(self, text):
         """Returns a single representing images for all pieces in a sentence.
-        Dimension (num_pieces x *image_dims)
+        Dimension (num_pieces x channels=1 x height x width)
         """
         whole_image, image_pieces = self.get_images(text)
         tensors = []
         for image in image_pieces:
-            tensors.append(self.transform(image))
+            image_tensor = self.transform(image).squeeze(0)
+            tensors.append(image_tensor)
 
         assert len(tensors) != 0, text
         return torch.stack(tensors)
@@ -242,6 +227,7 @@ class TextImageGenerator():
 def main(args):
     gen = TextImageGenerator(stride=args.image_stride,
                              overlap=args.image_stride_overlap,
+                             font_size=args.font_size,
     )
     whole_image = gen.get_image(args.text)
     imagepath = f"test_image.png"
@@ -258,6 +244,7 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("--font-size", type=int, default=8)
     parser.add_argument("--image-stride", type=int, default=30)
     parser.add_argument("--image-stride-overlap", type=int, default=10)
     parser.add_argument("--text", type=str, default="This is a test.")
