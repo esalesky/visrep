@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _collate_frames(
-    frames: List[torch.Tensor], is_audio_input: bool = False
+    frames: List[torch.Tensor],
 ) -> torch.Tensor:
     """
     Convert a list of 2D frames into a padded 3D tensor
@@ -37,11 +37,12 @@ def _collate_frames(
     Returns:
         3D tensor of size len(frames)*len_max*f_dim where len_max is max of L[i]
     """
+    batch_size = len(frames)
     max_len = max(frame.size(0) for frame in frames)
-    if is_audio_input:
-        out = frames[0].new_zeros((len(frames), max_len))
-    else:
-        out = frames[0].new_zeros((len(frames), max_len, frames[0].size(1)))
+
+    # for 3 channels: image_dims = [channels x height x width]
+    image_dims = frames[0].size()[1:]
+    out = frames[0].new_zeros(batch_size, max_len, *image_dims)
     for i, v in enumerate(frames):
         out[i, : v.size(0)] = v
     return out
@@ -78,11 +79,9 @@ class VisualTextDataset(LanguagePairDataset):
             eos=tgt_dict.eos_index,
             shuffle=shuffle,
         )
-        self.src_texts = src_texts
+        self.src_text = src_texts
 
         # TODO: make sure lengths are all valid
-
-        logger.info(self.__repr__())
 
     def __getitem__(
         self, index: int
@@ -92,21 +91,17 @@ class VisualTextDataset(LanguagePairDataset):
         example["source_text"] = self.src_text[index]
         return example #  index, source, source_image, target
 
-    def __len__(self):
-        """Can do this because we know the stride length and image width"""
-        raise NotImplementedException("TODO: return image length")
-
-    def collater(self, samples: List[Tuple[int, torch.Tensor, torch.Tensor]]) -> Dict:
+    def collater(self, samples) -> Dict:
         """Merge a list of samples to form a mini-batch."""
 
         if len(samples) == 0:
             return {}
-        indices = torch.tensor([i for i, _, _ in samples], dtype=torch.long)
+        indices = torch.tensor([i["id"] for i in samples], dtype=torch.long)
         frames = _collate_frames(
-            [s for _, s, _ in samples], self.data_cfg.use_audio_input
+            [s["source"] for s in samples],
         )
         # sort samples by descending number of frames
-        n_frames = torch.tensor([s.size(0) for _, s, _ in samples], dtype=torch.long)
+        n_frames = torch.tensor([s.size(0) for s in frames], dtype=torch.long)
         n_frames, order = n_frames.sort(descending=True)
         indices = indices.index_select(0, order)
         frames = frames.index_select(0, order)
@@ -114,9 +109,9 @@ class VisualTextDataset(LanguagePairDataset):
         target, target_lengths = None, None
         prev_output_tokens = None
         ntokens = None
-        if self.tgt_texts is not None:
+        if samples[0]["target"] is not None:
             target = fairseq_data_utils.collate_tokens(
-                [t for _, _, t in samples],
+                [t["target"] for t in samples],
                 self.tgt_dict.pad(),
                 self.tgt_dict.eos(),
                 left_pad=False,
@@ -124,22 +119,22 @@ class VisualTextDataset(LanguagePairDataset):
             )
             target = target.index_select(0, order)
             target_lengths = torch.tensor(
-                [t.size(0) for _, _, t in samples], dtype=torch.long
-            ).index_select(0, order)
+                [t.size(0) for t in target], dtype=torch.long
+            )
             prev_output_tokens = fairseq_data_utils.collate_tokens(
-                [t for _, _, t in samples],
+                [t["target"] for t in samples],
                 self.tgt_dict.pad(),
                 self.tgt_dict.eos(),
                 left_pad=False,
                 move_eos_to_beginning=True,
             )
             prev_output_tokens = prev_output_tokens.index_select(0, order)
-            ntokens = sum(t.size(0) for _, _, t in samples)
+            ntokens = sum(s["target"].size(0) for s in samples)
 
         out = {
             "id": indices,
             "net_input": {
-                "src_tokens": frames,
+                "src_images": frames,
                 "src_lengths": n_frames,
                 "prev_output_tokens": prev_output_tokens,
             },
@@ -149,23 +144,6 @@ class VisualTextDataset(LanguagePairDataset):
             "nsentences": len(samples),
         }
         return out
-
-    @property
-    def can_reuse_epoch_itr_across_epochs(self):
-        return True
-
-    def ordered_indices(self):
-        if self.shuffle:
-            order = [np.random.permutation(len(self))]
-        else:
-            order = [np.arange(len(self))]
-        # first by descending order of # of frames then by original/random order
-        order.append([-n for n in self.n_frames])
-        return np.lexsort(order)
-
-    def prefetch(self, indices):
-        # TODO: add prefetching! could build images on the fly maybe...
-        raise False
 
     @classmethod
     def from_text_path(

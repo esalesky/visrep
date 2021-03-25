@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 
 import cv2
+import logging
 import pygame.freetype
 import os
 import sys
 import random
+
 
 import numpy as np
 import torch
 
 import torchvision.transforms as transforms
 
+logger = logging.getLogger(__name__)
 
 class TextImageGenerator():
     def __init__(self,
@@ -59,6 +62,7 @@ class TextImageGenerator():
 
         # Get the maximum image height
         self.image_height = self.font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
+        logger.info(f"Image height for font size {self.font_size} is {self.image_height}")
 
         self.stride = stride
         self.overlap = overlap
@@ -99,6 +103,7 @@ class TextImageGenerator():
         """Transforms a surface containing a rendered image into a numpy image."""
         image = pygame.surfarray.pixels3d(surf)
         image = image.swapaxes(0, 1)
+        # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
         return image
@@ -141,7 +146,7 @@ class TextImageGenerator():
         whole_image, image_pieces = self.get_images(text)
         tensors = []
         for image in image_pieces:
-            image_tensor = self.transform(image).squeeze(0)
+            image_tensor = self.transform(image)
             tensors.append(image_tensor)
 
         assert len(tensors) != 0, text

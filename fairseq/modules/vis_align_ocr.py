@@ -2,13 +2,16 @@ import torch
 import torch.nn as nn
 
 import logging
-LOG = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class AlignOCR(nn.Module):
     """Vista OCR """
 
     def __init__(self):
+        """
+        """
+
         super(AlignOCR, self).__init__()
 
         self.cnn = nn.Sequential(
@@ -24,9 +27,16 @@ class AlignOCR(nn.Module):
         )
 
     def forward(self, x):
+        """
+        Takes a tensor of size (batch x frames x channels x width x height).
+        Runs convolutions on every frame. The CNN will reduce every frame
+        to dims (256 x w' x h').
+        """
 
-        b, t, c, h, w = x.shape  # batch x token x channel x height x width
-        x = x.view(-1, x.size(-3), x.size(-2), x.size(-1))
+        # shape is (batch x token x (channel) x height x width)
+        # if channel is 1 it may be collapsed
+        # x = x.view(-1, x.size(-3), x.size(-2), x.size(-1))
+        # logger.info("VIEW", x.shape)
         x = self.cnn(x)
 
         return x
@@ -48,8 +58,8 @@ class AlignOcrModel(torch.nn.Module):
         self.encoder = AlignOcrEncoder(args)
         self.decoder = AlignOcrDecoder(args, vocab)
 
-        LOG.info('AlignOcrModel eval_only %s', self.eval_only)
-        LOG.info(repr(self))
+        logger.info('AlignOcrModel eval_only %s', self.eval_only)
+        logger.info(repr(self))
 
     def forward(self, src_tokens):  # , src_widths):
         encoder_out = self.encoder(src_tokens)  # , src_widths)
@@ -83,9 +93,9 @@ class AlignOcrEncoder(torch.nn.Module):
 
         cnn_feat_size = cnn_out_c * cnn_out_h
 
-        LOG.info('CNN out height %d', cnn_out_h)
-        LOG.info('CNN out channels %d', cnn_out_c)
-        LOG.info('CNN feature size (channels %d x height %d) = %d',
+        logger.info('CNN out height %d', cnn_out_h)
+        logger.info('CNN out channels %d', cnn_out_c)
+        logger.info('CNN feature size (channels %d x height %d) = %d',
                  cnn_out_c, cnn_out_h, cnn_feat_size)
 
         self.avg_pool = nn.AdaptiveAvgPool2d((8, 1))
@@ -100,28 +110,37 @@ class AlignOcrEncoder(torch.nn.Module):
             torch.nn.init.uniform_(param, -0.08, 0.08)
 
     def forward(self, src_tokens):  # , src_widths):
+        """
+        input: (batch, len, channels, height, width)
+        output: (batch, len, embed_size)
+        """
 
-        LOG.debug('ENCODER: forward input %s', src_tokens.shape)
+        logger.debug('ENCODER: forward input %s', src_tokens.shape)
+
+        batch_size, src_len, *image_dims = src_tokens.shape
+        src_tokens = src_tokens.view(batch_size * src_len, *image_dims)
+
+        logger.debug('ENCODER: collapse tokens %s', src_tokens.shape)
 
         x_cnn = self.cnn(src_tokens)
 
-        LOG.debug('ENCODER: forward cnn features out (b, c, h, w) %s', x_cnn.shape)
+        logger.debug('ENCODER: forward cnn features out (b, c, h, w) %s', x_cnn.shape)
 
         x = self.avg_pool(x_cnn)
-        LOG.debug('ENCODER: avg pool %s', x.shape)
+        logger.debug('ENCODER: avg pool %s', x.shape)
 
         b, c, h, w = x.size()
         x = x.permute(3, 0, 1, 2).contiguous()
-        LOG.debug('ENCODER: permute (w, b, c, h) %s', x.shape)
+        logger.debug('ENCODER: permute (w, b, c, h) %s', x.shape)
 
         x = x.view(-1, c * h)
-        LOG.debug('ENCODER: view (w*b, c*h) %s', x.shape)
+        logger.debug('ENCODER: view (w*b, c*h) %s', x.shape)
 
         x = self.bridge_layer(x)
-        LOG.debug('ENCODER: forward bridge out %s', x.shape)
+        logger.debug('ENCODER: forward bridge out %s', x.shape)
 
-        x = x.view(w, b, -1)
-        LOG.debug('ENCODER: forward bridge view %s', x.shape)
+        x = x.view(batch_size, src_len, -1)
+        logger.debug('ENCODER: forward bridge view %s', x.shape)
 
         return {
             'encoder_out': x,
@@ -148,11 +167,11 @@ class AlignOcrDecoder(torch.nn.Module):
 
     def forward(self, encoder_output):
         embeddings = encoder_output['encoder_out'].squeeze()
-        LOG.debug('DECODER: embeddings %s', embeddings.shape)
+        logger.debug('DECODER: embeddings %s', embeddings.shape)
 
         logits = self.classifier(embeddings)
 
-        LOG.debug('DECODER: logits %s', logits.shape)
+        logger.debug('DECODER: logits %s', logits.shape)
 
         out_meta = {
             'input_shape': encoder_output['input_shape'],

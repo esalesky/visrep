@@ -20,10 +20,10 @@ from fairseq.modules import (
     PositionalEmbedding,
     TransformerEncoderLayer,
 )
-from fairseq.modules.vis_unalign_ocr import (
-    UnAlignOcrEncoder,
+from fairseq.modules.vis_align_ocr import (
+    AlignOcrEncoder,
 )
-from fairseq.modules.vista import VistaOCR
+
 from torch import Tensor
 
 
@@ -207,13 +207,13 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
         lprobs.batch_first = True
         return lprobs
 
-    def forward(self, src_tokens, src_lengths, prev_output_tokens):
+    def forward(self, src_images, src_lengths, prev_output_tokens):
         """
         The forward method inherited from the base class has a **kwargs
         argument in its input, which is not supported in torchscript. This
         method overwrites the forward method definition without **kwargs.
         """
-        encoder_out = self.encoder(src_tokens=src_tokens, src_lengths=src_lengths)
+        encoder_out = self.encoder(src_images=src_images, src_lengths=src_lengths)
         decoder_out = self.decoder(
             prev_output_tokens=prev_output_tokens, encoder_out=encoder_out
         )
@@ -229,7 +229,7 @@ class VisualTextTransformerEncoder(FairseqEncoder):
 
         self.args = args
 
-        self.cnn_embedder = UnAlignOcrEncoder(args)
+        self.cnn_embedder = AlignOcrEncoder(args)
 
         self.dropout_module = FairseqDropout(
             p=args.dropout, module_name=self.__class__.__name__
@@ -251,23 +251,18 @@ class VisualTextTransformerEncoder(FairseqEncoder):
         else:
             self.layer_norm = None
 
-    def forward_embedding(
-            self, src_images
-    ):
-        x = embed = self.embed_scale * token_embedd
-
     def forward(self, src_images, src_lengths):
-        if self.args.image_verbose:
-            logger.debug("ENCODER: image embedding")
+        logger.debug("ENCODER: image embedding %s %s %s", src_images.shape, src_lengths.shape, src_lengths)
 
-        x = self.forward_embedding(src_images)
+        x = self.cnn_embedder(src_images)["encoder_out"]
+
         x = self.embed_scale * x
 
         # ??? 
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
-        encoder_padding_mask = lengths_to_padding_mask(input_lengths)
+        encoder_padding_mask = lengths_to_padding_mask(src_lengths)
         # ugh, why this?
         positions = self.embed_positions(encoder_padding_mask).transpose(0, 1)
         x += positions
