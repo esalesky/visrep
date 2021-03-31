@@ -84,25 +84,13 @@ class VisualTextTask(LegacyFairseqTask):
                             help='Enable src loss')
         parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
                             help='Image src loss scale')
-        parser.add_argument('--image-tgt-loss-scale', type=float, default=1.0,
-                            help='Image tgt loss scale')
 
         parser.add_argument('--image-font-path', type=str,
                             default='', help='Input font file')
         parser.add_argument("--image-font-size", type=int,
                             default=16, help="Font size")
-        parser.add_argument("--image-height", type=int,
-                            default=32, help="Image height")
-        parser.add_argument("--image-width", type=int,
-                            default=32, help="Image width")
         parser.add_argument("--image-surface-width", type=int,
                             default=7000, help="Image surface width")
-        parser.add_argument("--image-surface-height", type=int,
-                            default=200, help="Image surface height")
-        parser.add_argument("--image-start-x", type=int,
-                            default=25, help="Image start x")
-        parser.add_argument("--image-start-y", type=int,
-                            default=25, help="Image start y")
         parser.add_argument("--image-pad-size", type=int,
                             default=2, help="Image pad size")
         parser.add_argument("--image-dpi", type=int,
@@ -163,8 +151,7 @@ class VisualTextTask(LegacyFairseqTask):
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         is_train_split = split.startswith("train")
-        # pre_tokenizer = self.build_tokenizer(self.args)
-        # bpe_tokenizer = self.build_bpe(self.args)
+
         self.datasets[split] = VisualTextDataset.from_text_path(
             self.args.data,
             self.args,
@@ -194,36 +181,23 @@ class VisualTextTask(LegacyFairseqTask):
         # args.input_channels = self.data_cfg.input_channels
         return super(VisualTextTask, self).build_model(args)
 
-    def build_generator(
-        self,
-        models,
-        args,
-        seq_gen_cls=None,
-        extra_gen_cls_kwargs=None,
-    ):
-        lang_token_ids = {
-            i
-            for s, i in self.trg_dict.indices.items()
-            if VisualTextDataset.is_lang_tag(s)
-        }
-        extra_gen_cls_kwargs = {"symbols_to_strip_from_output": lang_token_ids}
-        return super().build_generator(
-            models, args, seq_gen_cls=None, extra_gen_cls_kwargs=extra_gen_cls_kwargs
-        )
-
-    # def build_tokenizer(self, args):
-    #     logger.info(f"pre-tokenizer: {self.data_cfg.pre_tokenizer}")
-    #     return encoders.build_tokenizer(Namespace(**self.data_cfg.pre_tokenizer))
-
-    # def build_bpe(self, args):
-    #     logger.info(f"tokenizer: {self.data_cfg.bpe_tokenizer}")
-    #     return encoders.build_bpe(Namespace(**self.data_cfg.bpe_tokenizer))
-
     def get_interactive_tokens_and_lengths(self, lines, encode_fn):
-        n_frames = [get_features_or_waveform(p).shape[0] for p in lines]
-        return lines, n_frames
+        return lines, [len(line) for line in lines]
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, **kwargs):
-        return VisualTextDataset(
-            "interactive", False, self.args, src_tokens, src_lengths
+        """
+        Turn the source tokens into images, and create a dictionary
+        object with
+        { id, net_input: { src_tokens, src_lengths } }
+
+        """
+
+        dataset = VisualTextDataset.from_text(
+            self.args,
+            src_tokens,
+            self.image_generator,
+            self.tgt_dict,
+            kwargs["constraints"],
         )
+
+        return dataset

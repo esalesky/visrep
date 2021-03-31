@@ -212,6 +212,9 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
         The forward method inherited from the base class has a **kwargs
         argument in its input, which is not supported in torchscript. This
         method overwrites the forward method definition without **kwargs.
+
+        These arguments come from the keys of the "net_input" dictionary
+        within each batch.
         """
         encoder_out = self.encoder(src_images=src_images, src_lengths=src_lengths)
         decoder_out = self.decoder(
@@ -251,10 +254,10 @@ class VisualTextTransformerEncoder(FairseqEncoder):
         else:
             self.layer_norm = None
 
-    def forward(self, src_images, src_lengths):
-        logger.debug("ENCODER: image embedding %s %s %s", src_images.shape, src_lengths.shape, src_lengths)
+    def forward(self, src_tokens, src_lengths):
+        logger.debug("ENCODER: image embedding %s %s %s", src_tokens.shape, src_lengths.shape, src_lengths)
 
-        x = self.cnn_embedder(src_images)["encoder_out"]
+        x = self.cnn_embedder(src_tokens)["encoder_out"]
 
         x = self.embed_scale * x
 

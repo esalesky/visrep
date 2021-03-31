@@ -26,24 +26,24 @@ import cv2
 logger = logging.getLogger(__name__)
 
 
-def _collate_frames(
-    frames: List[torch.Tensor],
+def _collate_slices(
+    slices: List[torch.Tensor],
 ) -> torch.Tensor:
     """
-    Convert a list of 2D frames into a padded 3D tensor
+    Convert a list of 2D slices into a padded 3D tensor
     Args:
-        frames (list): list of 2D frames of size L[i]*f_dim. Where L[i] is
+        slices (list): list of 2D slices of size L[i]*f_dim. Where L[i] is
             length of i-th frame and f_dim is static dimension of features
     Returns:
-        3D tensor of size len(frames)*len_max*f_dim where len_max is max of L[i]
+        3D tensor of size len(slices)*len_max*f_dim where len_max is max of L[i]
     """
-    batch_size = len(frames)
-    max_len = max(frame.size(0) for frame in frames)
+    batch_size = len(slices)
+    max_len = max(slice.size(0) for slice in slices)
 
     # for 3 channels: image_dims = [channels x height x width]
-    image_dims = frames[0].size()[1:]
-    out = frames[0].new_zeros(batch_size, max_len, *image_dims)
-    for i, v in enumerate(frames):
+    image_dims = slices[0].size()[1:]
+    out = slices[0].new_zeros(batch_size, max_len, *image_dims)
+    for i, v in enumerate(slices):
         out[i, : v.size(0)] = v
     return out
 
@@ -86,6 +86,9 @@ class VisualTextDataset(LanguagePairDataset):
     def __getitem__(
         self, index: int
     ) -> Tuple[int, torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Returns a single example in the form of a dictionary.
+        """
 
         example = super().__getitem__(index)
         example["source_text"] = self.src_text[index]
@@ -97,14 +100,14 @@ class VisualTextDataset(LanguagePairDataset):
         if len(samples) == 0:
             return {}
         indices = torch.tensor([i["id"] for i in samples], dtype=torch.long)
-        frames = _collate_frames(
+        slices = _collate_slices(
             [s["source"] for s in samples],
         )
-        # sort samples by descending number of frames
-        n_frames = torch.tensor([s.size(0) for s in frames], dtype=torch.long)
-        n_frames, order = n_frames.sort(descending=True)
+        # sort samples by descending number of slices
+        n_slices = torch.tensor([s.size(0) for s in slices], dtype=torch.long)
+        n_slices, order = n_slices.sort(descending=True)
         indices = indices.index_select(0, order)
-        frames = frames.index_select(0, order)
+        slices = slices.index_select(0, order)
 
         target, target_lengths = None, None
         prev_output_tokens = None
@@ -134,8 +137,8 @@ class VisualTextDataset(LanguagePairDataset):
         out = {
             "id": indices,
             "net_input": {
-                "src_images": frames,
-                "src_lengths": n_frames,
+                "src_tokens": slices,
+                "src_lengths": n_slices,
                 "prev_output_tokens": prev_output_tokens,
             },
             "target": target,
@@ -216,3 +219,64 @@ class VisualTextDataset(LanguagePairDataset):
                                     shuffle=shuffle)
 
         return dataset
+
+    @classmethod
+    def from_text(
+            cls,
+            args,
+            source_texts,
+            image_generator,
+            tgt_dict,
+            constraints,
+    ) -> "VisualTextDataset":
+
+        source_images = []
+        source_sizes = []
+        for lineno, source in enumerate(source_texts, 1):
+            image_tensor = image_generator.get_tensor(source)
+            source_images.append(image_tensor)
+            source_sizes.append(image_tensor.shape[0])
+
+            print("FROM TEXT", args.image_samples_path)
+            if args.image_samples_path is not None:
+
+                imagepath = f"{args.image_samples_path}.{lineno}.png"
+                whole_image, image_pieces = image_generator.get_images(source)
+                cv2.imwrite(imagepath, whole_image)
+                logger.info(f"Saving sample image to {imagepath}")
+
+                for i, image in enumerate(image_pieces, 1):
+                    imagepath = f"{args.image_samples_path}.{lineno}.{i}.png"
+                    logger.info(f"Saving sample #{lineno}.{i} to {imagepath}")
+                    cv2.imwrite(imagepath, image)
+
+
+        return VisualTextDataset(source_images, source_sizes, source_texts,
+                                 tgt_dict=tgt_dict,
+                                 constraints=constraints)
+
+    @classmethod
+    def load(
+            cls,
+            root: str,
+            args,
+            split: str,
+            source,
+            target,
+            image_generator,
+            tgt_dict,
+            is_train_split: bool,
+            epoch: int,
+            seed: int,
+    ) -> "VisualTextDataset":
+        """
+        Loads plain text or indexed data.
+        """
+        if args.dataset_impl == "raw":
+            return cls.from_text_path(root, args, split, source, target,
+                                      image_generator, tgt_dict, is_train_split,
+                                      epoch, seed)
+        elif args.dataset_impl == "mmap":
+            pass
+        else:
+            raise Exception(f"No such dataset implementation {args.dataset_impl}")

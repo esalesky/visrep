@@ -302,6 +302,11 @@ class LanguagePairDataset(FairseqDataset):
         return self.buckets
 
     def __getitem__(self, index):
+        """
+        Returns a single item in the form of a dictionary with an id, source,
+        target, and (optionally) alignment and constraints.
+        """
+
         tgt_item = self.tgt[index] if self.tgt is not None else None
         src_item = self.src[index]
         # Append EOS to end of tgt sentence if it does not have an EOS and remove
