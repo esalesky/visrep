@@ -1,12 +1,22 @@
-
-# Introduction
-
-Fairseq for Visual Machine Translation
+# Fairseq for Machine Translation via Visual Text
 
 [[_TOC_]]
- 
-  
-## Description  
+
+## Files
+
+The code is implemented via the following files:
+
+* grid_scripts/train.sh
+* grid_scripts/train_wrapper.sh
+* fairseq/tasks/visual_text.py
+* fairseq/data/visual_text_dataset.py
+* fairseq/data/image_generator.py
+* fairseq/models/visual/visual_transformer.py
+  (Note: fairseq/models/visual_transformer.py is UNUSED)
+
+There are other files scattered about that are not used.
+
+## Description
 In this work, we learn a visual representation of source tokens that when added to a token embedding improves the final target translation. The visual representation is learned from an image of the source token or sentence, that is generated using a font file and gaming engine.  
 
 We investigate both aligned and unaligned visual representations. For the aligned model, we learn a 512-dimensional visual representation for each word image (dictionary entry) of a source sentence. For the unaligned model, we learn a 512-dimensional visual representation for each step width of a full-sentence image.  
@@ -16,22 +26,6 @@ The visual representation model can be learned as an end-to-end system with a ma
 Both the aligned and unaligned pre-trained models use an OCR CNN-based architecture. The OCR model consists of 7 convolution layers with max-pooling after layers 2 and 4. A bridge layer is used to combine the CNN output height and channels into the 512-dimensional embedding at each step width. The aligned model uses an adaptive average pooling layer after the CNN to pool the step width to a single dimension per word. The unaligned model uses fractional max pooling after layers 2 and 4, which controls the final step width of the sentence representation.  
 
 The aligned model is trained with a cross-entropy loss for each visual word representation. The unaligned model is trained with a connectionist temporal classification loss over the sequence of words in the sentence. 
-
-## To do  
-- [x] merge branch with pre-train tasks into 'robust' branch
-- [x] add source loss for unalign CTCLoss  
-- [x] calculate CER or accuracy on validation  
-- [x] add tensorboard support
-- [x] add checkpoint loading of pre-train models  
-- [x] switch visual representation model to gray-scale
-- [x] add an argument to control step width for unaligned (width of visual embedding)
-- [x] add the ability to enable/disable gradient updates from the pre-train model
-- [x] load pre-train images in __getitem__ from numpy compressed file  
-- [x] add logging support using LOG.debug
-- [x] display debug source ref vs hyp OCR output on forward pass of transformer
-- [x] refactor aligned and unaligned  
-  (the code was getting a little unwieldy with branches for pre-train and word vs line)  
-  
 
 ## Major features
 - online image generation for both tokens and sentences
