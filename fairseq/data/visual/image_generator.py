@@ -26,8 +26,8 @@ class TextImageGenerator():
                  font_size=8,
                  font_rotation=0,
                  pad_size=5,
-                 stride=25,
-                 overlap=5,
+                 window=30,
+                 stride=20,
              ):
         pygame.freetype.init()
         pygame.freetype.set_default_resolution(dpi)
@@ -64,8 +64,8 @@ class TextImageGenerator():
         self.image_height = self.font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
         logger.info(f"Image height for font size {self.font_size} is {self.image_height}")
 
-        self.stride = stride
-        self.overlap = overlap
+        self.window = window
+        self.overlap = window - stride
 
     def get_surface(self, line_text):
         """Creates a single image from an entire line and returns the surface."""
@@ -87,8 +87,8 @@ class TextImageGenerator():
 
         # Make sure crop width is a multiple of the stride
         crop_width = text_rect.width + (self.pad_left + self.pad_right)
-        if crop_width % self.stride != 0:
-            crop_width = ((crop_width // self.stride) + 1) * self.stride
+        if crop_width % self.window != 0:
+            crop_width = ((crop_width // self.window) + 1) * self.window
 
         crop = (self.start_x - self.pad_left,
                 self.start_y - self.pad_top - self.pad_bottom,
@@ -125,10 +125,10 @@ class TextImageGenerator():
         whole_image = self.get_image_from_surface(surface)
 
         # Move a window over the image. The image width is guaranteed to be at
-        # least as wide as the stride.
+        # least as wide as the window.
         image_pieces = []
-        for x in range(0, width - self.stride + 1, self.stride - self.overlap):
-            crop_width = self.stride
+        for x in range(0, width - self.window + 1, self.window - self.overlap):
+            crop_width = self.window
             # if x + crop_width > width:
             #     crop_width -= (x + crop_width - width)
             crop_region = (x, 0, crop_width, height)
@@ -230,8 +230,8 @@ class TextImageGenerator():
 
 
 def main(args):
-    gen = TextImageGenerator(stride=args.image_stride,
-                             overlap=args.image_stride_overlap,
+    gen = TextImageGenerator(window=args.image_window,
+                             stride=args.image_stride,
                              font_size=args.font_size,
     )
     whole_image = gen.get_image(args.text)
@@ -250,8 +250,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--font-size", type=int, default=8)
-    parser.add_argument("--image-stride", type=int, default=30)
-    parser.add_argument("--image-stride-overlap", type=int, default=10)
+    parser.add_argument("--image-window", type=int, default=30)
+    parser.add_argument("--image-stride", type=int, default=10)
     parser.add_argument("--text", type=str, default="This is a test.")
     args = parser.parse_args()
 

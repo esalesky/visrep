@@ -69,21 +69,11 @@ class VisualTextTask(LegacyFairseqTask):
 
         parser.add_argument("--image-embed-type", default='avg', type=str,
                             help='Image embed type [add, avg, concat, visonly, tokonly]')
-        parser.add_argument('--image-embed-dim', default=512, type=int,
-                            help='Image embed dim')
         parser.add_argument('--image-embedding-normalize',  action='store_true',
                             help='Image embedding l2 normalize')
 
         parser.add_argument('--image-pretrain-eval-only', action='store_true',
                             help='OCR pretrain model in eval only mode')
-        parser.add_argument("--image-display-mod", type=int,
-                            default=400, help="display ocr ref/hyp and write image")
-        parser.add_argument('--image-augment', action='store_true',
-                            help='Augment images during training')
-        parser.add_argument('--image-enable-src-loss', action='store_true',
-                            help='Enable src loss')
-        parser.add_argument('--image-src-loss-scale', type=float, default=1.0,
-                            help='Image src loss scale')
 
         parser.add_argument('--image-font-path', type=str,
                             default='', help='Input font file')
@@ -96,13 +86,12 @@ class VisualTextTask(LegacyFairseqTask):
         parser.add_argument("--image-dpi", type=int,
                             default=120, help="Image dpi")
 
-        parser.add_argument("--image-stride", type=int, default=30,
-                            help="Stride width in image pixels")
-        parser.add_argument("--image-stride-overlap", type=int, default=10,
-                            help="Stride overlap in image pixels")
-
         parser.add_argument('--image-cache-path', default=None, type=str,
                             help='Image cache path')
+        parser.add_argument("--image-window", type=int, default=30,
+                            help="Window size in pixels")
+        parser.add_argument("--image-stride", type=int, default=10,
+                            help="Stride width in pixels")
 
 
     def __init__(self, args, tgt_dict):
@@ -110,20 +99,20 @@ class VisualTextTask(LegacyFairseqTask):
         self.tgt_dict = tgt_dict
         self.source_lang = args.source_lang
         self.target_lang = args.target_lang
-        self.image_generator = TextImageGenerator(stride=args.image_stride,
-                                                  overlap=args.image_stride_overlap,
+        self.image_generator = TextImageGenerator(window=args.image_window,
+                                                  stride=args.image_stride,
                                               )
 
         if self.source_lang is None or self.target_lang is None:
             raise ValueError("You have to set --source-lang and --target-lang")
 
-        assert args.image_stride > args.image_stride_overlap, "Stride must be larger than overlap"
-        assert args.image_stride % args.image_stride_overlap == 0, "overlap must be a factor of stride"
+        assert args.image_stride > 0 and args.image_stride <= args.image_window, "Stride must be nonzero and not greater than the window size"
 
         # self.data_cfg = S2TDataConfig(op.join(args.data, args.config_yaml))
 
     @classmethod
     def setup_task(cls, args, **kwargs):
+#        visual_config = VisualTextConfig(args)
         dict_path = op.join(args.data, args.target_dict)
         if not op.isfile(dict_path):
             raise FileNotFoundError(f"Dict not found: {dict_path}")

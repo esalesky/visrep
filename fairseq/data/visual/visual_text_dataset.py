@@ -48,6 +48,65 @@ def _collate_slices(
     return out
 
 
+DEFAULT_FONT_SIZE = 8
+DEFAULT_FONT_PATH = "."
+DEFAULT_IMAGE_STRIDE = 30
+DEFAULT_IMAGE_STRIDE_OVERLAP = 10
+
+class VisualTextConfig(object):
+    """Wrapper class for data config YAML"""
+
+    def __init__(self, args):
+        yaml_path = None
+
+        # TODO: If config file passed, load from specified path
+        # Make sure config file is consistent with args
+        # If config file not found, write it out in data dir
+
+        try:
+            import yaml
+        except ImportError:
+            print("Please install PyYAML to load YAML files for Visual text config")
+        self.config = {}
+        if op.isfile(yaml_path):
+            try:
+                with open(yaml_path) as f:
+                    self.config = yaml.load(f, Loader=yaml.FullLoader)
+            except Exception as e:
+                logger.info(f"Failed to load config from {yaml_path}: {e}")
+        else:
+            logger.info(f"Cannot find {yaml_path}")
+
+    def dump(self, yaml_path):
+        """Dump image config to file specified by path."""
+        with open(yaml_path, "w") as outfh:
+            print(yaml.dumps(self.config), file=outfh)
+
+    def type(self) -> str:
+        """Returns the image embedding method. The options are:
+        * slice: slice the image using {image_stride}
+        *
+        """
+        return self.config.get("method", DEFAULT_TYPE)
+
+    @property
+    def font_size(self) -> int:
+        return self.config.get("font_size", DEFAULT_FONT_SIZE)
+
+    @property
+    def font_path(self) -> str:
+        """Shuffle dataset samples before batching"""
+        return self.config.get("font_path", DEFAULT_FONT_PATH)
+
+    @property
+    def window(self) -> int:
+        return self.config.get("window", DEFAULT_IMAGE_WINDOW)
+
+    @property
+    def stride(self) -> int:
+        return self.config.get("stride", DEFAULT_IMAGE_STRIDE)
+
+
 class VisualTextDataset(LanguagePairDataset):
     """
     A class containing source texts, source images, and target IDs.
@@ -237,7 +296,6 @@ class VisualTextDataset(LanguagePairDataset):
             source_images.append(image_tensor)
             source_sizes.append(image_tensor.shape[0])
 
-            print("FROM TEXT", args.image_samples_path)
             if args.image_samples_path is not None:
 
                 imagepath = f"{args.image_samples_path}.{lineno}.png"
