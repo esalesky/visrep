@@ -1,5 +1,7 @@
 .#*
 *#
+*~
+*.bak
 build
 *__pycache__*
 *.swp
