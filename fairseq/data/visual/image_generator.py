@@ -66,6 +66,7 @@ class TextImageGenerator():
         logger.info(f"Image height for font size {self.font_size} is {self.image_height}")
 
         self.window = window
+        self.stride = stride
         self.overlap = window - stride
 
     def get_surface(self, line_text):
@@ -86,10 +87,13 @@ class TextImageGenerator():
         text_rect = self.font.render_to(
             surf, (self.start_x, self.start_y), line_text)
 
-        # Make sure crop width is a multiple of the stride
+        # Make sure the stride + window fit within the surface
         crop_width = text_rect.width + (self.pad_left + self.pad_right)
-        if crop_width % self.window != 0:
-            crop_width = ((crop_width // self.window) + 1) * self.window
+        if (crop_width - self.stride) % self.window != 0:
+            # The width minus the stride has to factorize by the window size.
+            # If not, find the size of the last piece, and increase it to be
+            # exactly one window size.
+            crop_width += self.window - ((crop_width - self.stride) % self.window)
 
         crop = (self.start_x - self.pad_left,
                 self.start_y - self.pad_top - self.pad_bottom,
@@ -128,10 +132,8 @@ class TextImageGenerator():
         # Move a window over the image. The image width is guaranteed to be at
         # least as wide as the window.
         image_pieces = []
-        for x in range(0, width - self.window + 1, self.window - self.overlap):
+        for x in range(0, width - self.window + 1, self.stride):
             crop_width = self.window
-            # if x + crop_width > width:
-            #     crop_width -= (x + crop_width - width)
             crop_region = (x, 0, crop_width, height)
 
             image = self.get_image_from_surface(surface.subsurface(crop_region))
@@ -234,6 +236,7 @@ def main(args):
     gen = TextImageGenerator(window=args.image_window,
                              stride=args.image_stride,
                              font_size=args.font_size,
+                             font_file=args.font_file,
     )
     whole_image = gen.get_image(args.text)
     imagepath = f"test_image.png"
@@ -242,7 +245,7 @@ def main(args):
 
     whole_image, image_pieces = gen.get_images(args.text)
     for i, image in enumerate(image_pieces, 1):
-        imagepath = f"test_image.{i}.png"
+        imagepath = f"test_image.{i:02d}.png"
         cv2.imwrite(imagepath, image)
         print(f"Writing to {imagepath}", file=sys.stderr)
 
@@ -254,7 +257,7 @@ if __name__ == "__main__":
     parser.add_argument("--font-size", type=int, default=8)
     parser.add_argument("--image-window", type=int, default=30)
     parser.add_argument("--image-stride", type=int, default=10)
-    parser.add_argument("--text", type=str, default="This is a test.")
+    parser.add_argument("--text", type=str, default="The quick brown fox jumped over the lazy dog.")
     args = parser.parse_args()
 
     main(args)
