@@ -2,19 +2,88 @@
 
 [[_TOC_]]
 
+The "visual" branch is quite a bit different and simplified from the
+prior "ocr" branch. There is just one kind of model, "unaligned" in
+our former parlance, but it is implemented technically in the
+"aligned" vein. The data loader generates a complete sentence and then
+chops it up into slices according to the values of `--image-window`
+and `--image-stride`. It then uses these to generate a sample of
+dimensions (tokens x width x height).  The width is `--image-window`,
+height is determined automatically from the font size (`--font-size`),
+and "tokens" depends on how long the sentence is and so on. There is
+no preprocessing of the source side.
+
+(Note taht extending this to work with our previous "aligned" idea would
+just first split the text on whitespace, then generate the images, making
+sure they're all padded to the same width (or some maximum).)
+
+Because the image is generated completely in the data loader, we can
+use other code basicaly as-is. We have a VisualTextTransformer (enabled
+with `--task visual_text`), which produces the embeddings, one per image
+slice. After that, everything works as per normal fairseq.
+
+Here are some TODOs, then a brief code walkthrough.
+
+## TODOs
+
+- [ ] Move the image generation stage to preprocessing (since it takes a bit)
+- [ ] Record the image parameters in the model config (or maybe they're there
+      already?), and load them automatically at inference time (currently, you
+      have to specify them)
+- [ ] Add a source loss
+
 ## Files
 
 The code is implemented via the following files:
 
 * grid_scripts/train.sh
 * grid_scripts/train_wrapper.sh
+
+  These two scripts are used to run jobs. You basicall have to pass in
+  a few arguments:
+
+  --task visual_text --arch visual_text_transformer \
+  --image-window --image stride
+  --image-font-path
+
+  There are some other parameters leftover that I am not sure whether they
+  are used.
+
+  You can have samples written to the MODELDIR/samples/ subdirectory
+  using --image-samples-path (directory to write to) and
+  --image-samples-interval N (write every Nth image)
+
 * fairseq/tasks/visual_text.py
+
+  The visual text task. Does data loading,
+  instantiates the model for training, and creates the data for inference.
+
 * fairseq/data/visual_text_dataset.py
 * fairseq/data/image_generator.py
+
+  Loads the raw data, and generates images from text. This should be extended
+  to permit preprocessing of images, and to do word-level ("aligned") image
+  generation.
+
 * fairseq/models/visual/visual_transformer.py
   (Note: fairseq/models/visual_transformer.py is UNUSED)
 
+  Creates the VisualTextTransformerModel. This has a
+  VisualTextTransformerEncoder and a normal decoder. The only thing different
+  the encoder does is call self.cnn_embedder, which is an instance of
+  AlignOcrEncoder
+
+* fairseq/modules/vis_align_ocr.py
+
+  The aligned encoder, which takes a (batch x slices x width x height)
+  object and generates (batch x slices x embed_size) encodings using the
+  OCR code.
+
 There are other files scattered about that are not used.
+
+That's mostly it! Though I am probably missing something.
+
+# OLD STUFF
 
 ## Description
 In this work, we learn a visual representation of source tokens that when added to a token embedding improves the final target translation. The visual representation is learned from an image of the source token or sentence, that is generated using a font file and gaming engine.  
