@@ -92,8 +92,8 @@ class TextImageGenerator():
             surf, (self.pad_left, self.pad_top), line_text)
 
         # Make sure the stride + window fit within the surface
-        crop_width = text_rect.width + (self.pad_left + self.pad_right)
-        if (crop_width - self.stride) % self.window != 0:
+        crop_width = max(self.window, text_rect.width + (self.pad_left + self.pad_right))
+        if (crop_width - self.window) % self.window != 0:
             # The width minus the stride has to factorize by the window size.
             # If not, find the size of the last piece, and increase it to be
             # exactly one window size.
