@@ -25,7 +25,7 @@ class TextImageGenerator():
     def __init__(self,
                  font_file=None,
                  surf_width=5000, surf_height=200,
-                 start_x=25, start_y=25, dpi=120,
+                 dpi=120,
                  bkg_color="white",
                  font_color="black",
                  font_style=1,
@@ -48,8 +48,6 @@ class TextImageGenerator():
 
         self.surface_width = surf_width
         self.surface_height = surf_height
-        self.start_x = start_x
-        self.start_y = start_y
         self.dpi = dpi
 
         self.font_rotation = [font_rotation] if font_rotation is not None else [-6, -4, -2, 0, 2, 4, 6]
@@ -91,7 +89,7 @@ class TextImageGenerator():
         surf.fill(pygame.color.THECOLORS['white'])
 
         text_rect = self.font.render_to(
-            surf, (self.start_x, self.start_y), line_text)
+            surf, (self.pad_left, self.pad_top), line_text)
 
         # Make sure the stride + window fit within the surface
         crop_width = text_rect.width + (self.pad_left + self.pad_right)
@@ -101,10 +99,10 @@ class TextImageGenerator():
             # exactly one window size.
             crop_width += self.window - ((crop_width - self.stride) % self.window)
 
-        crop = (self.start_x - self.pad_left,
-                self.start_y - self.pad_top,
-                crop_width,
-                self.image_height)
+        if crop_width > self.surface_width:
+            logger.error(f"Surface is too small for text {line_text}")
+
+        crop = (0, 0, crop_width, self.image_height)
 
         surf = surf.subsurface(crop)
 
