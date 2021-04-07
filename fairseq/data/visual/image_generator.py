@@ -38,6 +38,7 @@ class TextImageGenerator():
         ])
 
         self.font_file = font_file
+        logger.info(f"Font path: {self.font_file}")
 
         self.surface_width = surf_width
         self.surface_height = surf_height
@@ -249,6 +250,7 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("--font-file", type=str, default="/home/hltcoe/mpost/code/fairseq-ocr/fairseq/data/visual/fonts/NotoMono-Regular.ttf")
     parser.add_argument("--font-size", type=int, default=8)
     parser.add_argument("--image-window", type=int, default=30)
     parser.add_argument("--image-stride", type=int, default=10)

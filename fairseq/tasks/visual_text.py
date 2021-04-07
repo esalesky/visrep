@@ -101,6 +101,7 @@ class VisualTextTask(LegacyFairseqTask):
         self.target_lang = args.target_lang
         self.image_generator = TextImageGenerator(window=args.image_window,
                                                   stride=args.image_stride,
+                                                  font_file=args.image_font_path,
                                               )
 
         if self.source_lang is None or self.target_lang is None:
