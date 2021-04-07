@@ -13,7 +13,13 @@ import torch
 
 import torchvision.transforms as transforms
 
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_FONT_SIZE = 8
+DEFAULT_PAD_SIZE = 3
+DEFAULT_WINDOW = 30
+DEFAULT_STRIDE = 20
 
 class TextImageGenerator():
     def __init__(self,
@@ -23,11 +29,11 @@ class TextImageGenerator():
                  bkg_color="white",
                  font_color="black",
                  font_style=1,
-                 font_size=8,
+                 font_size=DEFAULT_FONT_SIZE,
                  font_rotation=0,
-                 pad_size=5,
-                 window=30,
-                 stride=20,
+                 pad_size=DEFAULT_PAD_SIZE,
+                 window=DEFAULT_WINDOW,
+                 stride=DEFAULT_STRIDE,
              ):
         pygame.freetype.init()
         pygame.freetype.set_default_resolution(dpi)
@@ -96,7 +102,7 @@ class TextImageGenerator():
             crop_width += self.window - ((crop_width - self.stride) % self.window)
 
         crop = (self.start_x - self.pad_left,
-                self.start_y - self.pad_top - self.pad_bottom,
+                self.start_y - self.pad_top,
                 crop_width,
                 self.image_height)
 
@@ -254,10 +260,12 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--font-file", type=str, default="/home/hltcoe/mpost/code/fairseq-ocr/fairseq/data/visual/fonts/NotoMono-Regular.ttf")
-    parser.add_argument("--font-size", type=int, default=8)
-    parser.add_argument("--image-window", type=int, default=30)
-    parser.add_argument("--image-stride", type=int, default=10)
+    parser.add_argument("--font-size", type=int, default=DEFAULT_FONT_SIZE)
+    parser.add_argument("--image-window", type=int, default=DEFAULT_WINDOW)
+    parser.add_argument("--image-stride", type=int, default=DEFAULT_STRIDE)
     parser.add_argument("--text", type=str, default="The quick brown fox jumped over the lazy dog.")
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     main(args)
