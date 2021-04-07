@@ -35,7 +35,7 @@ case ${SRC} in
     FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSans-Regular.ttf
     ;;
   zh | ja | ko )
-    FONTPATH=/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
+    FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
     ;;
   *)
     echo "You didn't set a font path for language ${SRC}, you turd!"
