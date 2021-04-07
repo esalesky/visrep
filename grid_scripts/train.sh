@@ -17,22 +17,42 @@ if [ ! -z $SGE_HGR_gpu ]; then
     sleep 3
 fi
 
+: ${WINDOW=30}
+: ${STRIDE=20}
 MODELDIR=$1
+SRC=$2
+TRG=$3
+
+shift
+shift
 shift
 
-## Settings
-SRC=de
-TRG=en
 FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
-DATADIR=/exp/mpost/mtocr19/data/unaligned/5k/$SRC-$TRG
+DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
+
+case ${SRC} in
+  de | fr | en )
+    FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoMono-Regular.ttf
+    ;;
+  zh | ja | ko )
+    FONTPATH=/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
+    ;;
+  *)
+    echo "You didn't set a font path for language ${SRC}, you turd!"
+    exit 1
+    ;;
+esac
 
 export PYTHONPATH=$FAIRSEQ
 
 echo "PATH: ${PATH}"
 echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
+echo "FAIRSEQ: $FAIRSEQ"
+echo "FONTPATH: $FONTPATH"
+echo "WINDOW: $WINDOW"
+echo "STRIDE: $STRIDE"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo "DATADIR: $DATADIR"
-echo "FAIRSEQ: $FAIRSEQ"
 echo "MODELDIR: $MODELDIR"
 
 [[ ! -d $MODELDIR ]] && mkdir -p $MODELDIR
@@ -57,6 +77,9 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --image-samples-interval 10000 \
   --image-embed-type 'visonly' \
   --image-embedding-normalize \
+  --image-font-path $FONTPATH \
+  --image-window $WINDOW \
+  --image-stride $STRIDE \
   --criterion 'label_smoothed_cross_entropy' \
   --adam-betas '(0.9, 0.98)' \
   --adam-eps 1e-08 \
@@ -94,9 +117,16 @@ echo done > $MODELDIR/status
 
 # evaluate
 outfile=$MODELDIR/out.mttt.test1
-cat ~/data/bitext/raw/multitarget-ted/en-de/raw/ted_test1_en-de.raw.de | ./interactive.sh $MODELDIR > $outfile
+cat ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
+| ./interactive.sh $MODELDIR \
+  --image-font-path $FONTPATH \
+  --image-window $WINDOW \
+  --image-stride $STRIDE \
+ > $outfile
 
 cleanfile=$MODELDIR/clean.mttt.test1
 bleufile=$MODELDIR/bleu.mttt.test1
-grep ^D- $outfile | sort -V | cut -f 3 | debpe | tee $cleanfile | sacrebleu -b ~/data/bitext/raw/multitarget-ted/en-de/raw/ted_test > $bleufile
-
+grep ^D- $outfile | sort -V | cut -f 3 | debpe \
+| tee $cleanfile \
+| sacrebleu -b ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$TRG \
+> $bleufile
