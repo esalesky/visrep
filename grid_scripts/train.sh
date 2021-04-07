@@ -32,7 +32,7 @@ DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
 
 case ${SRC} in
   de | fr | en )
-    FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoMono-Regular.ttf
+    FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSans-Regular.ttf
     ;;
   zh | ja | ko )
     FONTPATH=/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
