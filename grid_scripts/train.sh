@@ -19,6 +19,7 @@ fi
 
 : ${WINDOW=30}
 : ${STRIDE=20}
+: ${FONTSIZE=8}
 MODELDIR=$1
 SRC=$2
 TRG=$3
@@ -32,7 +33,7 @@ DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
 
 case ${SRC} in
   de | fr | en )
-    FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSans-Regular.ttf
+    : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSans-Regular.ttf}
     ;;
   zh | ja | ko )
     FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
@@ -51,6 +52,7 @@ echo "FAIRSEQ: $FAIRSEQ"
 echo "FONTPATH: $FONTPATH"
 echo "WINDOW: $WINDOW"
 echo "STRIDE: $STRIDE"
+echo "FONTSIZE: $FONTSIZE"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo "DATADIR: $DATADIR"
 echo "MODELDIR: $MODELDIR"
@@ -78,6 +80,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --image-embed-type 'visonly' \
   --image-embedding-normalize \
   --image-font-path $FONTPATH \
+  --image-font-size $FONTSIZE \
   --image-window $WINDOW \
   --image-stride $STRIDE \
   --criterion 'label_smoothed_cross_entropy' \
@@ -120,6 +123,7 @@ outfile=$MODELDIR/out.mttt.test1
 cat ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
 | ./interactive.sh $MODELDIR \
   --image-font-path $FONTPATH \
+  --image-font-size $FONTSIZE \
   --image-window $WINDOW \
   --image-stride $STRIDE \
  > $outfile
