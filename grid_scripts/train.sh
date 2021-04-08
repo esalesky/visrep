@@ -16,11 +16,6 @@
 
 set -eu
 
-if [ ! -z $SGE_HGR_gpu ]; then
-    export CUDA_VISIBLE_DEVICES=$SGE_HGR_gpu
-    sleep 3
-fi
-
 : ${WINDOW=30}
 : ${STRIDE=20}
 : ${FONTSIZE=8}
@@ -123,14 +118,8 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
 echo done > $MODELDIR/status
 
 # evaluate
-outfile=$MODELDIR/out.mttt.test1
-cat ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
-| ./interactive.sh $MODELDIR \
-> $outfile
-
-cleanfile=$MODELDIR/clean.mttt.test1
-bleufile=$MODELDIR/bleu.mttt.test1
-grep ^D- $outfile | sort -V | cut -f 3 | debpe \
-| tee $cleanfile \
-| sacrebleu -b ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$TRG \
-> $bleufile
+bash grid_scripts/translate.sh \
+  ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
+  $MODELDIR \
+  $MODELDIR/out.mttt.test1 \
+  ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$TRG
