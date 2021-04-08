@@ -1,14 +1,18 @@
 #!/bin/bash
-#. /etc/profile.d/modules.sh
-#
-# 2020-07-30
-#
-# End-to-end training with source loss.
-#
 
-# module load cuda10.1/toolkit/10.1.105
-# module load cudnn/7.6.1_cuda10.1
-# module load gcc/7.2.0
+# Does visual end-to-end training with standard MT loss.
+#
+# Usage:
+#
+#     cd ~mpost/exp/mtocr19/runs
+#     for lang in ja zh ko de fr; do 
+#       for window in 15 20 25 30; do 
+#         let bottom=window-10
+#         for stride in $(seq $window -5 $bottom); do 
+#           qsub -v FONTSIZE=10 -v WINDOW=$window -v STRIDE=$stride train_wrapper.sh train.sh $lang-en/5k.max-10k.window$window.stride$stride.fontsize10 $lang en
+#         done
+#       done
+#     done
 
 set -eu
 
