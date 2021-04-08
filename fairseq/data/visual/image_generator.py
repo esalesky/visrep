@@ -73,6 +73,8 @@ class TextImageGenerator():
         self.stride = stride
         self.overlap = window - stride
 
+        logger.info(f"Window size {self.window} stride {self.stride}")
+
     def get_surface(self, line_text):
         """Creates a single image from an entire line and returns the surface."""
 

@@ -584,6 +584,10 @@ class FairseqTask(object):
         for this task)."""
         raise NotImplementedError
 
+    def build_image_generator(self, args):
+        """Build the pre-tokenizer for this task."""
+        pass
+
     def build_tokenizer(self, args):
         """Build the pre-tokenizer for this task."""
         return encoders.build_tokenizer(args)

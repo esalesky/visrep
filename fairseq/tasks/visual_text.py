@@ -11,8 +11,14 @@ from fairseq.data import Dictionary, encoders
 from fairseq.data.visual import VisualTextDataset, TextImageGenerator
 from fairseq.tasks import LegacyFairseqTask, register_task
 
-
 logger = logging.getLogger(__name__)
+
+import fairseq.data.visual.image_generator as imgen
+
+
+DEFAULT_FONT_SIZE = imgen.DEFAULT_FONT_SIZE
+DEFAULT_WINDOW = imgen.DEFAULT_WINDOW
+DEFAULT_STRIDE = imgen.DEFAULT_STRIDE
 
 
 @register_task("visual_text")
@@ -75,10 +81,10 @@ class VisualTextTask(LegacyFairseqTask):
         parser.add_argument('--image-pretrain-eval-only', action='store_true',
                             help='OCR pretrain model in eval only mode')
 
-        parser.add_argument('--image-font-path', type=str,
-                            default='', help='Input font file')
-        parser.add_argument("--image-font-size", type=int,
-                            default=16, help="Font size")
+        parser.add_argument('--image-font-path', type=str, default=None,
+                            help='Input font file')
+        parser.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
+                            help="Font size")
         parser.add_argument("--image-surface-width", type=int,
                             default=7000, help="Image surface width")
         parser.add_argument("--image-pad-size", type=int,
@@ -88,32 +94,27 @@ class VisualTextTask(LegacyFairseqTask):
 
         parser.add_argument('--image-cache-path', default=None, type=str,
                             help='Image cache path')
-        parser.add_argument("--image-window", type=int, default=30,
+        parser.add_argument("--image-window", type=int,
+                            default=DEFAULT_WINDOW,
                             help="Window size in pixels")
-        parser.add_argument("--image-stride", type=int, default=10,
+        parser.add_argument("--image-stride", type=int,
+                            default=DEFAULT_STRIDE,
                             help="Stride width in pixels")
-
 
     def __init__(self, args, tgt_dict):
         super().__init__(args)
         self.tgt_dict = tgt_dict
         self.source_lang = args.source_lang
         self.target_lang = args.target_lang
-        self.image_generator = TextImageGenerator(window=args.image_window,
-                                                  stride=args.image_stride,
-                                                  font_file=args.image_font_path,
-                                              )
+        self.build_image_generator(args)
 
         if self.source_lang is None or self.target_lang is None:
             raise ValueError("You have to set --source-lang and --target-lang")
 
         assert args.image_stride > 0 and args.image_stride <= args.image_window, "Stride must be nonzero and not greater than the window size"
 
-        # self.data_cfg = S2TDataConfig(op.join(args.data, args.config_yaml))
-
     @classmethod
     def setup_task(cls, args, **kwargs):
-#        visual_config = VisualTextConfig(args)
         dict_path = op.join(args.data, args.target_dict)
         if not op.isfile(dict_path):
             raise FileNotFoundError(f"Dict not found: {dict_path}")
@@ -166,6 +167,27 @@ class VisualTextTask(LegacyFairseqTask):
     def max_positions(self):
         return self.args.max_source_positions, self.args.max_target_positions
 
+    def build_image_generator(self, args):
+        """Builds an image generator.
+
+        At training time, args.image_font_path will be defined.  At
+        test time, it shouldn't be, so this will not get built until
+        interactive.py calls this function on the task, after loading
+        the model args from the model. This is ugly, but it ensures
+        parameter continuity between training and inference. It's
+        basically a workaround for the fact that parameters in fairseq
+        are task-level, but are stored at the model level (in the
+        checkpoint), but models aren't loaded until after the task
+        is instantiated.
+        """
+        if args.image_font_path is not None:
+            self.image_generator = TextImageGenerator(window=args.image_window,
+                                                      stride=args.image_stride,
+                                                      font_size=args.image_font_size,
+                                                      font_file=args.image_font_path,
+            )
+
+
     def build_model(self, args):
         # args.input_feat_per_channel = self.data_cfg.input_feat_per_channel
         # args.input_channels = self.data_cfg.input_channels
@@ -181,7 +203,6 @@ class VisualTextTask(LegacyFairseqTask):
         { id, net_input: { src_tokens, src_lengths } }
 
         """
-
         dataset = VisualTextDataset.from_text(
             self.args,
             src_tokens,

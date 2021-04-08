@@ -126,11 +126,7 @@ echo done > $MODELDIR/status
 outfile=$MODELDIR/out.mttt.test1
 cat ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
 | ./interactive.sh $MODELDIR \
-  --image-font-path $FONTPATH \
-  --image-font-size $FONTSIZE \
-  --image-window $WINDOW \
-  --image-stride $STRIDE \
- > $outfile
+> $outfile
 
 cleanfile=$MODELDIR/clean.mttt.test1
 bleufile=$MODELDIR/bleu.mttt.test1
