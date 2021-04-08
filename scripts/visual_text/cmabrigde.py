@@ -23,7 +23,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--probability", default=0.1, help="probability of scramble")
+    parser.add_argument("-p", "--probability", default=0.1, type=float, help="probability of scramble")
     args = parser.parse_args()
 
     main(args)

@@ -39,7 +39,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--probability", default=0.1, help="probability of l33t mapping")
+    parser.add_argument("-p", "--probability", default=0.1, type=float, help="probability of l33t mapping")
     args = parser.parse_args()
 
     main(args)
