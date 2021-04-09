@@ -182,7 +182,7 @@ class VisualTextDataset(LanguagePairDataset):
 
         if args.image_samples_path is not None and not os.path.exists(args.image_samples_path):
             logger.info(f"Creating {args.image_samples_path}")
-            os.makedirs(args.image_samples_path)
+            os.makedirs(args.image_samples_path, exist_ok=True)
 
         for sampleno, (source, target) in enumerate(zip(open(source_path, "rt"), open(target_path, "rt")), 1):
             source = source.strip()
