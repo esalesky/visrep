@@ -8,7 +8,7 @@ source /opt/anaconda3/etc/profile.d/conda.sh
 conda deactivate
 conda activate fairseq
 
-trainscript=$1
+script=$1
 modeldir=$2
 shift
 shift
@@ -16,4 +16,4 @@ shift
 [[ ! -d $modeldir ]] && mkdir -p $modeldir
 
 # Now we're on a GPU
-bash $trainscript $modeldir "$@" > $modeldir/log 2>&1
+bash $script $modeldir "$@" > $modeldir/log 2>&1
