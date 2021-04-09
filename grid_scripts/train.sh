@@ -31,8 +31,11 @@ FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
 DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
 
 case ${SRC} in
-  de | fr | en )
+  ru | de | fr | en )
     : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSans-Regular.ttf}
+    ;;
+  ar )
+    : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoNaskhArabic-Regular.ttf}
     ;;
   zh | ja | ko )
     FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
