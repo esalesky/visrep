@@ -77,7 +77,7 @@ The code is implemented via the following files:
 
   The aligned encoder, which takes a (batch x slices x width x height)
   object and generates (batch x slices x embed_size) encodings using the
-  OCR code.
+  OCR code. The kernel used is a 3x3 kernel with a stride of 1.
 
 There are other files scattered about that are not used.
 
