@@ -13,7 +13,14 @@ modeldir=$2
 shift
 shift
 
-[[ ! -d $modeldir ]] && mkdir -p $modeldir
+echo "Running $script $modeldir $@"
+
+if [[ -e $modeldir ]]; then
+    echo "Refusing to run since $modeldir already exists"
+    exit 1
+fi
+
+echo "See results $modeldir/log"
 
 # Now we're on a GPU
-bash $script $modeldir "$@" > $modeldir/log 2>&1
+bash $script $modeldir "$@" >> $modeldir/log 2>&1
