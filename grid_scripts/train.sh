@@ -45,6 +45,9 @@ esac
 
 export PYTHONPATH=$FAIRSEQ
 
+echo "HOSTNAME: $(hostname)"
+nvidia-smi
+
 echo "PATH: ${PATH}"
 echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
 echo "FAIRSEQ: $FAIRSEQ"
@@ -58,8 +61,8 @@ echo "MODELDIR: $MODELDIR"
 
 [[ ! -d $MODELDIR ]] && mkdir -p $MODELDIR
 
-[[ -e $MODELDIR ]] && cp $DATADIR/dict.$SRC.txt $MODELDIR
-[[ -e $MODELDIR ]] && cp $DATADIR/dict.$TRG.txt $MODELDIR
+cp $DATADIR/dict.$SRC.txt $MODELDIR
+cp $DATADIR/dict.$TRG.txt $MODELDIR
 
 cp $0 $MODELDIR/train.sh
 echo "$@" > $MODELDIR/args
@@ -112,14 +115,16 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --weight-decay 0.0001 \
   --log-format json \
   --log-interval 10 \
-  "$@" \
-> $MODELDIR/log 2>&1
+  "$@"
 
+echo "Done training."
 echo done > $MODELDIR/status
 
 # evaluate
+echo "Starting evaluation..."
 bash grid_scripts/translate.sh \
   ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
   $MODELDIR \
   $MODELDIR/out.mttt.test1 \
   ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$TRG
+echo "Done evaluating."
