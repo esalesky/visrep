@@ -7,8 +7,6 @@ import numpy as np
 import torch
 import re
 
-import imgaug as ia
-from imgaug import augmenters as iaa
 
 import cv2
 import pygame.freetype
@@ -24,7 +22,6 @@ import sys
 import inspect
 import os
 from typing import Optional, Iterable, Any
-from fontTools.ttLib import TTFont
 
 import logging
 LOG = logging.getLogger(__name__)
@@ -286,42 +283,6 @@ class VisAlignIndexedCachedDataset(VisAlignIndexedDataset):
         return item
 
 
-class ImageAug(object):
-    """
-    Adds Gaussian noise and other distortions to text.
-    """
-
-    def __init__(self):
-        def sometimes(aug): return iaa.Sometimes(.50, aug)
-        seq = iaa.Sequential(
-            [
-                iaa.OneOf([
-                    iaa.GaussianBlur((0.25, 1.0)),  # blur images with a sigma
-                    # randomly remove up to n% of the pixels
-                    iaa.Dropout((0.01, 0.05), per_channel=0.5),
-                    iaa.CropAndPad(
-                        percent=(-0.05, 0.05),
-                        pad_mode=["constant"],
-                        pad_cval=255
-                    ),
-                    iaa.Affine(
-                        shear=(-3, 3),  # shear by -16 to +16 degrees
-                    ),
-                    iaa.Affine(
-                        rotate=(-4, 4),  # rotate by -45 to +45 degrees
-                    )
-                ]),
-
-            ],
-            random_order=True
-        )
-        self.seq = seq
-
-    def __call__(self, img):
-        images_aug = self.seq.augment_image(img)
-        return images_aug
-
-
 class VisAlignIndexedRawTextDataset(FairseqDataset):
     """Takes a text file as input and binarizes it in memory at instantiation.
     Original lines are also kept in memory"""
@@ -375,7 +336,7 @@ class VisAlignIndexedRawTextDataset(FairseqDataset):
             # pre-train images are already grayscale
             if self.augment:
                 self.transform = transforms.Compose([
-                    ImageAug(),
+                    None,
                     transforms.ToPILImage(),
                     transforms.ToTensor(),
                 ])

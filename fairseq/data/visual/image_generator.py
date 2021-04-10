@@ -13,7 +13,6 @@ import torch
 
 import torchvision.transforms as transforms
 
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_FONT_SIZE = 8
@@ -28,9 +27,7 @@ class TextImageGenerator():
                  dpi=120,
                  bkg_color="white",
                  font_color="black",
-                 font_style=1,
                  font_size=DEFAULT_FONT_SIZE,
-                 font_rotation=0,
                  pad_size=DEFAULT_PAD_SIZE,
                  window=DEFAULT_WINDOW,
                  stride=DEFAULT_STRIDE,
@@ -43,30 +40,28 @@ class TextImageGenerator():
             transforms.ToTensor(),
         ])
 
-        self.font_file = font_file
-        logger.info(f"Font path: {self.font_file}")
+        self.fonts = self.load_fonts(font_file, font_size)
 
         self.surface_width = surf_width
         self.surface_height = surf_height
         self.dpi = dpi
 
-        self.font_rotation = [font_rotation] if font_rotation is not None else [-6, -4, -2, 0, 2, 4, 6]
         self.pad_top = pad_size
         self.pad_bottom = pad_size
         self.pad_left = pad_size
         self.pad_right = pad_size
 
         self.font_size = font_size
-        self.font_style = font_style
         self.font_color = "black"
         self.bkg_color = "white"
 
-        self.font = pygame.freetype.Font(self.font_file, self.font_size)
-        self.font.style = pygame.freetype.STYLE_NORMAL
-        self.font.fgcolor = pygame.color.THECOLORS[font_color]
-
         # Get the maximum image height
-        self.image_height = self.font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
+        self.image_height = 0
+        for font in self.fonts.values():
+            self.image_height = max(
+                self.image_height,
+                font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
+            )
         logger.info(f"Image height for font size {self.font_size} is {self.image_height}")
 
         self.window = window
@@ -75,22 +70,16 @@ class TextImageGenerator():
 
         logger.info(f"Window size {self.window} stride {self.stride}")
 
-    def get_surface(self, line_text):
+    def get_surface(self, line_text, lang="*"):
         """Creates a single image from an entire line and returns the surface."""
-
-        # Replace Unicode Character 'LOWER ONE EIGHTH BLOCK' (U+2581)
-        # many of the fonts can not render this code
-        # TODO
-        line_text = line_text.replace('▁', '_')
 
         curr_surface_width = self.surface_width
         curr_surface_height = self.surface_height
-        text_rect_size = self.font.get_rect(line_text)
 
         surf = pygame.Surface((curr_surface_width, curr_surface_height))
         surf.fill(pygame.color.THECOLORS['white'])
 
-        text_rect = self.font.render_to(
+        text_rect = self.fonts[lang].render_to(
             surf, (self.pad_left, self.pad_top), line_text)
 
         # Make sure the stride + window fit within the surface
@@ -112,7 +101,7 @@ class TextImageGenerator():
 
         return surf
 
-    def get_image_from_surface(self, surf):
+    def get_image_from_surface(self, surf, lang="*"):
         """Transforms a surface containing a rendered image into a numpy image."""
         image = pygame.surfarray.pixels3d(surf)
         image = image.swapaxes(0, 1)
@@ -121,13 +110,13 @@ class TextImageGenerator():
 
         return image
 
-    def get_image(self, text):
+    def get_image(self, text, lang="*"):
         """
         Returns a single image from a line of text.
         """
         return self.get_image_from_surface(self.get_surface(text))
 
-    def get_images(self, line_text):
+    def get_images(self, line_text, lang="*"):
         """
         Returns images from all pieces in a line of text.
         """
@@ -163,81 +152,37 @@ class TextImageGenerator():
         assert len(tensors) != 0, text
         return torch.stack(tensors)
 
-    def get_font_list(self, font_file_path):
-        fontlist = []
-        fontcnt = 0
-        print('...loading fonts from %s' % font_file_path)
-        with open(font_file_path, 'r') as file:  # , encoding='utf8') as file:
-            for ctr, line in enumerate(file.readlines()):
-                fontname = line.strip()
-                fontcnt += 1
-                fontlist.append(fontname)
-        print('Found %d fonts' % (len(fontlist)))
-        return fontlist
+    @classmethod
+    def load_fonts(cls, font_file_path, font_size, font_color="black"):
+        """The font file path is either (a) the path to a font or (b) the path
+        to a file containing (language pair, font path) pairs, e.g.,
 
-    def image_resize(self, image, width=None, height=None,
-                     inter=cv2.INTER_AREA):
-        # initialize the dimensions of the image to be resized and grab the
-        # image size
-        dim = None
-        (h, w) = image.shape[:2]
-        # print(h,w,height,width)
+            * NotoSans-Regular.ttf
+            ar NotoNaskhArabic-Regular.ttf
 
-        # if both the width and height are None, then return the original image
-        if width is None and height is None:
-            return image
-
-        # check to see if the width is None
-        if width is None:
-            # calculate the ratio of the height and construct the dimensions
-            r = height / float(h)
-            dim = (int(w * r), height)
-            # print('resize height to ', height)
-        # otherwise, the height is None
+        The '*' keyword functions as a default, when the language is
+        not specified or provided.
+        """
+        fonts = {}
+        logger.info(f"Loading fonts from {font_file_path}")
+        if font_file_path.endswith(".map"):
+            with open(font_file_path, 'r') as infile:
+                for line in infile:
+                    langpair, path = line.rstrip().split()
+                    fonts[langpair] = pygame.freetype.Font(path, font_size)
+                    logger.info(f"-> Found {langpair} font {path}")
         else:
-            # calculate the ratio of the width and construct the dimensions
-            r = width / float(w)
-            dim = (width, int(h * r))
-            # print('resize width to ', width)
+            fonts["*"] = pygame.freetype.Font(font_file_path, font_size)
 
-        # resize the image
-        resized = cv2.resize(image, dim, interpolation=inter)
+        for langpair, font in fonts.items():
+            font.style = pygame.freetype.STYLE_NORMAL
+            font.fgcolor = pygame.color.THECOLORS[font_color]
 
-        (h, w) = resized.shape[:2]
-        return resized
+        if "*" not in fonts:
+            logger.error(f"Found no default font!")
+            sys.exit(1)
 
-    def resize_or_pad(self, img_data, height, width=None):
-        """
-        For line-based decoding, we don't want to change the width.
-        """
-        img_height, img_width = img_data.shape[:2]
-        # print('input h, w', img_height, img_width)
-        if img_height > height:
-            img_data = self.image_resize(img_data, height=height)
-            img_height, img_width = img_data.shape[:2]
-        # print('height resize h, w', img_height, img_width)
-
-        # Only adjust width if a requested width was passed (i.e., for word-based embeddings)
-        if width:
-            if img_width > width:
-                img_data = self.image_resize(img_data, width=width)
-                img_height, img_width = img_data.shape[:2]
-                # print('width resize h, w', img_height, img_width)
-
-            img_height, img_width = img_data.shape[:2]
-            pad_height = height - img_height
-            pad_width = width - img_width
-
-            border_color = [255, 255, 255]
-            # border_color = [0, 0, 0]
-
-            # print('img h w', img_height, img_width)
-            # print('pad h w',pad_height, pad_width)
-            img_data = cv2.copyMakeBorder(
-                img_data, pad_height, 0, 0, pad_width, cv2.BORDER_CONSTANT,
-                value=border_color)
-
-        return img_data
+        return fonts
 
 
 def main(args):

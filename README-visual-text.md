@@ -32,6 +32,16 @@ Here are some TODOs, then a brief code walkthrough.
       have to specify them)
 - [ ] Add a source loss
 
+## Installation
+
+Run
+
+    pip3 install -r examples/visual_text/requirements.txt
+
+You may have to first install the following on OS X:
+
+    brew install sdl sdl_image sdl_mixer sdl_ttf portmidi
+
 ## Files
 
 The code is implemented via the following files:
