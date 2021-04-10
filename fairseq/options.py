@@ -29,6 +29,7 @@ from fairseq.utils import csv_str_list, eval_bool, eval_str_dict, eval_str_list 
 def get_preprocessing_parser(default_task="translation"):
     parser = get_parser("Preprocessing", default_task)
     add_preprocess_args(parser)
+    add_visual_text_args(parser)
     return parser
 
 
@@ -238,6 +239,35 @@ def get_parser(desc, default_task="translation"):
         help="task",
     )
     # fmt: on
+    return parser
+
+DEFAULT_FONT_SIZE = 8
+DEFAULT_PAD_SIZE = 3
+DEFAULT_WINDOW = 30
+DEFAULT_STRIDE = 20
+
+def add_visual_text_args(parser):
+    group = parser.add_argument_group("Visual text")
+    # fmt: off
+    group.add_argument('--image-font-path', type=str, default=None,
+                       help='Input font file')
+    group.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
+                       help="Font size")
+    group.add_argument("--image-surface-width", type=int,
+                       default=7000, help="Image surface width")
+    group.add_argument("--image-pad-size", type=int,
+                       default=2, help="Image pad size")
+    group.add_argument("--image-dpi", type=int,
+                       default=120, help="Image dpi")
+    group.add_argument('--image-cache-path', default=None, type=str,
+                       help='Image cache path')
+    group.add_argument("--image-window", type=int,
+                       default=DEFAULT_WINDOW,
+                       help="Window size in pixels")
+    group.add_argument("--image-stride", type=int,
+                       default=DEFAULT_STRIDE,
+                       help="Stride width in pixels")
+    # fmt: off
     return parser
 
 

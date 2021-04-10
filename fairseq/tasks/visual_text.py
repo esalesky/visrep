@@ -13,6 +13,8 @@ from fairseq.tasks import LegacyFairseqTask, register_task
 
 logger = logging.getLogger(__name__)
 
+from fairseq.options import add_visual_text_args
+
 import fairseq.data.visual.image_generator as imgen
 
 
@@ -81,25 +83,7 @@ class VisualTextTask(LegacyFairseqTask):
         parser.add_argument('--image-pretrain-eval-only', action='store_true',
                             help='OCR pretrain model in eval only mode')
 
-        parser.add_argument('--image-font-path', type=str, default=None,
-                            help='Input font file')
-        parser.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
-                            help="Font size")
-        parser.add_argument("--image-surface-width", type=int,
-                            default=7000, help="Image surface width")
-        parser.add_argument("--image-pad-size", type=int,
-                            default=2, help="Image pad size")
-        parser.add_argument("--image-dpi", type=int,
-                            default=120, help="Image dpi")
-
-        parser.add_argument('--image-cache-path', default=None, type=str,
-                            help='Image cache path')
-        parser.add_argument("--image-window", type=int,
-                            default=DEFAULT_WINDOW,
-                            help="Window size in pixels")
-        parser.add_argument("--image-stride", type=int,
-                            default=DEFAULT_STRIDE,
-                            help="Stride width in pixels")
+        add_visual_text_args(parser)
 
     def __init__(self, args, tgt_dict):
         super().__init__(args)
