@@ -1,0 +1,17 @@
+#!/bin/bash
+
+#$ -cwd -S /bin/bash -V
+#$ -j y -o logs/
+#$ -l gpu=1 -q gpu.q@@v100 -q gpu.q@@dgx -q gpu.q@@rtx -l h_rt=48:00:00
+
+source /opt/anaconda3/etc/profile.d/conda.sh
+conda deactivate
+conda activate fairseq
+
+modeldir=$1
+shift
+
+echo "Training in $modeldir $@"
+
+# Now we're on a GPU
+bash /home/hltcoe/mpost/code/fairseq-ocr/grid_scripts/train.sh $modeldir "$@"

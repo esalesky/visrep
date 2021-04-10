@@ -62,7 +62,13 @@ echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo "DATADIR: $DATADIR"
 echo "MODELDIR: $MODELDIR"
 
-[[ ! -d $MODELDIR ]] && mkdir -p $MODELDIR
+
+if [[ -e $MODELDIR ]]; then
+    echo "Refusing to run training since $MODELDIR already exists"
+    exit 1
+fi
+
+mkdir -p $MODELDIR
 
 cp $DATADIR/dict.$SRC.txt $MODELDIR
 cp $DATADIR/dict.$TRG.txt $MODELDIR
@@ -75,7 +81,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --task 'visual_text' \
   --arch visual_text_transformer \
   -s $SRC -t $TRG \
-  --save-dir ${MODELDIR} \
+  --save-dir $MODELDIR \
   --target-dict $DATADIR/dict.$TRG.txt \
   --validate-interval-updates 1000 \
   --patience 10 \
@@ -118,7 +124,9 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --weight-decay 0.0001 \
   --log-format json \
   --log-interval 10 \
-  "$@"
+  "$@" \
+> $MODELDIR/log 2>&1
+chmod 444 $MODELDIR/log
 
 echo "Done training."
 echo done > $MODELDIR/status
@@ -126,8 +134,8 @@ echo done > $MODELDIR/status
 # evaluate
 echo "Starting evaluation..."
 bash grid_scripts/translate.sh \
-  ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
   $MODELDIR \
+  ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
   $MODELDIR/out.mttt.test1 \
   ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$TRG
 echo "Done evaluating."
