@@ -126,16 +126,16 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --log-interval 10 \
   "$@" \
 > $MODELDIR/log 2>&1
+
 chmod 444 $MODELDIR/log
 
 echo "Done training."
 echo done > $MODELDIR/status
 
 # evaluate
-echo "Starting evaluation..."
-bash grid_scripts/translate.sh \
-  $MODELDIR \
-  ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$SRC \
-  $MODELDIR/out.mttt.test1 \
-  ~/data/bitext/raw/multitarget-ted/$TRG-$SRC/raw/ted_test1_$TRG-$SRC.raw.$TRG
-echo "Done evaluating."
+echo "Starting evaluation on test sets..."
+for testset in /exp/esalesky/visrep/fairseq-ocr/visual/test-sets/mttt.$SRC-en.$SRC; do
+    echo "Evaluating $testset..."
+    ref=$(echo $testset | perl -pe "s/.$SRC$/.en/");
+    qsub grid_scripts/translate.qsub $MODELDIR $testset $MODELDIR/out.$(basename $testset) $ref
+done

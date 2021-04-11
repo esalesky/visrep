@@ -67,6 +67,15 @@ def main(cfg: FairseqConfig) -> None:
     # Print args
     logger.info(cfg)
 
+    # if cfg.checkpoint.finetune_from_model:
+    #     print("Updating params")
+    #     d = torch.load(cfg.checkpoint.finetune_from_model)
+    #     cfg.task.image_window = d["cfg"]["task"].image_window
+    #     cfg.task.image_stride = d["cfg"]["task"].image_stride
+    #     cfg.task.image_font_path = d["cfg"]["task"].image_font_path
+    #     cfg.task.image_size = d["cfg"]["task"].image_size
+    #     print(cfg.task)
+
     # Setup task, e.g., translation, language modeling, etc.
     task = tasks.setup_task(cfg.task)
     # Load valid dataset (we load training data below, based on the latest checkpoint)
