@@ -5,14 +5,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class AlignOCR(nn.Module):
-    """Vista OCR """
+class AlignOcrEncoder(torch.nn.Module):
+    """
+    An encoder is the visual CNN, followed by average pooling, then
+    a bridge layer to the embedding size.
+    """
 
-    def __init__(self):
-        """
-        """
+    def ConvBNReLU(self, nInputMaps, nOutputMaps, stride=1, kernel_size=3, padding=1):
+        return [nn.Conv2d(nInputMaps, nOutputMaps, stride=stride, kernel_size=kernel_size, padding=padding),
+                nn.BatchNorm2d(nOutputMaps),
+                nn.ReLU(inplace=True)]
 
-        super(AlignOCR, self).__init__()
+    def __init__(self, args):
+        super().__init__()
+        self.args = args
+
+        # self.args.image_verbose = True
 
         self.cnn = nn.Sequential(
             *self.ConvBNReLU(1, 64),
@@ -26,47 +34,16 @@ class AlignOCR(nn.Module):
             *self.ConvBNReLU(256, 256)
         )
 
-    def forward(self, x):
-        """
-        Takes a tensor of size (batch x frames x channels x width x height).
-        Runs convolutions on every frame. The CNN will reduce every frame
-        to dims (256 x w' x h').
-        """
-
-        # shape is (batch x token x (channel) x height x width)
-        # if channel is 1 it may be collapsed
-        # x = x.view(-1, x.size(-3), x.size(-2), x.size(-1))
-        # logger.info("VIEW", x.shape)
-        x = self.cnn(x)
-
-        return x
-
-    def ConvBNReLU(self, nInputMaps, nOutputMaps, stride=1):
-        return [nn.Conv2d(nInputMaps, nOutputMaps, stride=stride, kernel_size=3, padding=1),
-                nn.BatchNorm2d(nOutputMaps),
-                nn.ReLU(inplace=True)]
-
-class AlignOcrEncoder(torch.nn.Module):
-
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-
-        # self.args.image_verbose = True
+        self.avg_pool = nn.AdaptiveAvgPool2d((8, 1))
 
         cnn_out_c = 256
         cnn_out_h = 8
-
-        self.cnn = align_ocr()
-
         cnn_feat_size = cnn_out_c * cnn_out_h
 
         logger.info('CNN out height %d', cnn_out_h)
         logger.info('CNN out channels %d', cnn_out_c)
         logger.info('CNN feature size (channels %d x height %d) = %d',
                  cnn_out_c, cnn_out_h, cnn_feat_size)
-
-        self.avg_pool = nn.AdaptiveAvgPool2d((8, 1))
 
         self.bridge_layer = nn.Sequential(
             nn.Linear(cnn_feat_size, self.args.encoder_embed_dim),
@@ -90,10 +67,12 @@ class AlignOcrEncoder(torch.nn.Module):
 
         logger.debug('ENCODER: collapse tokens %s', src_tokens.shape)
 
+        ## APPLY THE CNN
         x_cnn = self.cnn(src_tokens)
 
         logger.debug('ENCODER: forward cnn features out (b, c, h, w) %s', x_cnn.shape)
 
+        ## AVERAGE POOLING
         x = self.avg_pool(x_cnn)
         logger.debug('ENCODER: avg pool %s', x.shape)
 
@@ -104,6 +83,7 @@ class AlignOcrEncoder(torch.nn.Module):
         x = x.view(-1, c * h)
         logger.debug('ENCODER: view (w*b, c*h) %s', x.shape)
 
+        ## APPLY THE BRIDGE LAYER
         x = self.bridge_layer(x)
         logger.debug('ENCODER: forward bridge out %s', x.shape)
 
@@ -120,7 +100,3 @@ class AlignOcrEncoder(torch.nn.Module):
         return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=3, padding=1),
                 nn.BatchNorm2d(nOutputMaps),
                 nn.ReLU(inplace=True)]
-
-def align_ocr():
-    model = AlignOCR()
-    return model
