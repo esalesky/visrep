@@ -202,15 +202,15 @@ class VisualTextDataset(LanguagePairDataset):
             target_sizes.append(len(target_tokens))
 
             if args.image_samples_path and sampleno % args.image_samples_interval == 0:
-                logger.info(f"Saving sample #{sampleno} to {imagepath} ({len(image_pieces)} pieces)")
                 whole_image, image_pieces = image_generator.get_images(source)
-
                 imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.png")
                 cv2.imwrite(imagepath, whole_image)
 
+                logger.info(f"Writing sample #{sampleno} to {imagepath} ({len(image_pieces)} pieces)")
                 for i, image in enumerate(image_pieces, 1):
                     imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.{i}.png")
                     cv2.imwrite(imagepath, image)
+
 
         source_sizes = np.array(source_sizes)
         target_sizes = np.array(target_sizes)
