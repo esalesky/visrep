@@ -92,9 +92,10 @@ class TextImageGenerator():
 
         if crop_width > self.surface_width:
             old_width = crop_width
+            # smallest number <= self.surface_width that self.stride factorizes into
             while crop_width > self.surface_width:
                 crop_width -= self.stride
-            logger.warning(f"Surface ({self.surface_width}) is too narrow for text {len(line_text.split())} tokens): truncating from {old_width} -> {crop_width}")
+            logger.warning(f"Surface ({self.surface_width}) too narrow for {len(line_text.split())} tokens of {self.font_size}pt text: truncating {old_width} -> {crop_width}")
 
         crop = (0, 0, crop_width, self.image_height)
         surf = surf.subsurface(crop)

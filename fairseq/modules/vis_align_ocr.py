@@ -46,38 +46,6 @@ class AlignOCR(nn.Module):
                 nn.BatchNorm2d(nOutputMaps),
                 nn.ReLU(inplace=True)]
 
-
-class AlignOcrModel(torch.nn.Module):
-    def __init__(self, args, vocab, eval_only=False):
-        super().__init__()
-        self.args = args
-
-        self.eval_only = eval_only
-
-        self.vocab = vocab
-        self.encoder = AlignOcrEncoder(args)
-        self.decoder = AlignOcrDecoder(args, vocab)
-
-        logger.info('AlignOcrModel eval_only %s', self.eval_only)
-        logger.info(repr(self))
-
-    def forward(self, src_tokens):  # , src_widths):
-        encoder_out = self.encoder(src_tokens)  # , src_widths)
-        decoder_out = self.decoder(encoder_out)
-
-        return decoder_out  # decoder_out
-
-    def train(self, mode=True):
-
-        if self.eval_only:
-            mode = False
-
-        self.training = mode
-        for module in self.children():
-            module.train(mode)
-        return self
-
-
 class AlignOcrEncoder(torch.nn.Module):
 
     def __init__(self, args):
@@ -152,36 +120,6 @@ class AlignOcrEncoder(torch.nn.Module):
         return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=3, padding=1),
                 nn.BatchNorm2d(nOutputMaps),
                 nn.ReLU(inplace=True)]
-
-
-class AlignOcrDecoder(torch.nn.Module):
-    def __init__(self, args, vocab):
-        super().__init__()
-
-        self.args = args
-        self.vocab = vocab
-
-        self.classifier = nn.Sequential(
-            nn.Linear(self.args.encoder_embed_dim, len(self.vocab))
-        )
-
-    def forward(self, encoder_output):
-        embeddings = encoder_output['encoder_out'].squeeze()
-        logger.debug('DECODER: embeddings %s', embeddings.shape)
-
-        logits = self.classifier(embeddings)
-
-        logger.debug('DECODER: logits %s', logits.shape)
-
-        out_meta = {
-            'input_shape': encoder_output['input_shape'],
-            'encoder_cnn_shape': encoder_output['encoder_cnn_shape'],
-            'embeddings': embeddings,
-            'logits': logits,
-        }
-
-        return out_meta
-
 
 def align_ocr():
     model = AlignOCR()

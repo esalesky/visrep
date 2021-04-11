@@ -36,7 +36,7 @@ from .unfold import unfold1d
 from .transformer_layer import TransformerDecoderLayer, TransformerEncoderLayer
 from .vggblock import VGGBlock
 from .visual import VisualNet, VisualTrainer, Softmax, VistaOCR
-from .vis_align_ocr import AlignOCR, AlignOcrModel, AlignOcrEncoder, AlignOcrDecoder
+from .vis_align_ocr import AlignOcrEncoder
 
 __all__ = [
     "AdaptiveInput",
