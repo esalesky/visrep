@@ -255,13 +255,13 @@ def main(cfg: FairseqConfig):
             if src_dict is not None:
                 src_str = src_dict.string(src_tokens, cfg.common_eval.post_process)
                 print("S-{}\t{}".format(id_, src_str))
-                print("W-{}\t{:.3f}\tseconds".format(id_, info["time"]))
                 for constraint in info["constraints"]:
                     print(
                         "C-{}\t{}".format(
                             id_, tgt_dict.string(constraint, cfg.common_eval.post_process)
                         )
                     )
+            print("W-{}\t{:.3f}\tseconds".format(id_, info["time"]))
 
             # Process top predictions
             for hypo in hypos[: min(len(hypos), cfg.generation.nbest)]:
