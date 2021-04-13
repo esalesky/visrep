@@ -249,6 +249,9 @@ DEFAULT_STRIDE = 20
 def add_visual_text_args(parser):
     group = parser.add_argument_group("Visual text")
     # fmt: off
+    group.add_argument('--image-embed-type', type=str, default='vista',
+                       choices=["vista", "direct"],
+                       help='OCR embedding method')
     group.add_argument('--image-font-path', type=str, default=None,
                        help='Input font file')
     group.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,

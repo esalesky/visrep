@@ -4,6 +4,48 @@ import torch.nn as nn
 import torchvision
 import torch.nn.functional as F
 
+import logging
+logger = logging.getLogger(__name__)
+
+
+class DirectOCR(nn.Module):
+    """
+    Directly encodes pixels into the embedding
+    size via a linear transformation.
+    """
+    def __init__(self,
+                 slice_width,
+                 slice_height,
+                 embed_dim):
+
+        super().__init__()
+        self.slice_width = slice_width
+        self.slice_height = slice_height
+        self.embed_dim = embed_dim
+
+        self.embedder = nn.Linear(slice_width * slice_height,
+                                  embed_dim)
+        logger.info(f"embedding from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+
+    def forward(self, image_slice):
+        """
+        An image_slice is a piece of a rendered sentence with a fixed
+        width and height. Here we directly map to the embedding size with
+        a big ol' linear layer.
+
+        The slice width comes from --image-window. The height is computed
+        from the font size (usually about 21 for an 8 point font).
+        """
+        # Assume there is just one channel so it can be removed
+        batch_size, src_len, channels, width, height = image_slice.shape
+        pixels = image_slice.view(batch_size * src_len, width * height)
+
+        # Embed and recast to 3d tensor
+        embeddings = self.embedder(pixels)
+        embeddings = embeddings.view(batch_size, src_len, self.embed_dim)
+
+        return embeddings
+
 
 class VistaOCR(nn.Module):
     """ Vista OCR - VGG style """

@@ -56,10 +56,9 @@ class AlignOcrEncoder(torch.nn.Module):
 
     def forward(self, src_tokens):  # , src_widths):
         """
-        input: (batch, len, channels, height, width)
-        output: (batch, len, embed_size)
+        Takes batch input with shape (batch, len, channels, height, width)
+        and returns embeddings for all batch items, with shape (batch, len, embed_size).
         """
-
         logger.debug('ENCODER: forward input %s', src_tokens.shape)
 
         batch_size, src_len, *image_dims = src_tokens.shape
@@ -90,13 +89,4 @@ class AlignOcrEncoder(torch.nn.Module):
         x = x.view(batch_size, src_len, -1)
         logger.debug('ENCODER: forward bridge view %s', x.shape)
 
-        return {
-            'encoder_out': x,
-            'encoder_cnn_shape': list(x_cnn.shape),
-            'input_shape': list(src_tokens.shape),
-        }
-
-    def ConvBNReLU(self, nInputMaps, nOutputMaps):
-        return [nn.Conv2d(nInputMaps, nOutputMaps, kernel_size=3, padding=1),
-                nn.BatchNorm2d(nOutputMaps),
-                nn.ReLU(inplace=True)]
+        return x

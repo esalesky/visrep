@@ -23,6 +23,9 @@ from fairseq.modules import (
 from fairseq.modules.vis_align_ocr import (
     AlignOcrEncoder,
 )
+from fairseq.modules.visual import (
+    DirectOCR
+)
 
 from torch import Tensor
 
@@ -161,8 +164,8 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
         )
 
     @classmethod
-    def build_encoder(cls, args):
-        encoder = VisualTextTransformerEncoder(args)
+    def build_encoder(cls, args, image_generator):
+        encoder = VisualTextTransformerEncoder(args, image_generator)
         if getattr(args, "load_pretrained_encoder_from", None):
             encoder = checkpoint_utils.load_pretrained_component_from_model(
                 component=encoder, checkpoint=args.load_pretrained_encoder_from
@@ -192,7 +195,7 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
         decoder_embed_tokens = build_embedding(
             task.target_dictionary, args.decoder_embed_dim
         )
-        encoder = cls.build_encoder(args)
+        encoder = cls.build_encoder(args, task.image_generator)
         decoder = cls.build_decoder(args, task, decoder_embed_tokens)
         return cls(encoder, decoder)
 
@@ -227,12 +230,19 @@ class VisualTextTransformerEncoder(FairseqEncoder):
     """Speech-to-text Transformer encoder that consists of input subsampler and
     Transformer encoder."""
 
-    def __init__(self, args):
+    def __init__(self, args, image_generator):
         super().__init__(None)
 
         self.args = args
+        self.image_generator = image_generator
 
-        self.cnn_embedder = AlignOcrEncoder(args)
+        # "visonly" is for backwards compatibility
+        if args.image_embed_type == "vista" or args.image_embed_type == "visonly":
+            self.cnn_embedder = AlignOcrEncoder(args)
+        elif args.image_embed_type == "direct":
+            self.cnn_embedder = DirectOCR(args.image_window,
+                                          image_generator.image_height,
+                                          args.encoder_embed_dim)
 
         self.dropout_module = FairseqDropout(
             p=args.dropout, module_name=self.__class__.__name__
@@ -257,7 +267,7 @@ class VisualTextTransformerEncoder(FairseqEncoder):
     def forward(self, src_tokens, src_lengths):
         logger.debug("ENCODER: image embedding %s %s %s", src_tokens.shape, src_lengths.shape, src_lengths)
 
-        x = self.cnn_embedder(src_tokens)["encoder_out"]
+        x = self.cnn_embedder(src_tokens)
 
         x = self.embed_scale * x
 
