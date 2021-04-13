@@ -66,22 +66,12 @@ class VisualTextTask(LegacyFairseqTask):
 
         parser.add_argument("--image-verbose", action='store_true',
                             help='Display verbose debug')
-        parser.add_argument("--image-checkpoint-path", type=str,
-                            default=None, help="Image checkpoint path")
         parser.add_argument("--image-pretrain-path", type=str, default=None,
                             help='Load pretrain sentence embeddings')
         parser.add_argument('--image-samples-path', default=None, type=str,
-                            help='Image samples path')
-        parser.add_argument('--image-samples-interval', default=1000, type=int,
-                            help='Image sample frequency')
-
-        parser.add_argument("--image-embed-type", default='avg', type=str,
-                            help='Image embed type [add, avg, concat, visonly, tokonly]')
-        parser.add_argument('--image-embedding-normalize',  action='store_true',
-                            help='Image embedding l2 normalize')
-
-        parser.add_argument('--image-pretrain-eval-only', action='store_true',
-                            help='OCR pretrain model in eval only mode')
+                            help='Directory to dump image samples to')
+        parser.add_argument('--image-samples-interval', default=1000, type=int, metavar="N",
+                            help='Dump every Nth sample image')
 
         add_visual_text_args(parser)
 
@@ -90,6 +80,8 @@ class VisualTextTask(LegacyFairseqTask):
         self.tgt_dict = tgt_dict
         self.source_lang = args.source_lang
         self.target_lang = args.target_lang
+
+        self.image_generator = None
         self.build_image_generator(args)
 
         if self.source_lang is None or self.target_lang is None:
