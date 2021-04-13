@@ -184,6 +184,7 @@ class VisualTextDataset(LanguagePairDataset):
             logger.info(f"Creating {args.image_samples_path}")
             os.makedirs(args.image_samples_path, exist_ok=True)
 
+        total_source_len = 0
         for sampleno, (source, target) in enumerate(zip(open(source_path, "rt"), open(target_path, "rt")), 1):
             source = source.strip()
             target = target.strip()
@@ -193,6 +194,7 @@ class VisualTextDataset(LanguagePairDataset):
                 image_tensor = image_generator.get_tensor(source)
                 source_images.append(image_tensor)
                 source_sizes.append(image_tensor.shape[0])
+                total_source_len += image_tensor.shape[0]
 
             target_tokens = tgt_dict.encode_line(
                 target, add_if_not_exist=False,
@@ -211,6 +213,8 @@ class VisualTextDataset(LanguagePairDataset):
                     imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.{i}.png")
                     cv2.imwrite(imagepath, image)
 
+
+        logger.info(f"Read {sampleno} samples for split {split}, mean length {total_source_len / sampleno:.1f}")
 
         source_sizes = np.array(source_sizes)
         target_sizes = np.array(target_sizes)
