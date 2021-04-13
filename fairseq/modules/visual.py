@@ -8,6 +8,65 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class NLayerOCR(nn.Module):
+    """
+    Runs a 2d convolution over an image slice, before
+    connecting to the embedding size with a linear bridge
+    layer. DirectOCR should be rolled into this, since it
+    is just an NLayerOCR with N=0.
+    """
+    def __init__(self,
+                 slice_width,
+                 slice_height,
+                 embed_dim,
+                 num_convolutions=1):
+
+        super().__init__()
+        self.slice_width = slice_width
+        self.slice_height = slice_height
+        self.embed_dim = embed_dim
+        self.num_convolutions = num_convolutions
+
+        ops = []
+        for i in range(num_convolutions):
+            ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=3, padding=1))
+            ops.append(nn.ReLU(inplace=True))
+        print("OPS", len(ops))
+        self.embedder = nn.Sequential(*ops)
+
+        self.bridge = nn.Linear(slice_width * slice_height, embed_dim)
+
+        logger.info(f"{num_convolutions}Layer embedding from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+
+        for param in self.parameters():
+            torch.nn.init.uniform_(param, -0.08, 0.08)
+
+    def forward(self, image_slice):
+        """
+        An image_slice is a piece of a rendered sentence with a fixed
+        width and height. Here we directly map to the embedding size with
+        a big ol' linear layer.
+
+        The slice width comes from --image-window. The height is computed
+        from the font size (usually about 21 for an 8 point font).
+        """
+        # Assume there is just one channel so it can be removed
+        batch_size, src_len, channels, height, width = image_slice.shape
+
+        pixels = image_slice.view(batch_size * src_len, channels, height, width)
+
+        # Embed and recast to 3d tensor
+        embeddings = self.embedder(pixels)
+
+        embeddings = embeddings.view(batch_size * src_len, height * width)
+
+        embeddings = self.bridge(embeddings)
+
+        embeddings = embeddings.view(batch_size, src_len, self.embed_dim)
+
+        return embeddings
+
+
 class DirectOCR(nn.Module):
     """
     Directly encodes pixels into the embedding
@@ -25,7 +84,10 @@ class DirectOCR(nn.Module):
 
         self.embedder = nn.Linear(slice_width * slice_height,
                                   embed_dim)
-        logger.info(f"embedding from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+        logger.info(f"Direct embedding from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+
+        for param in self.parameters():
+            torch.nn.init.uniform_(param, -0.08, 0.08)
 
     def forward(self, image_slice):
         """
@@ -37,7 +99,7 @@ class DirectOCR(nn.Module):
         from the font size (usually about 21 for an 8 point font).
         """
         # Assume there is just one channel so it can be removed
-        batch_size, src_len, channels, width, height = image_slice.shape
+        batch_size, src_len, channels, height, width = image_slice.shape
         pixels = image_slice.view(batch_size * src_len, width * height)
 
         # Embed and recast to 3d tensor

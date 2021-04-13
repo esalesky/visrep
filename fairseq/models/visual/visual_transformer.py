@@ -24,7 +24,7 @@ from fairseq.modules.vis_align_ocr import (
     AlignOcrEncoder,
 )
 from fairseq.modules.visual import (
-    DirectOCR
+    DirectOCR, NLayerOCR
 )
 
 from torch import Tensor
@@ -243,6 +243,16 @@ class VisualTextTransformerEncoder(FairseqEncoder):
             self.cnn_embedder = DirectOCR(args.image_window,
                                           image_generator.image_height,
                                           args.encoder_embed_dim)
+        elif args.image_embed_type == "1layer":
+            self.cnn_embedder = NLayerOCR(args.image_window,
+                                          image_generator.image_height,
+                                          args.encoder_embed_dim,
+                                          num_convolutions=1)
+        elif args.image_embed_type == "2layer":
+            self.cnn_embedder = NLayerOCR(args.image_window,
+                                          image_generator.image_height,
+                                          args.encoder_embed_dim,
+                                          num_convolutions=2)
 
         self.dropout_module = FairseqDropout(
             p=args.dropout, module_name=self.__class__.__name__

@@ -40,6 +40,7 @@ class TextImageGenerator():
             transforms.ToTensor(),
         ])
 
+        print(f"Creating {font_size}pt font from {font_file}")
         self.fonts = self.load_fonts(font_file, font_size)
 
         self.surface_width = surf_width
