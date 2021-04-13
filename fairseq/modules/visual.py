@@ -19,6 +19,7 @@ class NLayerOCR(nn.Module):
                  slice_width,
                  slice_height,
                  embed_dim,
+                 embed_normalize=False,
                  num_convolutions=1):
 
         super().__init__()
@@ -30,8 +31,10 @@ class NLayerOCR(nn.Module):
         ops = []
         for i in range(num_convolutions):
             ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=3, padding=1))
+            if embed_normalize:
+                ops.append(nn.BatchNorm2d(1)),
             ops.append(nn.ReLU(inplace=True))
-        print("OPS", len(ops))
+
         self.embedder = nn.Sequential(*ops)
 
         self.bridge = nn.Linear(slice_width * slice_height, embed_dim)
