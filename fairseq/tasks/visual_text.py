@@ -143,15 +143,32 @@ class VisualTextTask(LegacyFairseqTask):
     def max_positions(self):
         return self.args.max_source_positions, self.args.max_target_positions
 
-    def build_model(self, args):
-        # At inference, we have to build the image generator here,
-        # after we have the parameters loaded from the model
-        if self.image_generator is None:
+    def build_image_generator(self, args):
+        """Builds an image generator.
+
+        At training time, args.image_font_path will be defined.  At
+        test time, it shouldn't be, so this will not get built until
+        it is called from build_model(), which has access to the
+        params loaded from the saved model.
+
+        This is ugly, but it ensures parameter continuity between
+        training and inference. It's basically a workaround for the
+        fact that parameters in fairseq are task-level, but are stored
+        at the model level (in the checkpoint), but models aren't
+        loaded until after the task is instantiated.
+        """
+        if args.image_font_path is not None:
             self.image_generator = TextImageGenerator(window=args.image_window,
                                                       stride=args.image_stride,
                                                       font_size=args.image_font_size,
                                                       font_file=args.image_font_path,
             )
+
+    def build_model(self, args):
+        # At inference, we have to build the image generator here,
+        # after we have the parameters loaded from the model
+        if self.image_generator is None:
+            self.build_image_generator(args)
 
         return super(VisualTextTask, self).build_model(args)
 
