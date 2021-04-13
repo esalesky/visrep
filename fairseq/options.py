@@ -250,8 +250,8 @@ def add_visual_text_args(parser):
     group = parser.add_argument_group("Visual text")
     # fmt: off
     group.add_argument('--image-embed-type', type=str, default='vista',
-                       choices=["vista", "direct"],
-                       help='OCR embedding method')
+                       choices=["vista", "visonly", "direct"],
+                       help='OCR embedding method (visonly is for backwards compat, means vista)')
     group.add_argument('--image-font-path', type=str, default=None,
                        help='Input font file')
     group.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
