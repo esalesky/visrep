@@ -151,8 +151,6 @@ def main(cfg: FairseqConfig):
         num_shards=cfg.checkpoint.checkpoint_shard_count,
     )
 
-    task.build_image_generator(_model_args.task)
-
     # Set dictionaries
     src_dict = task.source_dictionary
     tgt_dict = task.target_dictionary

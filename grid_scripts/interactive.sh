@@ -1,11 +1,13 @@
 #!/bin/bash
 
 ## Settings
-SRC=de
-TRG=en
 FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
 
 MODELDIR=$1
+SRC=$2
+TRG=$3
+shift
+shift
 shift
 
 export PYTHONPATH=$FAIRSEQ
