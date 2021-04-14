@@ -20,26 +20,36 @@ class NLayerOCR(nn.Module):
                  slice_height,
                  embed_dim,
                  embed_normalize=False,
+                 channel_increment=1,
                  num_convolutions=1):
 
         super().__init__()
         self.slice_width = slice_width
         self.slice_height = slice_height
         self.embed_dim = embed_dim
+        self.embed_normalize = embed_normalize
         self.num_convolutions = num_convolutions
 
+        logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}, incr: {channel_increment}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+
         ops = []
+        prev_channel_size = 1
         for i in range(num_convolutions):
-            ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=3, padding=1))
+            next_channel_size = prev_channel_size
+            if i % 2 == 0:
+                next_channel_size = ((i // 2) + 1) * channel_increment
+
+            logger.info(f"  Layer {i}: channel size {prev_channel_size} -> {next_channel_size}")
+            ops.append(nn.Conv2d(prev_channel_size, next_channel_size, stride=1, kernel_size=3, padding=1))
             if embed_normalize:
-                ops.append(nn.BatchNorm2d(1)),
+                ops.append(nn.BatchNorm2d(next_channel_size)),
             ops.append(nn.ReLU(inplace=True))
+
+            prev_channel_size = next_channel_size
 
         self.embedder = nn.Sequential(*ops)
 
         self.bridge = nn.Linear(slice_width * slice_height, embed_dim)
-
-        logger.info(f"{num_convolutions}Layer embedding from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
 
         for param in self.parameters():
             torch.nn.init.uniform_(param, -0.08, 0.08)

@@ -247,11 +247,15 @@ class VisualTextTransformerEncoder(FairseqEncoder):
             self.cnn_embedder = NLayerOCR(args.image_window,
                                           image_generator.image_height,
                                           args.encoder_embed_dim,
+                                          embed_normalize=args.image_embed_normalize,
+                                          channel_increment=args.image_channel_increment,
                                           num_convolutions=1)
         elif args.image_embed_type == "2layer":
             self.cnn_embedder = NLayerOCR(args.image_window,
                                           image_generator.image_height,
                                           args.encoder_embed_dim,
+                                          embed_normalize=args.image_embed_normalize,
+                                          channel_increment=args.image_channel_increment,
                                           num_convolutions=2)
 
         self.dropout_module = FairseqDropout(
