@@ -238,10 +238,10 @@ class Dictionary:
 
         for line in lines[indices_start_line:]:
             try:
-                line, field = line.rstrip().rsplit(" ", 1)
+                line, field = line.rstrip().rsplit(maxsplit=1)
                 if field == "#fairseq:overwrite":
                     overwrite = True
-                    line, field = line.rsplit(" ", 1)
+                    line, field = line.rsplit(maxsplit=1)
                 else:
                     overwrite = False
                 count = int(field)
