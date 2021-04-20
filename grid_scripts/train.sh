@@ -89,6 +89,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --image-samples-path ${MODELDIR}/samples \
   --image-samples-interval 10000 \
   --image-embed-type 1layer \
+  --image-embed-normalize \
   --image-font-path $FONTPATH \
   --image-font-size $FONTSIZE \
   --image-window $WINDOW \
