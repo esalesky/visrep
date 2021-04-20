@@ -4,12 +4,14 @@
 #
 # Usage:
 #
+# train.sh MODELDIR SOURCE_LANG TARGET_LANG [FAIRSEQ ARGS...]
+#
 #     cd ~mpost/exp/mtocr19/runs
-#     for lang in ja zh ko de fr; do 
-#       for window in 15 20 25 30; do 
+#     for lang in ja zh ko de fr; do
+#       for window in 15 20 25 30; do
 #         let bottom=window-10
-#         for stride in $(seq $window -5 $bottom); do 
-#           qsub -v FONTSIZE=10 -v WINDOW=$window -v STRIDE=$stride train_wrapper.sh train.sh $lang-en/5k.max-10k.window$window.stride$stride.fontsize10 $lang en
+#         for stride in $(seq $window -5 $bottom); do
+#           qsub train.qsub $lang-en/5k.max-10k.window$window.stride$stride.fontsize10 $lang en --image-font-size 8 --image-window $window --image-stride $stride \
 #         done
 #       done
 #     done
@@ -83,17 +85,16 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   -s $SRC -t $TRG \
   --save-dir $MODELDIR \
   --target-dict $DATADIR/dict.$TRG.txt \
-  --validate-interval-updates 1000 \
+  --validate-interval 1 \
   --patience 10 \
+  --max-epoch 200 \
+  --max-tokens 10000 \
   --update-freq=1 \
   --image-samples-path ${MODELDIR}/samples \
   --image-samples-interval 10000 \
   --image-embed-type 1layer \
   --image-embed-normalize \
   --image-font-path $FONTPATH \
-  --image-font-size $FONTSIZE \
-  --image-window $WINDOW \
-  --image-stride $STRIDE \
   --criterion 'label_smoothed_cross_entropy' \
   --adam-betas '(0.9, 0.98)' \
   --adam-eps 1e-08 \
@@ -109,10 +110,8 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --label-smoothing 0.1 \
   --lr 5e-4 \
   --lr-scheduler 'inverse_sqrt' \
-  --max-epoch 200 \
   --max-source-positions 1024 \
   --max-target-positions 1024 \
-  --max-tokens 10000 \
   --max-tokens-valid 2000 \
   --min-loss-scale 0.0001 \
   --no-epoch-checkpoints \
