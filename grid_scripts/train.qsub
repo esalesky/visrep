@@ -15,3 +15,5 @@ echo "Training in $modeldir $@"
 
 # Now we're on a GPU
 bash /home/hltcoe/mpost/code/fairseq-ocr/grid_scripts/train.sh $modeldir "$@"
+
+echo "Done."

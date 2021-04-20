@@ -78,7 +78,7 @@ echo "$@" > $MODELDIR/args
 
 PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   ${DATADIR} \
-  --task 'visual_text' \
+  --task visual_text \
   --arch visual_text_transformer \
   -s $SRC -t $TRG \
   --save-dir $MODELDIR \
@@ -88,8 +88,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --update-freq=1 \
   --image-samples-path ${MODELDIR}/samples \
   --image-samples-interval 10000 \
-  --image-embed-type 'visonly' \
-  --image-embedding-normalize \
+  --image-embed-type 1layer \
   --image-font-path $FONTPATH \
   --image-font-size $FONTSIZE \
   --image-window $WINDOW \
@@ -109,7 +108,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --label-smoothing 0.1 \
   --lr 5e-4 \
   --lr-scheduler 'inverse_sqrt' \
-  --max-epoch 100 \
+  --max-epoch 200 \
   --max-source-positions 1024 \
   --max-target-positions 1024 \
   --max-tokens 10000 \
