@@ -102,6 +102,33 @@ class Binarizer:
         return {"nseq": nseq}
 
     @staticmethod
+    def binarize_images(
+        filename, image_generator, consumer, offset=0, end=-1
+    ) -> Dict[str, int]:
+        """
+        Binarizes images.
+        """
+        nseq = 0
+        ntok = 0
+
+        with open(PathManager.get_local_path(filename), "r") as f:
+            f.seek(offset)
+            line = safe_readline(f)
+            while line:
+                if end > 0 and f.tell() > end:
+                    break
+                slices = image_generator.get_tensor(line)
+                nseq += 1
+                consumer(slices)
+                line = f.readline()
+                ntok += len(slices)
+
+        return {
+            "nseq": nseq,
+            "ntok": ntok,
+        }
+
+    @staticmethod
     def find_offsets(filename, num_chunks) -> List[int]:
         with open(PathManager.get_local_path(filename), "r", encoding="utf-8") as f:
             size = os.fstat(f.fileno()).st_size

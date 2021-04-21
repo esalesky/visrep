@@ -297,7 +297,7 @@ def add_preprocess_args(parser):
                             "(words missing from train set are replaced with <unk>)")
     group.add_argument("--align-suffix", metavar="FP", default=None,
                        help="alignment file suffix")
-    group.add_argument("--images", action="store_true", default=False,
+    group.add_argument("--visual-text", action="store_true", default=False,
                        help="generate images from source text for visual text task.")
     group.add_argument("--image-config", metavar="CONFIG", default=None,
                        help="Image configuration file")

@@ -18,7 +18,7 @@ from multiprocessing import Pool
 from fairseq import options, tasks, utils
 from fairseq.binarizer import Binarizer
 from fairseq.data import indexed_dataset
-
+from fairseq.tasks.visual_text import VisualTextTask
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -134,6 +134,7 @@ def main(args):
         pool = None
         if num_workers > 1:
             pool = Pool(processes=num_workers - 1)
+            # Skip the first piece, which is done below
             for worker_id in range(1, num_workers):
                 prefix = "{}{}".format(output_prefix, worker_id)
                 pool.apply_async(
@@ -236,6 +237,67 @@ def main(args):
 
         logger.info("[alignments] {}: parsed {} alignments".format(input_file, nseq[0]))
 
+    def make_visual_text_dataset(
+            args,
+            image_generator,
+            input_prefix,
+            output_prefix,
+            num_workers):
+        """
+        Dumps processd image file, parallel to source and target.
+        """
+        lang = args.source_lang
+        counts = [0, 0]
+
+        def merge_result(worker_result):
+            counts[0] += worker_result["nseq"]
+            counts[1] += worker_result["ntok"]
+
+        input_file = "{}{}".format(input_prefix, ("." + lang))
+
+        offsets = Binarizer.find_offsets(input_file, num_workers)
+        pool = None
+        if num_workers > 1:
+            pool = Pool(processes=num_workers - 1)
+            # Skip the first piece, which is done below
+            for worker_id in range(1, num_workers):
+                prefix = "{}{}".format(output_prefix, worker_id)
+                pool.apply_async(
+                    binarize_images,
+                    (
+                        input_file,
+                        image_generator,
+                        prefix,
+                        lang,
+                        offsets[worker_id],
+                        offsets[worker_id + 1],
+                    ),
+                    callback=merge_result,
+                )
+            pool.close()
+
+        ds = indexed_dataset.make_builder(
+            dataset_dest_file(args, output_prefix, lang, "bin"), impl=args.dataset_impl
+        )
+
+        merge_result(
+            Binarizer.binarize_images(
+                input_file, image_generator, lambda t: ds.add_item(t), offset=0, end=offsets[1]
+            )
+        )
+        if num_workers > 1:
+            pool.join()
+            for worker_id in range(1, num_workers):
+                prefix = "{}{}".format(output_prefix, worker_id)
+                temp_file_path = dataset_dest_prefix(args, prefix, lang)
+                ds.merge_file_(temp_file_path)
+                os.remove(indexed_dataset.data_file_path(temp_file_path))
+                os.remove(indexed_dataset.index_file_path(temp_file_path))
+
+        ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
+
+        logger.info("[visual text] {}: generated {} images with mean length {:.1f}".format(input_file, counts[0], counts[1] / counts[0]))
+
     def make_dataset(vocab, input_prefix, output_prefix, lang, num_workers=1):
         if args.dataset_impl == "raw":
             # Copy original text file to destination folder
@@ -260,6 +322,34 @@ def main(args):
             for k, testpref in enumerate(args.testpref.split(",")):
                 outprefix = "test{}".format(k) if k > 0 else "test"
                 make_dataset(vocab, testpref, outprefix, lang, num_workers=args.workers)
+
+    def make_all_visual_text():
+        image_generator = VisualTextTask.build_image_generator(args)
+
+        if args.trainpref:
+            make_visual_text_dataset(
+                args,
+                image_generator,
+                args.trainpref,
+                "train.vis",
+                num_workers=args.workers,
+            )
+        if args.validpref:
+            make_visual_text_dataset(
+                args,
+                image_generator,
+                args.validpref,
+                "valid.vis",
+                num_workers=args.workers,
+            )
+        if args.testpref:
+            make_visual_text_dataset(
+                args,
+                image_generator,
+                args.testpref,
+                "test.vis",
+                num_workers=args.workers,
+            )
 
     def make_all_alignments():
         if args.trainpref and os.path.exists(args.trainpref + "." + args.align_suffix):
@@ -286,6 +376,8 @@ def main(args):
         make_all(args.target_lang, tgt_dict)
     if args.align_suffix:
         make_all_alignments()
+    if args.visual_text:
+        make_all_visual_text()
 
     logger.info("Wrote preprocessed data to {}".format(args.destdir))
 
@@ -334,6 +426,9 @@ def main(args):
 
 
 def binarize(args, filename, vocab, output_prefix, lang, offset, end, append_eos=True):
+    """
+    Binarizes the contents of a file.
+    """
     ds = indexed_dataset.make_builder(
         dataset_dest_file(args, output_prefix, lang, "bin"),
         impl=args.dataset_impl,
@@ -367,6 +462,25 @@ def binarize_alignments(args, filename, parse_alignment, output_prefix, offset, 
     return res
 
 
+def binarize_images(
+    filename, image_generator, consumer, offset=0, end=-1
+):
+    ds = indexed_dataset.make_builder(
+        dataset_dest_file(args, output_prefix, None, "bin"),
+        impl=args.dataset_impl,
+        vocab_size=None,
+    )
+
+    def consumer(tensor):
+        ds.add_item(tensor)
+
+    res = Binarizer.binarize_alignments(
+        filename, image_generator, consumer, offset=offset, end=end
+    )
+    ds.finalize(dataset_dest_file(args, output_prefix, args.source_lang, "idx"))
+    return res
+
+
 def dataset_dest_prefix(args, output_prefix, lang):
     base = "{}/{}".format(args.destdir, output_prefix)
     if lang is not None:
@@ -382,10 +496,6 @@ def dataset_dest_prefix(args, output_prefix, lang):
 def dataset_dest_file(args, output_prefix, lang, extension):
     base = dataset_dest_prefix(args, output_prefix, lang)
     return "{}.{}".format(base, extension)
-
-
-def get_offsets(input_file, num_workers):
-    return Binarizer.find_offsets(input_file, num_workers)
 
 
 def cli_main():
