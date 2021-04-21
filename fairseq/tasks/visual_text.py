@@ -116,6 +116,10 @@ class VisualTextTask(LegacyFairseqTask):
         return criterions.build_criterion(args, self)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
+        """
+        Load dataset from precompiled format (preferred) or plain text.
+        """
+
         is_train_split = split.startswith("train")
 
         self.datasets[split] = VisualTextDataset.from_text_path(

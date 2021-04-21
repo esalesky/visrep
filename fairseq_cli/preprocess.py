@@ -258,17 +258,16 @@ def main(args):
         offsets = Binarizer.find_offsets(input_file, num_workers)
         pool = None
         if num_workers > 1:
+            # Skip the first piece, which is done below, and then merged into
             pool = Pool(processes=num_workers - 1)
-            # Skip the first piece, which is done below
             for worker_id in range(1, num_workers):
                 prefix = "{}{}".format(output_prefix, worker_id)
                 pool.apply_async(
                     binarize_images,
                     (
+                        args,
                         input_file,
-                        image_generator,
                         prefix,
-                        lang,
                         offsets[worker_id],
                         offsets[worker_id + 1],
                     ),
@@ -289,7 +288,7 @@ def main(args):
             pool.join()
             for worker_id in range(1, num_workers):
                 prefix = "{}{}".format(output_prefix, worker_id)
-                temp_file_path = dataset_dest_prefix(args, prefix, lang)
+                temp_file_path = dataset_dest_prefix(args, prefix, None)
                 ds.merge_file_(temp_file_path)
                 os.remove(indexed_dataset.data_file_path(temp_file_path))
                 os.remove(indexed_dataset.index_file_path(temp_file_path))
@@ -462,22 +461,26 @@ def binarize_alignments(args, filename, parse_alignment, output_prefix, offset, 
     return res
 
 
-def binarize_images(
-    filename, image_generator, consumer, offset=0, end=-1
-):
+def binarize_images(args, filename, output_prefix, offset=0, end=-1):
+    """
+    Note: image generator cannot be passed in because it cannot be pickled.
+    """
     ds = indexed_dataset.make_builder(
         dataset_dest_file(args, output_prefix, None, "bin"),
         impl=args.dataset_impl,
         vocab_size=None,
     )
 
+    image_generator = VisualTextTask.build_image_generator(args)
+
     def consumer(tensor):
         ds.add_item(tensor)
 
-    res = Binarizer.binarize_alignments(
+    res = Binarizer.binarize_images(
         filename, image_generator, consumer, offset=offset, end=end
     )
-    ds.finalize(dataset_dest_file(args, output_prefix, args.source_lang, "idx"))
+    whereto = dataset_dest_file(args, output_prefix, None, "idx")
+    ds.finalize(whereto)
     return res
 
 

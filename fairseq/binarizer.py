@@ -105,8 +105,9 @@ class Binarizer:
     def binarize_images(
         filename, image_generator, consumer, offset=0, end=-1
     ) -> Dict[str, int]:
-        """
-        Binarizes images.
+        """Reads lines of {filename} from {offset} to {end}, creating an
+        image tensor from each one, and passing the result to the
+        consumer. Returns some statistics.
         """
         nseq = 0
         ntok = 0
