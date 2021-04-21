@@ -2,16 +2,18 @@
 
 import cv2
 import logging
-import pygame.freetype
 import os
 import sys
 import random
-
 
 import numpy as np
 import torch
 
 import torchvision.transforms as transforms
+
+# This gets rid of the rude message printed to STDOUT
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+import pygame.freetype
 
 logger = logging.getLogger(__name__)
 
