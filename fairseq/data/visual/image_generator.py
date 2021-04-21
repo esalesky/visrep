@@ -188,19 +188,19 @@ class TextImageGenerator():
 
 
 def main(args):
-    gen = TextImageGenerator(window=args.image_window,
-                             stride=args.image_stride,
+    gen = TextImageGenerator(window=args.window,
+                             stride=args.stride,
                              font_size=args.font_size,
                              font_file=args.font_file,
     )
     whole_image = gen.get_image(args.text)
-    imagepath = f"test_image.png"
+    imagepath = f"{args.prefix}.png"
     print(f"Writing to {imagepath}", file=sys.stderr)
     cv2.imwrite(imagepath, whole_image)
 
     whole_image, image_pieces = gen.get_images(args.text)
     for i, image in enumerate(image_pieces, 1):
-        imagepath = f"test_image.{i:02d}.png"
+        imagepath = f"{args.prefix}.{i:02d}.png"
         cv2.imwrite(imagepath, image)
         print(f"Writing to {imagepath}", file=sys.stderr)
 
@@ -210,8 +210,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--font-file", type=str, default="/home/hltcoe/mpost/code/fairseq-ocr/fairseq/data/visual/fonts/NotoMono-Regular.ttf")
     parser.add_argument("--font-size", type=int, default=DEFAULT_FONT_SIZE)
-    parser.add_argument("--image-window", type=int, default=DEFAULT_WINDOW)
-    parser.add_argument("--image-stride", type=int, default=DEFAULT_STRIDE)
+    parser.add_argument("--window", type=int, default=DEFAULT_WINDOW)
+    parser.add_argument("--stride", type=int, default=DEFAULT_STRIDE)
+    parser.add_argument("--prefix", type=str, default="test_image")
     parser.add_argument("--text", type=str, default="The quick brown fox jumped over the lazy dog.")
     args = parser.parse_args()
 
