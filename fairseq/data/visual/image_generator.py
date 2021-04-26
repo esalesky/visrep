@@ -37,12 +37,13 @@ class TextImageGenerator():
         pygame.freetype.init()
         pygame.freetype.set_default_resolution(dpi)
 
+        # This normalizes the 0--255 grayscale values
+        # and creates the tensors.
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.ToTensor(),
         ])
 
-        print(f"Creating {font_size}pt font from {font_file}")
         self.fonts = self.load_fonts(font_file, font_size)
 
         self.surface_width = surf_width
@@ -65,13 +66,15 @@ class TextImageGenerator():
                 self.image_height,
                 font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
             )
-        logger.info(f"Image height for font size {self.font_size} is {self.image_height}")
+
+        font_name = os.path.basename(font_file)
+        logger.info(f"Created {self.font_size}pt {font_name} with image height {self.image_height}")
 
         self.window = window
         self.stride = stride
         self.overlap = window - stride
 
-        logger.info(f"Window size {self.window} stride {self.stride}")
+        logger.info(f"Image window size {self.window} stride {self.stride}")
 
     def get_surface(self, line_text, lang="*"):
         """Creates a single image from an entire line and returns the surface."""
@@ -154,6 +157,7 @@ class TextImageGenerator():
             tensors.append(image_tensor)
 
         assert len(tensors) != 0, text
+
         return torch.stack(tensors)
 
     @classmethod

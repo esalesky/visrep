@@ -8,6 +8,7 @@ Data pre-processing: build vocabularies and binarize training data.
 """
 
 import logging
+import numpy as np
 import os
 import shutil
 import sys
@@ -276,7 +277,9 @@ def main(args):
             pool.close()
 
         ds = indexed_dataset.make_builder(
-            dataset_dest_file(args, output_prefix, lang, "bin"), impl=args.dataset_impl
+            dataset_dest_file(args, output_prefix, lang, "bin"),
+            impl=args.dataset_impl,
+            dtype=np.float16,
         )
 
         merge_result(
@@ -324,6 +327,8 @@ def main(args):
 
     def make_all_visual_text():
         image_generator = VisualTextTask.build_image_generator(args)
+
+        # TODO: write image config!
 
         if args.trainpref:
             make_visual_text_dataset(
@@ -468,6 +473,7 @@ def binarize_images(args, filename, output_prefix, offset=0, end=-1):
     ds = indexed_dataset.make_builder(
         dataset_dest_file(args, output_prefix, None, "bin"),
         impl=args.dataset_impl,
+        dtype=np.float16,
         vocab_size=None,
     )
 

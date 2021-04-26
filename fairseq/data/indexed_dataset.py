@@ -45,10 +45,12 @@ def infer_dataset_impl(path):
         return None
 
 
-def make_builder(out_file, impl, vocab_size=None):
+def make_builder(out_file, impl, dtype=None, vocab_size=None):
     if impl == "mmap":
+        if dtype is None:
+            dtype = __best_fitting_dtype(vocab_size)
         return MMapIndexedDatasetBuilder(
-            out_file, dtype=__best_fitting_dtype(vocab_size)
+            out_file, dtype=dtype
         )
     elif impl == "fasta":
         raise NotImplementedError
@@ -98,9 +100,10 @@ dtypes = {
     3: np.int16,
     4: np.int32,
     5: np.int64,
-    6: np.float,
+    6: np.single,
     7: np.double,
     8: np.uint16,
+    9: np.half
 }
 
 
@@ -364,6 +367,10 @@ def _warmup_mmap_file(path):
 
 class MMapIndexedDataset(torch.utils.data.Dataset):
     class Index:
+        """
+        Class responsible for writing the .idx file, containing
+        the sizes of all the data.
+        """
         _HDR_MAGIC = b"MMIDIDX\x00\x00"
 
         @classmethod
@@ -545,7 +552,7 @@ class MMapIndexedDatasetBuilder:
     def merge_file_(self, another_file):
         # Concatenate index
         index = MMapIndexedDataset.Index(index_file_path(another_file))
-        assert index.dtype == self._dtype
+        assert index.dtype == self._dtype, f"index.dtype={index.dtype}, self._dtype={self._dtype}"
 
         for size in index.sizes:
             self._sizes.append(size)

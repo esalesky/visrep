@@ -6,6 +6,7 @@ build
 *__pycache__*
 *.swp
 *.so
+*.png
 
 # macOS dir files
 .DS_Store
