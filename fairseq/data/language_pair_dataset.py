@@ -474,6 +474,7 @@ class LanguagePairDataset(FairseqDataset):
             np.array: filtered sample array
             list: list of removed indices
         """
+#        print("FILTER", "LEN", len(self), "SRC SIZES", self.src_sizes, "TGT SIZES", self.tgt_sizes, "INDICES", indices, "MAX SIZES", max_sizes, sep="\n")
         return data_utils.filter_paired_dataset_indices_by_size(
             self.src_sizes,
             self.tgt_sizes,

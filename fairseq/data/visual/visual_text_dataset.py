@@ -4,14 +4,21 @@
 # LICENSE file in the root directory of this source tree.
 
 import csv
+import cv2
+import itertools
 import io
 import logging
 import os
 import re
 from typing import Dict, List, Optional, Tuple
 
+from functools import lru_cache
+
 import numpy as np
 import torch
+
+from fairseq.data.indexed_dataset import dataset_exists as indexed_dataset_exists
+
 from fairseq.data import (
     ConcatDataset,
     Dictionary,
@@ -21,7 +28,6 @@ from fairseq.data import (
 )
 from fairseq.data.language_pair_dataset import LanguagePairDataset
 
-import cv2
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +73,8 @@ class VisualTextDataset(LanguagePairDataset):
             self,
             src_images,
             src_sizes,
+            slice_height,
+            slice_width,
             src_texts: Optional[List[str]] = None,
             tgt_texts: Optional[List[str]] = None,
             tgt_sizes=None,
@@ -74,10 +82,14 @@ class VisualTextDataset(LanguagePairDataset):
             constraints=None,
             shuffle=False,
     ):
+        """
+        src_images is a list of 1d tensors which will be reshaped later
+        into shape (num_slices x channels x height x width)
+        """
         super().__init__(
             src=src_images,
             src_sizes=src_sizes,
-            src_dict=tgt_dict, # actually, unused
+            src_dict=tgt_dict, # unused!
             tgt=tgt_texts,
             tgt_sizes=tgt_sizes,
             tgt_dict=tgt_dict,
@@ -86,22 +98,42 @@ class VisualTextDataset(LanguagePairDataset):
             shuffle=shuffle,
         )
         self.src_text = src_texts
+        self.slice_height = slice_height
+        self.slice_width = slice_width
+        self.slice_area = slice_width * slice_height if slice_width and slice_height else 1
 
         # TODO: make sure lengths are all valid
 
+    @lru_cache(maxsize=8)
     def __getitem__(
         self, index: int
     ) -> Tuple[int, torch.Tensor, Optional[torch.Tensor]]:
         """
         Returns a single example in the form of a dictionary.
+        The image tensor is 1d, and has to be scaled to the
+        right shape (slices, channels, height, width).
         """
 
         example = super().__getitem__(index)
-        example["source_text"] = self.src_text[index]
-        return example #  index, source, source_image, target
+        if self.src_text is not None:
+            example["source_text"] = self.src_text[index]
+
+        # print("GETITEM:", example["source"].shape, self.slice_area)
+        # Scale the example if necessary
+        if self.slice_area:
+            num_slices = example["source"].shape[0] // self.slice_area
+            example["source"] = example["source"].view(num_slices, 1, self.slice_height, self.slice_width)
+        # print(" -> RESHAPED:", example["source"].shape)
+        # print(" -> DATA:")
+        # for t in example["source"]:
+        #     print("     ->", t)
+
+        return example #  { id, source, target, source_text }
 
     def collater(self, samples) -> Dict:
         """Merge a list of samples to form a mini-batch."""
+
+        # print("visual_text_dataset::collater: SAMPLES", len(samples), samples[0])
 
         if len(samples) == 0:
             return {}
@@ -155,7 +187,7 @@ class VisualTextDataset(LanguagePairDataset):
         return out
 
     @classmethod
-    def from_text_path(
+    def from_raw(
             cls,
             root: str,
             args,
@@ -170,6 +202,8 @@ class VisualTextDataset(LanguagePairDataset):
     ) -> "VisualTextDataset":
         """
         Builds a VisualTextDataset from an input path and some command-line parameters.
+
+        There are two ways to build: from plain text, or from a preprocessed dataset.
         """
 
         samples = []
@@ -179,6 +213,9 @@ class VisualTextDataset(LanguagePairDataset):
 
         source_texts, source_images, source_sizes = [], [], []
         targets, target_sizes = [], []
+
+        slice_height = image_generator.height
+        slice_width = image_generator.width
 
         if args.image_samples_path is not None and not os.path.exists(args.image_samples_path):
             logger.info(f"Creating {args.image_samples_path}")
@@ -192,7 +229,8 @@ class VisualTextDataset(LanguagePairDataset):
             source_texts.append(source)
             if not args.image_cache_path:
                 image_tensor = image_generator.get_tensor(source)
-                source_images.append(image_tensor)
+                # VisualTextDataset expects the tensor to be flattened
+                source_images.append(image_tensor.view(-1))
                 source_sizes.append(image_tensor.shape[0])
                 total_source_len += image_tensor.shape[0]
 
@@ -220,8 +258,11 @@ class VisualTextDataset(LanguagePairDataset):
         target_sizes = np.array(target_sizes)
 
         shuffle = args.shuffle if is_train_split else False
-        dataset = VisualTextDataset(source_images, source_sizes, source_texts,
-                                    targets, target_sizes,
+        dataset = VisualTextDataset(source_images, source_sizes,
+                                    slice_height, slice_width,
+                                    src_texts=source_texts,
+                                    tgt_texts=targets,
+                                    tgt_sizes=target_sizes,
                                     tgt_dict=tgt_dict,
                                     constraints=None,
                                     shuffle=shuffle)
@@ -237,16 +278,18 @@ class VisualTextDataset(LanguagePairDataset):
             tgt_dict,
             constraints,
     ) -> "VisualTextDataset":
-
+        """
+        Used at inference time to create a dataset from STDIN.
+        """
         source_images = []
         source_sizes = []
         for lineno, source in enumerate(source_texts, 1):
             image_tensor = image_generator.get_tensor(source)
-            source_images.append(image_tensor)
+            # VisualTextDataset expects the tensor to be flattened
+            source_images.append(image_tensor.view(-1))
             source_sizes.append(image_tensor.shape[0])
 
             if args.image_samples_path is not None:
-
                 imagepath = f"{args.image_samples_path}.{lineno}.png"
                 whole_image, image_pieces = image_generator.get_images(source)
                 cv2.imwrite(imagepath, whole_image)
@@ -257,10 +300,111 @@ class VisualTextDataset(LanguagePairDataset):
                     logger.info(f"Saving sample #{lineno}.{i} to {imagepath}")
                     cv2.imwrite(imagepath, image)
 
-
-        return VisualTextDataset(source_images, source_sizes, source_texts,
+        return VisualTextDataset(source_images, source_sizes,
+                                 image_generator.height,
+                                 image_generator.width,
+                                 src_texts=source_texts,
                                  tgt_dict=tgt_dict,
                                  constraints=constraints)
+
+    def from_indexed(
+            data_path,
+            split,
+            src,
+            trg,
+            trg_dict,
+            dataset_impl,
+            image_window,
+            image_height,
+            truncate_source=False,
+            shuffle=True,
+            combine=True,
+    ):
+        def split_exists(split, src, trg, lang, data_path):
+            filename = os.path.join(data_path, "{}.{}-{}.{}".format(split, src, trg, lang))
+            return indexed_dataset_exists(filename, impl=dataset_impl)
+
+        src_datasets = []
+        trg_datasets = []
+
+        for k in itertools.count():
+            split_k = split + (str(k) if k > 0 else "")
+            split_k_vis = split + ".vis" + (str(k) if k > 0 else "")
+
+            # infer langcode
+            if split_exists(split_k_vis, src, trg, src, data_path):
+                image_prefix = os.path.join(data_path, "{}.{}-{}.".format(split_k_vis, src, trg))
+                target_prefix = os.path.join(data_path, "{}.{}-{}.".format(split_k, src, trg))
+            else:
+                if k > 0:
+                    break
+                else:
+                    raise FileNotFoundError(
+                        "Dataset not found: {} ({})".format(split, os.path.join(data_path, "{}.{}-{}.".format(split_k_vis, src, trg)))
+                    )
+
+            # This is important. We use standard fairseq utils to load the dataset, but each
+            # entry has collapsed the (slice, pixel width, pixel height) entries into a sequence
+            # of pixels, which we need to map back to their original sizes.
+            src_dataset = fairseq_data_utils.load_indexed_dataset(
+                image_prefix + src, None, dataset_impl
+            )
+            # print("LOADED: first five examples")
+            # for i in range(5):
+            #     print(f"  ->", len(src_dataset[i]), src_dataset[i].shape, src_dataset[i])
+
+            if truncate_source:
+                src_dataset = AppendTokenDataset(
+                    TruncateDataset(
+                        StripTokenDataset(src_dataset, src_dict.eos()),
+                        max_source_positions - 1,
+                    ),
+                    src_dict.eos(),
+                )
+            src_datasets.append(src_dataset)
+
+            # TODO: you could load the source text dataset here, if you needed access to it.
+            # I'm not going to waste our time.
+
+            trg_dataset = fairseq_data_utils.load_indexed_dataset(
+                target_prefix + trg, trg_dict, dataset_impl
+            )
+            if trg_dataset is not None:
+                trg_datasets.append(trg_dataset)
+
+            logger.info(
+                "{} {} {}-{} {} examples".format(
+                    data_path, split_k, src, trg, len(src_datasets[-1])
+                )
+            )
+
+            if not combine:
+                break
+
+        assert len(src_datasets) == len(trg_datasets) or len(trg_datasets) == 0
+
+        if len(src_datasets) == 1:
+            src_dataset = src_datasets[0]
+            trg_dataset = trg_datasets[0] if len(trg_datasets) > 0 else None
+        else:
+            sample_ratios = [1] * len(src_datasets)
+            sample_ratios[0] = upsample_primary
+            src_dataset = ConcatDataset(src_datasets, sample_ratios)
+            if len(trg_datasets) > 0:
+                trg_dataset = ConcatDataset(trg_datasets, sample_ratios)
+            else:
+                trg_dataset = None
+
+        trg_dataset_sizes = trg_dataset.sizes if trg_dataset is not None else None
+        dataset = VisualTextDataset(src_dataset,
+                                    src_dataset.sizes // (image_height * image_window),
+                                    image_height, image_window,
+                                    tgt_texts=trg_dataset,
+                                    tgt_sizes=trg_dataset.sizes,
+                                    tgt_dict=trg_dict,
+                                    constraints=None,
+                                    shuffle=shuffle)
+        return dataset
 
     @classmethod
     def load(
@@ -277,13 +421,43 @@ class VisualTextDataset(LanguagePairDataset):
             seed: int,
     ) -> "VisualTextDataset":
         """
-        Loads plain text or indexed data.
+        Loads plain text or indexed data, based on the requested dataset implementation.
         """
         if args.dataset_impl == "raw":
-            return cls.from_text_path(root, args, split, source, target,
-                                      image_generator, tgt_dict, is_train_split,
-                                      epoch, seed)
+            return cls.from_raw(root, args, split, source, target,
+                                image_generator, tgt_dict, is_train_split,
+                                epoch, seed)
+
         elif args.dataset_impl == "mmap":
-            pass
+            return cls.from_indexed(data_path=root, split=split, src=source, trg=target,
+                                    trg_dict=tgt_dict, dataset_impl=args.dataset_impl,
+                                    image_window=args.image_window,
+                                    image_height=image_generator.image_height)
+
         else:
             raise Exception(f"No such dataset implementation {args.dataset_impl}")
+
+
+# class VisualMMapIndexedDataset(MMapIndexedDataset):
+#     def __init__(self, path):
+#         super().__init__()
+
+#     @lru_cache(maxsize=8)
+#     def __getitem__(self, i):
+#         ptr, size = self._index[i]
+
+#         np_array = np.frombuffer(
+#             self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr
+#         )
+#         if self._index.dtype != np.int64:
+#             np_array = np_array.astype(np.int64)
+
+#         return torch.from_numpy(np_array)
+
+#     @property
+#     def sizes(self):
+#         """
+#         The actual size is (slices * image_area), but this is used for
+#         pruning based on source length, so just return the number of slices.
+#         """
+#         return self._index.sizes // self.image_area

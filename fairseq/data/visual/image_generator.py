@@ -76,6 +76,14 @@ class TextImageGenerator():
 
         logger.info(f"Image window size {self.window} stride {self.stride}")
 
+    @property
+    def height(self):
+        return self.image_height
+
+    @property
+    def width(self):
+        return self.window
+
     def get_surface(self, line_text, lang="*"):
         """Creates a single image from an entire line and returns the surface."""
 
@@ -120,12 +128,14 @@ class TextImageGenerator():
     def get_image(self, text, lang="*"):
         """
         Returns a single image from a line of text.
+        Dimensions: height x width
         """
         return self.get_image_from_surface(self.get_surface(text))
 
     def get_images(self, line_text, lang="*"):
         """
         Returns images from all pieces in a line of text.
+        Shape: slices x height x width
         """
 
         surface = self.get_surface(line_text)
