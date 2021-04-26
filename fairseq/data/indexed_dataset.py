@@ -504,8 +504,12 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         np_array = np.frombuffer(
             self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr
         )
-        if self._index.dtype != np.int64:
+
+        # These types are unsupported downstream, so convert them
+        if self._index.dtype == np.uint16:
             np_array = np_array.astype(np.int64)
+        elif self._index.dtype == np.half:
+            np_array = np_array.astype(np.single)
 
         return torch.from_numpy(np_array)
 
