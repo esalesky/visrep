@@ -81,7 +81,7 @@ class VisualTextTask(LegacyFairseqTask):
         self.source_lang = args.source_lang
         self.target_lang = args.target_lang
 
-        self.image_generator = build_image_generator(args)
+        self.image_generator = VisualTextTask.build_image_generator(args)
 
         if self.source_lang is None or self.target_lang is None:
             raise ValueError("You have to set --source-lang and --target-lang")
