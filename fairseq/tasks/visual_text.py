@@ -159,12 +159,10 @@ class VisualTextTask(LegacyFairseqTask):
         """
         image_generator = None
         if args.image_font_path is not None:
-            surface_width = getattr(args, "max_source_positions", 1024) * args.image_stride
             image_generator = TextImageGenerator(window=args.image_window,
                                                  stride=args.image_stride,
                                                  font_size=args.image_font_size,
                                                  font_file=args.image_font_path,
-                                                 surface_width=surface_width,
             )
 
         return image_generator

@@ -15,18 +15,15 @@ import torchvision.transforms as transforms
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.freetype
 
-logger = logging.getLogger(__name__)
+from fairseq.options import DEFAULT_FONT_SIZE, DEFAULT_PAD_SIZE, DEFAULT_WINDOW, DEFAULT_STRIDE, MAX_SURFACE_WIDTH
 
-DEFAULT_FONT_SIZE = 8
-DEFAULT_PAD_SIZE = 3
-DEFAULT_WINDOW = 30
-DEFAULT_STRIDE = 20
+
+logger = logging.getLogger(__name__)
 
 class TextImageGenerator():
     def __init__(self,
                  font_file=None,
-                 surface_width=5000,
-                 surface_height=50,
+                 surface_width=MAX_SURFACE_WIDTH,
                  dpi=120,
                  bkg_color="white",
                  font_color="black",
@@ -47,14 +44,11 @@ class TextImageGenerator():
 
         self.fonts = self.load_fonts(font_file, font_size)
 
-        SURFACE_MAX = 16383
-
-        if surface_width > SURFACE_MAX:
-            logger.warning(f"Reducing surface width from {surface_width} to {SURFACE_MAX}, which means no more than {16384//stride} slices")
-            surface_width = SURFACE_MAX
+        if surface_width > MAX_SURFACE_WIDTH:
+            logger.warning(f"Reducing surface width from {surface_width} to {MAX_SURFACE_WIDTH} or {16384//stride} slices")
+            surface_width = MAX_SURFACE_WIDTH
 
         self.surface_width = surface_width
-        self.surface_height = surface_height
         self.dpi = dpi
 
         self.pad_top = pad_size
@@ -74,8 +68,16 @@ class TextImageGenerator():
                 font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
             )
 
+        # Get the estimated upper bound on character width
+        self.estimated_max_char_width = 0
+        for font in self.fonts.values():
+            self.estimated_max_char_width = max(
+                self.estimated_max_char_width,
+                font.get_rect("W.").width + self.pad_left + self.pad_right
+            )
+
         font_name = os.path.basename(font_file)
-        logger.info(f"Created {self.font_size}pt {font_name} with image height {self.image_height}")
+        logger.info(f"Created {self.font_size}pt {font_name} with image height {self.image_height} and est. char width {self.estimated_max_char_width}")
 
         self.window = window
         self.stride = stride
@@ -94,11 +96,15 @@ class TextImageGenerator():
     def get_surface(self, line_text, lang="*", remove_subword=True):
         """Creates a single image from an entire line and returns the surface."""
 
-        surf = pygame.Surface((self.surface_width, self.surface_height))
-        surf.fill(pygame.color.THECOLORS['white'])
-
         if remove_subword:
             line_text = line_text.replace(" ", "").replace("▁", " ").strip()
+
+        # We can save a lot of time by creating a smaller surface, so here,
+        # we estimate the width based on how much 
+        surface_width = self.estimated_max_char_width * len(line_text)
+        # print(f"SURFACE: {surface_width} x {self.image_height * 2}")
+        surf = pygame.Surface((surface_width, self.image_height * 2))
+        surf.fill(pygame.color.THECOLORS['white'])
 
         text_rect = self.fonts[lang].render_to(
             surf, (self.pad_left, self.pad_top), line_text)

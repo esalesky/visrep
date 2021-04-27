@@ -22,9 +22,6 @@ from fairseq.dataclass.configs import (
 )
 from fairseq.dataclass.utils import gen_parser_from_dataclass
 
-# this import is for backward compatibility
-from fairseq.utils import csv_str_list, eval_bool, eval_str_dict, eval_str_list  # noqa
-
 
 def get_preprocessing_parser(default_task="translation"):
     parser = get_parser("Preprocessing", default_task)
@@ -245,6 +242,7 @@ DEFAULT_FONT_SIZE = 8
 DEFAULT_PAD_SIZE = 3
 DEFAULT_WINDOW = 30
 DEFAULT_STRIDE = 20
+MAX_SURFACE_WIDTH = 16383
 
 def add_visual_text_args(parser):
     group = parser.add_argument_group("Visual text")
@@ -263,7 +261,7 @@ def add_visual_text_args(parser):
     group.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
                        help="Font size")
     group.add_argument("--image-surface-width", type=int,
-                       default=7000, help="Image surface width")
+                       default=MAX_SURFACE_WIDTH, help="Image surface width")
     group.add_argument("--image-pad-size", type=int,
                        default=2, help="Image pad size")
     group.add_argument("--image-dpi", type=int,
