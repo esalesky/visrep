@@ -25,7 +25,8 @@ DEFAULT_STRIDE = 20
 class TextImageGenerator():
     def __init__(self,
                  font_file=None,
-                 surf_width=5000, surf_height=200,
+                 surface_width=5000,
+                 surface_height=50,
                  dpi=120,
                  bkg_color="white",
                  font_color="black",
@@ -46,8 +47,14 @@ class TextImageGenerator():
 
         self.fonts = self.load_fonts(font_file, font_size)
 
-        self.surface_width = surf_width
-        self.surface_height = surf_height
+        SURFACE_MAX = 16383
+
+        if surface_width > SURFACE_MAX:
+            logger.warning(f"Reducing surface width from {surface_width} to {SURFACE_MAX}, which means no more than {16384//stride} slices")
+            surface_width = SURFACE_MAX
+
+        self.surface_width = surface_width
+        self.surface_height = surface_height
         self.dpi = dpi
 
         self.pad_top = pad_size
@@ -84,14 +91,14 @@ class TextImageGenerator():
     def width(self):
         return self.window
 
-    def get_surface(self, line_text, lang="*"):
+    def get_surface(self, line_text, lang="*", remove_subword=True):
         """Creates a single image from an entire line and returns the surface."""
 
-        curr_surface_width = self.surface_width
-        curr_surface_height = self.surface_height
-
-        surf = pygame.Surface((curr_surface_width, curr_surface_height))
+        surf = pygame.Surface((self.surface_width, self.surface_height))
         surf.fill(pygame.color.THECOLORS['white'])
+
+        if remove_subword:
+            line_text = line_text.replace(" ", "").replace("▁", " ").strip()
 
         text_rect = self.fonts[lang].render_to(
             surf, (self.pad_left, self.pad_top), line_text)
@@ -109,7 +116,7 @@ class TextImageGenerator():
             # smallest number <= self.surface_width that self.stride factorizes into
             while crop_width > self.surface_width:
                 crop_width -= self.stride
-            logger.warning(f"Surface ({self.surface_width}) too narrow for {len(line_text.split())} tokens of {self.font_size}pt text: truncating {old_width} -> {crop_width}")
+            logger.warning(f"{len(line_text.split())} raw text tokens ({old_width // self.window} slices) too wide, truncating {old_width} -> {crop_width}")
 
         crop = (0, 0, crop_width, self.image_height)
         surf = surf.subsurface(crop)
