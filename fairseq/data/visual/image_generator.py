@@ -96,7 +96,8 @@ class TextImageGenerator():
     def get_surface(self, line_text, lang="*", remove_subword=True):
         """Creates a single image from an entire line and returns the surface."""
 
-        if remove_subword:
+        # Remove subwords if present
+        if remove_subword and "▁" in line_text:
             line_text = line_text.replace(" ", "").replace("▁", " ").strip()
 
         # We can save a lot of time by creating a smaller surface, so here,
