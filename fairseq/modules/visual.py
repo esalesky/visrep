@@ -20,7 +20,7 @@ class NLayerOCR(nn.Module):
                  slice_height,
                  embed_dim,
                  embed_normalize=False,
-                 channel_increment=1,
+                 bridge_relu=False,
                  num_convolutions=1):
 
         super().__init__()
@@ -28,9 +28,10 @@ class NLayerOCR(nn.Module):
         self.slice_height = slice_height
         self.embed_dim = embed_dim
         self.embed_normalize = embed_normalize
+        self.bridge_relu = bridge_relu
         self.num_convolutions = num_convolutions
 
-        logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}, incr: {channel_increment}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+        logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}; bridge relu: {bridge_relu}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
 
         ops = []
         prev_channel_size = 1
@@ -49,7 +50,13 @@ class NLayerOCR(nn.Module):
 
         self.embedder = nn.Sequential(*ops)
 
-        self.bridge = nn.Linear(slice_width * slice_height, embed_dim)
+        if self.bridge_relu:
+            self.bridge = nn.Sequential(
+                nn.Linear(slice_width * slice_height, embed_dim),
+                nn.ReLU(inplace=True)
+            )
+        else:
+            self.bridge = nn.Linear(slice_width * slice_height, embed_dim)
 
         for param in self.parameters():
             torch.nn.init.uniform_(param, -0.08, 0.08)
