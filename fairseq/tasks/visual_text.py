@@ -81,8 +81,7 @@ class VisualTextTask(LegacyFairseqTask):
         self.source_lang = args.source_lang
         self.target_lang = args.target_lang
 
-        self.image_generator = None
-        self.build_image_generator(args)
+        self.image_generator = build_image_generator(args)
 
         if self.source_lang is None or self.target_lang is None:
             raise ValueError("You have to set --source-lang and --target-lang")
@@ -143,7 +142,8 @@ class VisualTextTask(LegacyFairseqTask):
     def max_positions(self):
         return self.args.max_source_positions, self.args.max_target_positions
 
-    def build_image_generator(self, args):
+    @staticmethod
+    def build_image_generator(args):
         """Builds an image generator.
 
         At training time, args.image_font_path will be defined.  At
@@ -157,18 +157,21 @@ class VisualTextTask(LegacyFairseqTask):
         at the model level (in the checkpoint), but models aren't
         loaded until after the task is instantiated.
         """
+        image_generator = None
         if args.image_font_path is not None:
-            self.image_generator = TextImageGenerator(window=args.image_window,
-                                                      stride=args.image_stride,
-                                                      font_size=args.image_font_size,
-                                                      font_file=args.image_font_path,
+            image_generator = TextImageGenerator(window=args.image_window,
+                                                 stride=args.image_stride,
+                                                 font_size=args.image_font_size,
+                                                 font_file=args.image_font_path,
             )
+
+        return image_generator
 
     def build_model(self, args):
         # At inference, we have to build the image generator here,
         # after we have the parameters loaded from the model
         if self.image_generator is None:
-            self.build_image_generator(args)
+            self.image_generator = build_image_generator(args)
 
         return super(VisualTextTask, self).build_model(args)
 
