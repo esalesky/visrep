@@ -105,7 +105,7 @@ class TextImageGenerator():
 
         # We can save a lot of time by creating a smaller surface, so here,
         # we estimate the width based on how much 
-        surface_width = self.estimated_max_char_width * len(line_text)
+        surface_width = max(self.window, self.estimated_max_char_width * len(line_text))
         # print(f"SURFACE: {surface_width} x {self.image_height * 2}")
         surf = pygame.Surface((surface_width, self.image_height * 2))
         surf.fill(pygame.color.THECOLORS['white'])
