@@ -68,10 +68,6 @@ class VisualTextTask(LegacyFairseqTask):
                             help='Display verbose debug')
         parser.add_argument("--image-pretrain-path", type=str, default=None,
                             help='Load pretrain sentence embeddings')
-        parser.add_argument('--image-samples-path', default=None, type=str,
-                            help='Directory to dump image samples to')
-        parser.add_argument('--image-samples-interval', default=1000, type=int, metavar="N",
-                            help='Dump every Nth sample image')
 
         add_visual_text_args(parser)
 

@@ -280,16 +280,19 @@ def main(args):
             dataset_dest_file(args, output_prefix, lang, "bin"),
             impl=args.dataset_impl,
             dtype=np.float16,
+            vocab_size=None,
         )
 
         merge_result(
             Binarizer.binarize_images(
-                input_file, image_generator, lambda t: ds.add_item(t), offset=0, end=offsets[1]
+                input_file, image_generator, lambda t: ds.add_item(t), offset=0, end=offsets[1],
+                sample_dir=args.image_samples_path, sample_interval=args.image_samples_interval,
             )
         )
         if num_workers > 1:
             pool.join()
             for worker_id in range(1, num_workers):
+                logger.info(f"Merging piece {worker_id} / {num_workers}")
                 prefix = "{}{}".format(output_prefix, worker_id)
                 temp_file_path = dataset_dest_prefix(args, prefix, None)
                 ds.merge_file_(temp_file_path)

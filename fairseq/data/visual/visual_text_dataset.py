@@ -217,10 +217,6 @@ class VisualTextDataset(LanguagePairDataset):
         slice_height = image_generator.height
         slice_width = image_generator.width
 
-        if args.image_samples_path is not None and not os.path.exists(args.image_samples_path):
-            logger.info(f"Creating {args.image_samples_path}")
-            os.makedirs(args.image_samples_path, exist_ok=True)
-
         total_source_len = 0
         for sampleno, (source, target) in enumerate(zip(open(source_path, "rt"), open(target_path, "rt")), 1):
             source = source.strip()
@@ -242,15 +238,7 @@ class VisualTextDataset(LanguagePairDataset):
             target_sizes.append(len(target_tokens))
 
             if args.image_samples_path and sampleno % args.image_samples_interval == 0:
-                whole_image, image_pieces = image_generator.get_images(source)
-                imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.png")
-                cv2.imwrite(imagepath, whole_image)
-
-                logger.info(f"Writing sample #{sampleno} to {imagepath} ({len(image_pieces)} pieces)")
-                for i, image in enumerate(image_pieces, 1):
-                    imagepath = os.path.join(args.image_samples_path, f"{split}.{sampleno}.{i}.png")
-                    cv2.imwrite(imagepath, image)
-
+                image_generator.dump(source), os.path.join(args.image_samples_path, f"{split}.{sampleno}")
 
         logger.info(f"Read {sampleno} samples for split {split}, mean length {total_source_len / sampleno:.1f}")
 

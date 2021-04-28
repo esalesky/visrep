@@ -271,6 +271,10 @@ def add_visual_text_args(parser):
     group.add_argument("--image-stride", type=int,
                        default=DEFAULT_STRIDE,
                        help="Stride width in pixels")
+    parser.add_argument('--image-samples-path', default="samples", type=str,
+                        help='Directory to dump image samples to')
+    parser.add_argument('--image-samples-interval', default=0, type=int, metavar="N",
+                        help='Dump every Nth sample image')
     # fmt: off
     return parser
 

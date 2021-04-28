@@ -21,6 +21,7 @@ TRG=$4
 shift
 shift
 shift
+shift
 
 FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
 export PYTHONPATH=$FAIRSEQ
@@ -65,4 +66,5 @@ PYTHONPATH=$FAIRSEQ python3 -m fairseq_cli.preprocess \
   --image-font-path $FONTPATH \
   --image-font-size $FONTSIZE \
   --image-window $WINDOW \
-  --image-stride $STRIDE
+  --image-stride $STRIDE \
+  "$@"

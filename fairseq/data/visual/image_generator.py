@@ -130,6 +130,10 @@ class TextImageGenerator():
 
         crop = (0, 0, crop_width, self.image_height)
         surf = surf.subsurface(crop)
+        # try:
+        #     surf = surf.subsurface(crop)
+        # except ValueError:
+        #     logger.error(f"Can't crop line `{line_text}' to {crop} with surf width {surface_width}")
 
         return surf
 
@@ -218,6 +222,25 @@ class TextImageGenerator():
             sys.exit(1)
 
         return fonts
+
+    def dump(self, text, prefix):
+        """
+        Creates sample images.
+        """
+        whole_image, image_pieces = self.get_images(text)
+
+        dirname = os.path.dirname(prefix)
+        if not os.path.exists(dirname):
+            logger.info(f"Creating samples directory {dirname}")
+            os.makedirs(dirname)
+
+        imagepath = f"{prefix}.png"
+        cv2.imwrite(imagepath, whole_image)
+
+        logger.info(f"Dumping sample to {imagepath} ({len(image_pieces)} pieces)")
+        for i, image in enumerate(image_pieces, 1):
+            imagepath = f"{prefix}.{i}.png"
+            cv2.imwrite(imagepath, image)
 
 
 def main(args):
