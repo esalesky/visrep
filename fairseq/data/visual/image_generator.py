@@ -15,8 +15,11 @@ import torchvision.transforms as transforms
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.freetype
 
-from fairseq.options import DEFAULT_FONT_SIZE, DEFAULT_PAD_SIZE, DEFAULT_WINDOW, DEFAULT_STRIDE, MAX_SURFACE_WIDTH
-
+DEFAULT_FONT_SIZE = 8
+DEFAULT_PAD_SIZE = 3
+DEFAULT_WINDOW = 30
+DEFAULT_STRIDE = 20
+MAX_SURFACE_WIDTH = 16383
 
 logger = logging.getLogger(__name__)
 

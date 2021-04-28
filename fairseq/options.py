@@ -22,6 +22,8 @@ from fairseq.dataclass.configs import (
 )
 from fairseq.dataclass.utils import gen_parser_from_dataclass
 
+from fairseq.data.visual.image_generator import DEFAULT_FONT_SIZE, DEFAULT_PAD_SIZE, DEFAULT_WINDOW, DEFAULT_STRIDE, MAX_SURFACE_WIDTH
+
 
 def get_preprocessing_parser(default_task="translation"):
     parser = get_parser("Preprocessing", default_task)
@@ -238,11 +240,6 @@ def get_parser(desc, default_task="translation"):
     # fmt: on
     return parser
 
-DEFAULT_FONT_SIZE = 8
-DEFAULT_PAD_SIZE = 3
-DEFAULT_WINDOW = 30
-DEFAULT_STRIDE = 20
-MAX_SURFACE_WIDTH = 16383
 
 def add_visual_text_args(parser):
     group = parser.add_argument_group("Visual text")
