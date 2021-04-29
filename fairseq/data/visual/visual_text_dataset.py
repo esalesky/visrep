@@ -277,16 +277,8 @@ class VisualTextDataset(LanguagePairDataset):
             source_images.append(image_tensor.view(-1))
             source_sizes.append(image_tensor.shape[0])
 
-            if args.image_samples_path is not None:
-                imagepath = f"{args.image_samples_path}.{lineno}.png"
-                whole_image, image_pieces = image_generator.get_images(source)
-                cv2.imwrite(imagepath, whole_image)
-                logger.info(f"Saving sample image to {imagepath}")
-
-                for i, image in enumerate(image_pieces, 1):
-                    imagepath = f"{args.image_samples_path}.{lineno}.{i}.png"
-                    logger.info(f"Saving sample #{lineno}.{i} to {imagepath}")
-                    cv2.imwrite(imagepath, image)
+            if args.image_samples_interval > 0 and lineno % args.image_samples_interval == 0:
+                image_generator.dump(source), os.path.join(args.image_samples_path, f"{split}.{sampleno}")
 
         return VisualTextDataset(source_images, source_sizes,
                                  image_generator.height,
