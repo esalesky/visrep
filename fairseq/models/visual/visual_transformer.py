@@ -26,11 +26,16 @@ from fairseq.modules.vis_align_ocr import (
 from fairseq.modules.visual import *
 
 from torch import Tensor
-
+import argparse
 
 logger = logging.getLogger(__name__)
 
 
+# argparse action: runs eval() to e.g., get a tuple(int,int) from string
+class ActionEval(argparse.Action):
+    def __call__(self, parser, namespace, values,
+                 option_string=None):
+        setattr(namespace, self.dest, eval(values))
 
 
 
@@ -50,18 +55,13 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
     @staticmethod
     def add_args(parser):
         """Add model-specific arguments to the parser."""
-        # input
+        # OCR
         parser.add_argument(
-            "--conv-kernel-sizes",
+            "--kernel-size",
             type=str,
-            metavar="N",
-            help="kernel sizes of Conv1d subsampling layers",
-        )
-        parser.add_argument(
-            "--conv-channels",
-            type=int,
-            metavar="N",
-            help="# of channels in Conv1d subsampling layers",
+            metavar="(h,w)",
+            action=ActionEval,
+            help="kernel sizes of Conv2d layers: (h,w). to use image height, use h=-1",
         )
         # Transformer
         parser.add_argument(
@@ -225,7 +225,7 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
 
 
 class VisualTextTransformerEncoder(FairseqEncoder):
-    """Speech-to-text Transformer encoder that consists of input subsampler and
+    """Image-to-text Transformer encoder that consists of input subsampler and
     Transformer encoder."""
 
     def __init__(self, args, image_generator):
@@ -247,6 +247,7 @@ class VisualTextTransformerEncoder(FairseqEncoder):
                                           args.encoder_embed_dim,
                                           embed_normalize=args.image_embed_normalize,
                                           bridge_relu=getattr(args, "image_bridge_relu", False),
+                                          kernel_size=getattr(args, "kernel_size", (3,3)),
                                           num_convolutions=1)
         elif args.image_embed_type == "2layer":
             self.cnn_embedder = NLayerOCR(args.image_window,
@@ -254,6 +255,7 @@ class VisualTextTransformerEncoder(FairseqEncoder):
                                           args.encoder_embed_dim,
                                           embed_normalize=args.image_embed_normalize,
                                           bridge_relu=getattr(args, "image_bridge_relu", False),
+                                          kernel_size=getattr(args, "kernel_size", (3,3)),
                                           num_convolutions=2)
 
         self.dropout_module = FairseqDropout(
@@ -364,8 +366,7 @@ class TransformerDecoderScriptable(TransformerDecoder):
 @register_model_architecture(model_name="visual_text_transformer", arch_name="visual_text_transformer")
 def base_architecture(args):
     # Convolutional subsampler
-    args.conv_kernel_sizes = getattr(args, "conv_kernel_sizes", "5,5")
-    args.conv_channels = getattr(args, "conv_channels", 1024)
+    args.kernel_size = getattr(args, "kernel_sizes", (3,3))
     # Transformer
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
     args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 2048)

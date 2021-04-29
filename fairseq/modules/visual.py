@@ -21,6 +21,7 @@ class NLayerOCR(nn.Module):
                  embed_dim,
                  embed_normalize=False,
                  bridge_relu=False,
+                 kernel_size=(3,3),
                  num_convolutions=1):
 
         super().__init__()
@@ -29,13 +30,14 @@ class NLayerOCR(nn.Module):
         self.embed_dim = embed_dim
         self.embed_normalize = embed_normalize
         self.bridge_relu = bridge_relu
+        self.kernel_size = (slice_height,kernel_size[1]) if kernel_size[0]==-1 else kernel_size
         self.num_convolutions = num_convolutions
 
-        logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}; bridge relu: {bridge_relu}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
+        logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}; bridge relu: {bridge_relu}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}; conv2d kernel size: {kernel_size}")
 
         ops = []
         for i in range(num_convolutions):
-            ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=3, padding=1))
+            ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=kernel_size, padding=1))
             if embed_normalize:
                 ops.append(nn.BatchNorm2d(1)),
             ops.append(nn.ReLU(inplace=True))
