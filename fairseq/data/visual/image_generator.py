@@ -121,12 +121,13 @@ class TextImageGenerator():
             # exactly one window size.
             crop_width += self.window - ((crop_width - self.stride) % self.window)
 
-        if crop_width > self.surface_width:
+        if crop_width > surface_width:
             old_width = crop_width
-            # smallest number <= self.surface_width that self.stride factorizes into
-            while crop_width > self.surface_width:
+            # smallest number <= surface_width that self.stride factorizes into
+            while crop_width > surface_width:
                 crop_width -= self.stride
-            logger.warning(f"{len(line_text.split())} raw text tokens ({old_width // self.window} slices) too wide, truncating {old_width} -> {crop_width}")
+            logger.warn(f"{len(line_text.split())} raw text tokens ({old_width // self.window} slices) too wide, truncating {old_width} -> {crop_width}")
+
 
         crop = (0, 0, crop_width, self.image_height)
         surf = surf.subsurface(crop)
