@@ -365,8 +365,6 @@ class TransformerDecoderScriptable(TransformerDecoder):
 
 @register_model_architecture(model_name="visual_text_transformer", arch_name="visual_text_transformer")
 def base_architecture(args):
-    # Convolutional subsampler
-    args.kernel_size = getattr(args, "kernel_sizes", (3,3))
     # Transformer
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
     args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 2048)
