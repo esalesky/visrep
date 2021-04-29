@@ -49,6 +49,8 @@ cat $INPUT \
   "$@" \
 > $OUTPUT 2>&1
 
+echo "model epoch for $MODELDIR/checkpoint_best.pt is $(~/bin/getepoch.py $MODELDIR/checkpoint_best.pt)" >> $OUTPUT
+
 cleanfile=$(echo $OUTPUT | perl -pe "s|/out\.|/clean.|")
 bleufile=$(echo $OUTPUT | perl -pe "s|/out\.|/bleu.|")
 
