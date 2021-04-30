@@ -100,7 +100,7 @@ class TextImageGenerator():
         # Set the surface width based on a liberal estimate of the space needed for rendering
         surface_width = max(self.window, self.estimated_max_char_width * len(line_text))
         if surface_width > MAX_SURFACE_WIDTH:
-            logger.warning(f"Reducing surface width from {surface_width} to {MAX_SURFACE_WIDTH} or {16384//stride} slices")
+            logger.warning(f"Reducing surface width from {surface_width} to {MAX_SURFACE_WIDTH} or {16384//self.stride} slices")
             surface_width = MAX_SURFACE_WIDTH
 
         surf = pygame.Surface((surface_width, self.image_height * 2))
