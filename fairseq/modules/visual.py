@@ -38,8 +38,8 @@ class NLayerOCR(nn.Module):
         assert self.kernel_size[1] % 2 != 0, f"conv2d kernel width {self.kernel_size} is even. we require odd."
 
         # padding for dynamic kernel size. assumes we do not change the conv dilation or conv stride (we currently use the defaults)
-        padding_h = (kernel_size[0] - 1) / 2
-        padding_w = (kernel_size[1] - 1) / 2
+        padding_h = int((kernel_size[0] - 1) / 2)
+        padding_w = int((kernel_size[1] - 1) / 2)
 
         logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}; bridge relu: {bridge_relu}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}; conv2d kernel size: {self.kernel_size}")
 
