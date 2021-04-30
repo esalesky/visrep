@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 class TextImageGenerator():
     def __init__(self,
                  font_file=None,
-                 surface_width=MAX_SURFACE_WIDTH,
                  dpi=120,
                  bkg_color="white",
                  font_color="black",
@@ -47,11 +46,6 @@ class TextImageGenerator():
 
         self.fonts = self.load_fonts(font_file, font_size)
 
-        if surface_width > MAX_SURFACE_WIDTH:
-            logger.warning(f"Reducing surface width from {surface_width} to {MAX_SURFACE_WIDTH} or {16384//stride} slices")
-            surface_width = MAX_SURFACE_WIDTH
-
-        self.surface_width = surface_width
         self.dpi = dpi
 
         self.pad_top = pad_size
@@ -103,10 +97,12 @@ class TextImageGenerator():
         if remove_subword and "▁" in line_text:
             line_text = line_text.replace(" ", "").replace("▁", " ").strip()
 
-        # We can save a lot of time by creating a smaller surface, so here,
-        # we estimate the width based on how much 
+        # Set the surface width based on a liberal estimate of the space needed for rendering
         surface_width = max(self.window, self.estimated_max_char_width * len(line_text))
-        # print(f"SURFACE: {surface_width} x {self.image_height * 2}")
+        if surface_width > MAX_SURFACE_WIDTH:
+            logger.warning(f"Reducing surface width from {surface_width} to {MAX_SURFACE_WIDTH} or {16384//stride} slices")
+            surface_width = MAX_SURFACE_WIDTH
+
         surf = pygame.Surface((surface_width, self.image_height * 2))
         surf.fill(pygame.color.THECOLORS['white'])
 
