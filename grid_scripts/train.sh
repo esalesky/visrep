@@ -84,7 +84,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --arch visual_text_transformer \
   -s $SRC -t $TRG \
   --save-dir $MODELDIR \
-  --save-checkpoints 1 \
+  --save-interval 1 \
   --keep-best-checkpoints 5 \
   --target-dict $DATADIR/dict.$TRG.txt \
   --validate-interval 1 \
