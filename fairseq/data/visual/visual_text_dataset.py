@@ -237,7 +237,7 @@ class VisualTextDataset(LanguagePairDataset):
             targets.append(target_tokens)
             target_sizes.append(len(target_tokens))
 
-            if args.image_samples_path and sampleno % args.image_samples_interval == 0:
+            if args.image_samples_interval > 0 and sampleno % args.image_samples_interval == 0:
                 image_generator.dump(source, os.path.join(args.image_samples_path, f"{split}.{sampleno}"))
 
         logger.info(f"Read {sampleno} samples for split {split}, mean length {total_source_len / sampleno:.1f}")
