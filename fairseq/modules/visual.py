@@ -33,11 +33,19 @@ class NLayerOCR(nn.Module):
         self.kernel_size = (slice_height,kernel_size[1]) if kernel_size[0]==-1 else kernel_size
         self.num_convolutions = num_convolutions
 
+        # we require odd kernel size values:
+        assert self.kernel_size[0] % 2 != 0, f"conv2d kernel height {self.kernel_size} is even. we require odd. did you use {self.slice_height}?"
+        assert self.kernel_size[1] % 2 != 0, f"conv2d kernel width {self.kernel_size} is even. we require odd."
+
+        # padding for dynamic kernel size. assumes we do not change the conv dilation or conv stride (we currently use the defaults)
+        padding_h = int((kernel_size[0] - 1) / 2)
+        padding_w = int((kernel_size[1] - 1) / 2)
+
         logger.info(f"{num_convolutions}Layer embedding (norm: {embed_normalize}; bridge relu: {bridge_relu}) from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}; conv2d kernel size: {self.kernel_size}")
 
         ops = []
         for i in range(num_convolutions):
-            ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=self.kernel_size, padding=1))
+            ops.append(nn.Conv2d(1, 1, stride=1, kernel_size=self.kernel_size, padding=(padding_h,padding_w)))
             if embed_normalize:
                 ops.append(nn.BatchNorm2d(1)),
             ops.append(nn.ReLU(inplace=True))
