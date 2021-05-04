@@ -125,6 +125,14 @@ def main(cfg: FairseqConfig) -> None:
             cfg.dataset.batch_size,
         )
     )
+    logger.info(
+        "effective batch size in tokens = {} devices x {} update-freq x {} max-tokens = {}".format(
+            cfg.distributed_training.distributed_world_size,
+            cfg.optimization.update_freq[-1],
+            cfg.dataset.max_tokens,
+            cfg.distributed_training.distributed_world_size * cfg.optimization.update_freq[-1] * cfg.dataset.max_tokens,
+        )
+    )
 
     # Load the latest checkpoint if one is available and restore the
     # corresponding train iterator
