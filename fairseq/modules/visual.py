@@ -89,15 +89,23 @@ class DirectOCR(nn.Module):
     def __init__(self,
                  slice_width,
                  slice_height,
-                 embed_dim):
-
+                 embed_dim,
+                 bridge_relu=False):
         super().__init__()
         self.slice_width = slice_width
         self.slice_height = slice_height
+        self.bridge_relu = bridge_relu
         self.embed_dim = embed_dim
 
-        self.embedder = nn.Linear(slice_width * slice_height,
-                                  embed_dim)
+        if self.bridge_relu:
+            self.embedder = nn.Sequential(
+                nn.Linear(slice_width * slice_height, embed_dim),
+                nn.ReLU(inplace=True)
+            )
+        else:
+            self.embedder = nn.Linear(slice_width * slice_height,
+                                      embed_dim)
+
         logger.info(f"Direct embedding from {slice_width} * {slice_height} = {slice_width * slice_height} to {embed_dim}")
 
         for param in self.parameters():
