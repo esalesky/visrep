@@ -64,6 +64,16 @@ class VisualTextTask(LegacyFairseqTask):
             help="Shuffle the training data",
         )
 
+        parser.add_argument('--image-embed-type', type=str, default='vista',
+                            choices=["vista", "visonly", "direct", "1layer", "2layer", "smallvista"],
+                            help='OCR embedding method (visonly is for backwards compat, means vista)')
+        parser.add_argument("--image-embed-normalize", action="store_true", default=False,
+                            help='Apply batch norm to convolutions (always true for "vista")')
+        parser.add_argument("--image-channel-increment", type=int, default=1,
+                            help='Amount to increment channel capacity in odd channel layers')
+        parser.add_argument("--image-bridge-relu", action="store_true",
+                            help='add ReLU to bridge')
+
         parser.add_argument("--image-verbose", action='store_true',
                             help='Display verbose debug')
         parser.add_argument("--image-pretrain-path", type=str, default=None,

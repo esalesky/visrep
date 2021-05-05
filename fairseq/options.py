@@ -244,15 +244,6 @@ def get_parser(desc, default_task="translation"):
 def add_visual_text_args(parser):
     group = parser.add_argument_group("Visual text")
     # fmt: off
-    group.add_argument('--image-embed-type', type=str, default='vista',
-                       choices=["vista", "visonly", "direct", "1layer", "2layer", "smallvista"],
-                       help='OCR embedding method (visonly is for backwards compat, means vista)')
-    group.add_argument("--image-embed-normalize", action="store_true", default=False,
-                       help='Apply batch norm to convolutions (always true for "vista")')
-    group.add_argument("--image-channel-increment", type=int, default=1,
-                       help='Amount to increment channel capacity in odd channel layers')
-    group.add_argument("--image-bridge-relu", action="store_true",
-                       help='add ReLU to bridge')
     group.add_argument('--image-font-path', type=str, default=None,
                        help='Input font file')
     group.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
@@ -271,10 +262,10 @@ def add_visual_text_args(parser):
     group.add_argument("--image-stride", type=int,
                        default=DEFAULT_STRIDE,
                        help="Stride width in pixels")
-    parser.add_argument('--image-samples-path', default="samples", type=str,
-                        help='Directory to dump image samples to')
-    parser.add_argument('--image-samples-interval', default=0, type=int, metavar="N",
-                        help='Dump every Nth sample image')
+    group.add_argument('--image-samples-path', default="samples", type=str,
+                       help='Directory to dump image samples to')
+    group.add_argument('--image-samples-interval', default=0, type=int, metavar="N",
+                       help='Dump every Nth sample image')
     # fmt: off
     return parser
 
