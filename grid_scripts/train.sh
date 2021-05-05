@@ -96,6 +96,9 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --image-samples-interval 10000 \
   --image-embed-type 1layer \
   --image-embed-normalize \
+  --image-window $WINDOW \
+  --image-stride $STRIDE \
+  --image-font-size $FONTSIZE \
   --image-font-path $FONTPATH \
   --criterion 'label_smoothed_cross_entropy' \
   --adam-betas '(0.9, 0.98)' \
