@@ -119,10 +119,11 @@ class VisualTextDataset(LanguagePairDataset):
             example["source_text"] = self.src_text[index]
 
         # print("GETITEM:", example["source"].shape, self.slice_area)
-        # Scale the example if necessary
+        # Binarization writes this to a 1d pixel stream, so reshape (harmless for raw text)
         if self.slice_area:
             num_slices = example["source"].shape[0] // self.slice_area
             example["source"] = example["source"].view(num_slices, 1, self.slice_height, self.slice_width)
+
         # print(" -> RESHAPED:", example["source"].shape)
         # print(" -> DATA:")
         # for t in example["source"]:
@@ -223,12 +224,11 @@ class VisualTextDataset(LanguagePairDataset):
             target = target.strip()
 
             source_texts.append(source)
-            if not args.image_cache_path:
-                image_tensor = image_generator.get_tensor(source)
-                # VisualTextDataset expects the tensor to be flattened
-                source_images.append(image_tensor.view(-1))
-                source_sizes.append(image_tensor.shape[0])
-                total_source_len += image_tensor.shape[0]
+            image_tensor = image_generator.get_tensors(source)
+            # VisualTextDataset expects the tensor to be flattened
+            source_images.append(image_tensor.view(-1))
+            source_sizes.append(image_tensor.shape[0])
+            total_source_len += image_tensor.shape[0]
 
             target_tokens = tgt_dict.encode_line(
                 target, add_if_not_exist=False,
@@ -272,7 +272,7 @@ class VisualTextDataset(LanguagePairDataset):
         source_images = []
         source_sizes = []
         for lineno, source in enumerate(source_texts, 1):
-            image_tensor = image_generator.get_tensor(source)
+            image_tensor = image_generator.get_tensors(source)
             # VisualTextDataset expects the tensor to be flattened
             source_images.append(image_tensor.view(-1))
             source_sizes.append(image_tensor.shape[0])
@@ -416,28 +416,3 @@ class VisualTextDataset(LanguagePairDataset):
 
         else:
             raise Exception(f"No such dataset implementation {args.dataset_impl}")
-
-
-# class VisualMMapIndexedDataset(MMapIndexedDataset):
-#     def __init__(self, path):
-#         super().__init__()
-
-#     @lru_cache(maxsize=8)
-#     def __getitem__(self, i):
-#         ptr, size = self._index[i]
-
-#         np_array = np.frombuffer(
-#             self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr
-#         )
-#         if self._index.dtype != np.int64:
-#             np_array = np_array.astype(np.int64)
-
-#         return torch.from_numpy(np_array)
-
-#     @property
-#     def sizes(self):
-#         """
-#         The actual size is (slices * image_area), but this is used for
-#         pruning based on source length, so just return the number of slices.
-#         """
-#         return self._index.sizes // self.image_area

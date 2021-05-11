@@ -126,7 +126,8 @@ def main(cfg: FairseqConfig):
         not cfg.dataset.batch_size
         or cfg.dataset.batch_size <= cfg.interactive.buffer_size
     ), "--batch-size cannot be larger than --buffer-size"
-    assert (not cfg.task.image_font_path), "Don't use --image-font-path at inference (will be read from the model)"
+
+#    assert (not cfg.task.image_font_path), "Don't use --image-font-path at infer (will be read from the model)"
 
     logger.info(cfg)
 

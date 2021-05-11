@@ -149,6 +149,9 @@ class TextImageGenerator():
     def get_images(self, line_text, lang="*"):
         """
         Returns images from all pieces in a line of text.
+        A better way is to call get_tensors(), which slices the tensor directly,
+        instead of the image.
+
         Shape: slices x height x width
         """
 
@@ -166,23 +169,41 @@ class TextImageGenerator():
 
             image = self.get_image_from_surface(surface.subsurface(crop_region))
             image_pieces.append(image)
-            # tensors.append(self.transform(image))
 
         return whole_image, image_pieces
 
     def get_tensor(self, text):
-        """Returns a single representing images for all pieces in a sentence.
-        Dimension (num_pieces x channels=1 x height x width)
+        """Returns a single tensor for the image.
+        Shape: (channels=1 x height x width)
         """
-        whole_image, image_pieces = self.get_images(text)
-        tensors = []
-        for image in image_pieces:
-            image_tensor = self.transform(image)
-            tensors.append(image_tensor)
+        image = self.get_image(text)
+        image_tensor = self.transform(image)
+        return image_tensor
 
-        assert len(tensors) != 0, text
+    def slice(self, image_tensor):
+        """Slices a tensor according to stride and window.
+
+        image_tensor: Shape (channels, height, width).
+        """
+        num_channels, height, width = image_tensor.shape
+
+        tensors = []
+        # print("IMAGE_TENSOR:", image_tensor.shape)
+        for i in range(0, width - self.window + 1, self.stride):
+            # print(f"-> {i}:{i+self.window} of {image_tensor.shape[2]}")
+            slice_tensor = image_tensor[:,:,i:i+self.window]
+            tensors.append(slice_tensor)
 
         return torch.stack(tensors)
+
+    def get_tensors(self, text):
+        """Returns a stack of sliced tensor produced from rendered text.
+        Shape: (num_slices x channels=1 x height x width)
+        """
+        # image_tensor = self.get_tensor(text)
+        # print("GET_TENSORS", image_tensor.shape)
+        # print(" SLICES", self.slice(image_tensor).shape)
+        return self.slice(self.get_tensor(text))
 
     @classmethod
     def load_fonts(cls, font_file_path, font_size, font_color="black"):
