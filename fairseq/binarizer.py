@@ -119,7 +119,7 @@ class Binarizer:
             while line:
                 if end > 0 and f.tell() > end:
                     break
-                slices = image_generator.get_tensor(line)
+                slices = image_generator.get_tensors(line)
                 nseq += 1
                 consumer(slices)
                 line = f.readline()

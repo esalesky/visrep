@@ -70,7 +70,7 @@ class TextImageGenerator():
         for font in self.fonts.values():
             self.estimated_max_char_width = max(
                 self.estimated_max_char_width,
-                font.get_rect("W.").width + self.pad_left + self.pad_right
+                font.get_rect("W凯").width + self.pad_left + self.pad_right
             )
 
         font_name = os.path.basename(font_file)
@@ -122,15 +122,11 @@ class TextImageGenerator():
             # smallest number <= surface_width that self.stride factorizes into
             while crop_width > surface_width:
                 crop_width -= self.stride
-            logger.warn(f"{len(line_text.split())} raw text tokens ({old_width // self.window} slices) too wide, truncating {old_width} -> {crop_width}")
-
+            logger.warning(f"{len(line_text)} raw text chars ({old_width // self.window} slices) too wide, truncating {old_width} -> {crop_width}")
+            logger.warning(f"line: {line_text.strip()}")
 
         crop = (0, 0, crop_width, self.image_height)
         surf = surf.subsurface(crop)
-        # try:
-        #     surf = surf.subsurface(crop)
-        # except ValueError:
-        #     logger.error(f"Can't crop line `{line_text}' to {crop} with surf width {surface_width}")
 
         return surf
 
