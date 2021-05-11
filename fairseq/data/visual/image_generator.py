@@ -223,7 +223,7 @@ class TextImageGenerator():
         whole_image, image_pieces = self.get_images(text)
 
         dirname = os.path.dirname(prefix)
-        if not os.path.exists(dirname):
+        if dirname and not os.path.exists(dirname):
             logger.info(f"Creating samples directory {dirname}")
             os.makedirs(dirname)
 
@@ -242,16 +242,20 @@ def main(args):
                              font_size=args.font_size,
                              font_file=args.font_file,
     )
-    whole_image = gen.get_image(args.text)
-    imagepath = f"{args.prefix}.png"
-    print(f"Writing to {imagepath}", file=sys.stderr)
-    cv2.imwrite(imagepath, whole_image)
 
-    whole_image, image_pieces = gen.get_images(args.text)
-    for i, image in enumerate(image_pieces, 1):
-        imagepath = f"{args.prefix}.{i:02d}.png"
-        cv2.imwrite(imagepath, image)
-        print(f"Writing to {imagepath}", file=sys.stderr)
+    if args.text is None:
+        num_pixels = 0
+        nonempty_pixels = 0
+        for lineno, line in enumerate(args.input):
+            image_tensor = gen.get_tensor(line).view(-1)
+            num_pixels += image_tensor.shape[0]
+            nonempty_pixels += int(torch.sum(image_tensor < 1))
+            if args.interval and lineno % args.interval == 0:
+                gen.dump(line.rstrip(), f"{args.prefix}.{lineno}")
+        print(f"Pixel density: {nonempty_pixels} / {num_pixels} = {nonempty_pixels / num_pixels:.2f}", file=sys.stderr)
+
+    else:
+        gen.dump(args.text, args.prefix)
 
 
 if __name__ == "__main__":
@@ -262,7 +266,9 @@ if __name__ == "__main__":
     parser.add_argument("--window", type=int, default=DEFAULT_WINDOW)
     parser.add_argument("--stride", type=int, default=DEFAULT_STRIDE)
     parser.add_argument("--prefix", type=str, default="test_image")
-    parser.add_argument("--text", type=str, default="The quick brown fox jumped over the lazy dog.")
+    parser.add_argument("--text", type=str, default=None)
+    parser.add_argument("--interval", type=int, default=0, help="Dump every Nth image", metavar="N")
+    parser.add_argument("input", nargs="?", type=argparse.FileType("r"), default=sys.stdin)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
