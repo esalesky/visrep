@@ -23,6 +23,8 @@ shift
 shift
 shift
 
+: ${WORKERS=20}
+
 FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
 export PYTHONPATH=$FAIRSEQ
 #DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
@@ -54,17 +56,19 @@ echo "WINDOW: $WINDOW"
 echo "STRIDE: $STRIDE"
 echo "DATADIR: $DATADIR"
 echo "BINDIR: $BINDIR"
-
+echo "WORKERS: $WORKERS"
 
 PYTHONPATH=$FAIRSEQ python3 -m fairseq_cli.preprocess \
   --destdir $BINDIR \
-  --workers 20 \
+  --workers $WORKERS \
   -s $SRC -t $TRG \
   --trainpref $DATADIR/train \
   --validpref $DATADIR/valid \
+  --tgtdict $(abspath $DATADIR)/dict.$TRG.txt --thresholdtgt 1 \
   --visual-text \
   --image-font-path $FONTPATH \
   --image-font-size $FONTSIZE \
   --image-window $WINDOW \
   --image-stride $STRIDE \
+  --image-samples-path $BINDIR/samples \
   "$@"

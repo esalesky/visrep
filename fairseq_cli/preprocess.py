@@ -254,6 +254,12 @@ def main(args):
             counts[0] += worker_result["nseq"]
             counts[1] += worker_result["ntok"]
 
+        def get_sample_prefix(worker_id):
+            sample_dir = args.image_samples_path
+            if not sample_dir.startswith("/"):
+                sample_dir = os.path.join(os.path.basename(output_prefix), args.image_samples_path)
+            return os.path.join(sample_dir, f"worker-{worker_id}.sample")
+
         input_file = "{}{}".format(input_prefix, ("." + lang))
 
         offsets = Binarizer.find_offsets(input_file, num_workers)
@@ -262,15 +268,17 @@ def main(args):
             # Skip the first piece, which is done below, and then merged into
             pool = Pool(processes=num_workers - 1)
             for worker_id in range(1, num_workers):
-                prefix = "{}{}".format(output_prefix, worker_id)
+                data_prefix = "{}{}".format(output_prefix, worker_id)
+                sample_prefix = get_sample_prefix(worker_id)
                 pool.apply_async(
                     binarize_images,
                     (
                         args,
                         input_file,
-                        prefix,
+                        data_prefix,
                         offsets[worker_id],
                         offsets[worker_id + 1],
+                        sample_prefix,
                     ),
                     callback=merge_result,
                 )
@@ -283,10 +291,11 @@ def main(args):
             vocab_size=None,
         )
 
+        sample_prefix = get_sample_prefix(0)
         merge_result(
             Binarizer.binarize_images(
                 input_file, image_generator, lambda t: ds.add_item(t), offset=0, end=offsets[1],
-                sample_dir=args.image_samples_path, sample_interval=args.image_samples_interval,
+                sample_prefix=sample_prefix, sample_interval=args.image_samples_interval,
             )
         )
         if num_workers > 1:
@@ -469,7 +478,7 @@ def binarize_alignments(args, filename, parse_alignment, output_prefix, offset, 
     return res
 
 
-def binarize_images(args, filename, output_prefix, offset=0, end=-1):
+def binarize_images(args, filename, output_prefix, offset=0, end=-1, sample_prefix=None):
     """
     Note: image generator cannot be passed in because it cannot be pickled.
     """
@@ -486,7 +495,8 @@ def binarize_images(args, filename, output_prefix, offset=0, end=-1):
         ds.add_item(tensor)
 
     res = Binarizer.binarize_images(
-        filename, image_generator, consumer, offset=offset, end=end
+        filename, image_generator, consumer, offset=offset, end=end,
+        sample_prefix=sample_prefix, sample_interval=args.image_samples_interval,
     )
     whereto = dataset_dest_file(args, output_prefix, None, "idx")
     ds.finalize(whereto)

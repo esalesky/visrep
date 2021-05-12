@@ -104,7 +104,7 @@ class Binarizer:
     @staticmethod
     def binarize_images(
         filename, image_generator, consumer, offset=0, end=-1,
-            sample_dir="samples", sample_interval=0,
+            sample_prefix="samples", sample_interval=0,
     ) -> Dict[str, int]:
         """Reads lines of {filename} from {offset} to {end}, creating an
         image tensor from each one, and passing the result to the
@@ -126,7 +126,7 @@ class Binarizer:
                 ntok += len(slices)
 
                 if sample_interval > 0 and nseq % sample_interval == 0:
-                    image_generator.dump(line, os.path.join(sample_dir, f"sample.{nseq}"))
+                    image_generator.dump(line, f"{sample_prefix}.{nseq}")
 
         return {
             "nseq": nseq,
