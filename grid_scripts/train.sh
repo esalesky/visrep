@@ -129,7 +129,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --log-format json \
   --log-interval 10 \
   "$@" \
-> $MODELDIR/log 2>&1
+>> $MODELDIR/log 2>&1
 
 chmod 444 $MODELDIR/log
 
