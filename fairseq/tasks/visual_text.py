@@ -40,7 +40,7 @@ class VisualTextTask(LegacyFairseqTask):
         )
         parser.add_argument(
             "--max-source-positions",
-            default=6000,
+            default=1024,
             type=int,
             metavar="N",
             help="max number of tokens in the source sequence",
