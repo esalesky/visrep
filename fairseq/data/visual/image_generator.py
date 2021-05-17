@@ -14,6 +14,8 @@ import torchvision.transforms as transforms
 # This gets rid of the rude message printed to STDOUT
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.freetype
+from arabic_reshaper import ArabicReshaper
+from bidi.algorithm import get_display
 
 DEFAULT_FONT_SIZE = 8
 DEFAULT_PAD_SIZE = 3
@@ -35,6 +37,7 @@ class TextImageGenerator():
                  stride=DEFAULT_STRIDE,
              ):
         pygame.freetype.init()
+#        pygame.display.init()
         pygame.freetype.set_default_resolution(dpi)
 
         # This normalizes the 0--255 grayscale values
@@ -57,13 +60,30 @@ class TextImageGenerator():
         self.font_color = "black"
         self.bkg_color = "white"
 
+        #Arabic-specific init
+        reshaper_configuration = {
+            'delete_harakat': False, #whether to drop diacritics
+            'delete_tatweel': False,
+            'shift_harakat_position': False, #for some renderers, diacritics will appear over the next char when reversed. ours doesnt so False
+            'support_ligatures': True, #whether to support ligatures (ie contextual rendering, not render as isolated chars)
+            'RIAL SIGN': True,  #replace ر ي ا ل with ﷼
+            }
+        self.reshaper = ArabicReshaper(configuration=reshaper_configuration)
+
         # Get the maximum image height
         self.image_height = 0
         for font in self.fonts.values():
-            self.image_height = max(
-                self.image_height,
-                font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
-            )
+            #arabic font sizes can differ from latin (by font), check max height of diacritized arabic separately 
+            if 'Arabic' in font.path:
+                self.image_height = max(
+                    self.image_height,
+                    font.get_rect("أَنا كَنَدِيَّةٍ ، وَأَنا أَصْغَرِ إِخْوانِي السَبْعَةِ").height + self.pad_top + self.pad_bottom
+                )
+            else:
+                self.image_height = max(
+                    self.image_height,
+                    font.get_rect("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.").height + self.pad_top + self.pad_bottom
+                )
 
         # Get the estimated upper bound on character width
         self.estimated_max_char_width = 0
@@ -90,12 +110,21 @@ class TextImageGenerator():
     def width(self):
         return self.window
 
+    def arabic_proc(self, text_to_be_reshaped):
+        reshaped_text = self.reshaper.reshape(text_to_be_reshaped)
+        bidi_text     = get_display(reshaped_text)        
+        return bidi_text
+    
     def get_surface(self, line_text, lang="*", remove_subword=True):
         """Creates a single image from an entire line and returns the surface."""
-
+        # Note: lang is currently never changed from default "*". self.fonts["*"] is set to whatever is passed in
+        
         # Remove subwords if present
         if remove_subword and "▁" in line_text:
             line_text = line_text.replace(" ", "").replace("▁", " ").strip()
+        # Arabic reshaper and bidi proc:
+        if "Arabic" in self.fonts[lang].path:
+            line_text = self.arabic_proc(line_text)
 
         # Set the surface width based on a liberal estimate of the space needed for rendering
         surface_width = max(self.window, self.estimated_max_char_width * len(line_text))
