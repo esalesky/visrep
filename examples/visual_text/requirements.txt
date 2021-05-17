@@ -3,3 +3,6 @@ opencv-python
 pygame==1.9.6
 torchvision
 tensorboard
+arabic-reshaper
+python-bidi
+camel-tools
