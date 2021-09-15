@@ -6,3 +6,4 @@ tensorboard
 arabic-reshaper
 python-bidi
 camel-tools
+fonttools
