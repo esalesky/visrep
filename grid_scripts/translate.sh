@@ -5,7 +5,7 @@ set -eu
 ## Settings
 SRC=de
 TRG=en
-FAIRSEQ=/home/hltcoe/mpost/code/fairseq-ocr
+FAIRSEQ=/exp/esalesky/visrep/fairseq-ocr
 
 MODELDIR=$1
 INPUT=$2
@@ -21,11 +21,11 @@ export PYTHONPATH=$FAIRSEQ
 linesneeded=$(cat $INPUT | wc -l)
 linesfound=0
 [[ -e $OUTPUT ]] && linesfound=$(grep ^D- $OUTPUT | wc -l)
-if [[ $linesneeded -eq $linesfound ]]; then
-    echo "Cowardly refusing to regenerate existing and complete file $OUTPUT"
-    echo "Full command: $0 $MODELDIR $INPUT $OUTPUT $REF"
-    exit 1
-fi
+#if [[ $linesneeded -eq $linesfound ]]; then
+#    echo "Cowardly refusing to regenerate existing and complete file $OUTPUT"
+#    echo "Full command: $0 $MODELDIR $INPUT $OUTPUT $REF"
+#    exit 1
+#fi
 
 echo "PATH: ${PATH}"
 echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
@@ -49,12 +49,12 @@ cat $INPUT \
   "$@" \
 > $OUTPUT 2>&1
 
-echo "model epoch for $MODELDIR/checkpoint_best.pt is $(~/bin/getepoch.py $MODELDIR/checkpoint_best.pt)" >> $OUTPUT
+echo "model epoch for $MODELDIR/checkpoint_best.pt is $(/home/hltcoe/mpost/bin/getepoch.py $MODELDIR/checkpoint_best.pt)" >> $OUTPUT
 
 cleanfile=$(echo $OUTPUT | perl -pe "s|/out\.|/clean.|")
 bleufile=$(echo $OUTPUT | perl -pe "s|/out\.|/bleu.|")
 
-grep ^D- $OUTPUT | sort -V | cut -f 3 | deseg \
+grep ^D- $OUTPUT | sort -V | cut -f 3 | /home/hltcoe/mpost/bin/deseg \
 | tee $cleanfile \
-| sacrebleu -b $REF \
+| python -m sacrebleu -b $REF \
 > $bleufile

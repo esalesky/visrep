@@ -27,14 +27,16 @@ shift
 shift
 
 FAIRSEQ=/exp/esalesky/visrep/fairseq-ocr
-DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
+DATADIR=/expscratch/esalesky/visrep21/de-en/bin.window35.stride10.font-NotoSans-Regular.size10
+#DATADIR=/exp/mpost/mtocr19/data/unaligned/$SRC-$TRG/5k
 
 case ${SRC} in
   ru | de | fr | en )
     : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSans-Regular.ttf}
     ;;
   ar )
-    : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoNaskhArabic-Regular.ttf}
+#    : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoNaskhArabic-Regular.ttf}
+    : ${FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSansArabic-Regular.ttf}
     ;;
   zh | ja | ko )
     FONTPATH=$FAIRSEQ/fairseq/data/visual/fonts/NotoSansCJKjp-Regular.otf
@@ -83,25 +85,25 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --patience 10 \
   --max-epoch 200 \
   --max-tokens 10000 \
-  --update-freq=2 \
+  --update-freq=1 \
   --image-samples-path ${MODELDIR}/samples \
-  --image-samples-interval 10000 \
+  --image-samples-interval 100000 \
   --image-embed-type 1layer \
   --image-embed-normalize \
   --image-font-path $FONTPATH \
   --criterion 'label_smoothed_cross_entropy' \
   --adam-betas '(0.9, 0.98)' \
   --adam-eps 1e-08 \
-  --decoder-attention-heads 4 \
+  --decoder-attention-heads 8 \
   --decoder-embed-dim 512 \
-  --decoder-ffn-embed-dim 1024 \
+  --decoder-ffn-embed-dim 2048 \
   --decoder-layers 6 \
-  --dropout 0.3 \
-  --encoder-attention-heads 4 \
+  --dropout 0.1 \
+  --encoder-attention-heads 8 \
   --encoder-embed-dim 512 \
-  --encoder-ffn-embed-dim 1024 \
+  --encoder-ffn-embed-dim 2048 \
   --encoder-layers 6 \
-  --label-smoothing 0.2 \
+  --label-smoothing 0.1 \
   --lr 5e-4 \
   --lr-scheduler 'inverse_sqrt' \
   --max-source-positions 1024 \
@@ -111,12 +113,12 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --no-epoch-checkpoints \
   --num-workers 0 \
   --optimizer 'adam' \
-  --dataset-impl raw \
+  --dataset-impl mmap \
   --share-decoder-input-output-embed \
   --warmup-updates 4000 \
   --weight-decay 0.0001 \
   --log-format json \
-  --log-interval 10 \
+  --log-interval 100 \
   "$@" \
 > $MODELDIR/log 2>&1
 

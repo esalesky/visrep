@@ -4,9 +4,9 @@
 #$ -j y -o logs/
 #$ -l gpu=1 -l h_rt=4:00:00 -q gpu.q
 
-source /opt/anaconda3/etc/profile.d/conda.sh
+source /home/hltcoe/esalesky/anaconda3/etc/profile.d/conda.sh
 conda deactivate
-conda activate fairseq
+conda activate visrep
 
 modeldir=$1
 shift
@@ -14,4 +14,4 @@ shift
 echo "Translating with $modeldir $@"
 
 # Now we're on a GPU
-bash /home/hltcoe/mpost/code/fairseq-ocr/grid_scripts/translate.sh $modeldir "$@"
+bash /exp/esalesky/visrep/fairseq-ocr/grid_scripts/translate.sh $modeldir "$@"
