@@ -40,9 +40,26 @@ pip install --editable ./
 pip install -r examples/visual_text/requirements.txt
 ```
 
-## Training 
+## Running the code
 
+Training and evaluation can be called as with normal fairseq. 
+The following parameters are unique to visrep: 
 
+```
+--task visual_text 
+--arch visual_text_transformer 
+--image-window {VALUE} 
+--image-stride {VALUE} 
+--image-font-path {VALUE} (we have included the fonts we used in this repo: see train.sh for paths)
+--image-embed-normalize
+--image-embed-type {VALUE} (options for number of convolutional blocks: e.g., direct, 1layer, 2layer, ..
+```
+Visual text parameters will be serialized into saved models and do not need to be specified at inference time.  
+Image samples can also optionally be written to the MODELDIR/samples/ subdirectory using `--image-samples-path` (directory to write to) and `--image-samples-interval` N (write every Nth image). 
+
+**Grid scripts**: we include our grid scripts, which use the UGE scheduler, in [grid_scripts](https://github.com/esalesky/visrep/tree/main/grid_scripts).  
+These include `train.sh`, `train-big.sh`, `translate.sh`, `translate-big.sh`, and `translate-all-testsets.sh` to bulk queue translation of multiple test sets. 
+The train scripts have our training parameters for the small ([MTTT](https://www.cs.jhu.edu/~kevinduh/a/multitarget-tedtalks/)) and larger datasets. 
 
 ### Important Files
 
