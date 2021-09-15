@@ -282,7 +282,7 @@ class TextImageGenerator():
 
         logger.info(f"Dumping sample to {imagepath} ({len(image_pieces)} pieces)")
         for i, image in enumerate(image_pieces, 1):
-            imagepath = f"{prefix}.{i}.png"
+            imagepath = f"{prefix}.{i:02}.png"
             cv2.imwrite(imagepath, image)
 
 
