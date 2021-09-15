@@ -293,16 +293,29 @@ def main(args):
                              font_file=args.font_file,
     )
 
+#    if args.text is None:
+#        num_pixels = 0
+#        nonempty_pixels = 0
+#        for lineno, line in enumerate(args.input):
+#            image_tensor = gen.get_tensor(line).view(-1)
+#            num_pixels += image_tensor.shape[0]
+#            nonempty_pixels += int(torch.sum(image_tensor < 1))
+#            if args.interval and lineno % args.interval == 0:
+#                gen.dump(line.rstrip(), f"{args.prefix}.{lineno}")
+#        print(f"Pixel density: {nonempty_pixels} / {num_pixels} = {nonempty_pixels / num_pixels:.2f}", file=sys.stderr)
     if args.text is None:
         num_pixels = 0
         nonempty_pixels = 0
+        pixelavg = 0
         for lineno, line in enumerate(args.input):
             image_tensor = gen.get_tensor(line).view(-1)
             num_pixels += image_tensor.shape[0]
             nonempty_pixels += int(torch.sum(image_tensor < 1))
+            pixelavg += int(torch.sum(image_tensor))
             if args.interval and lineno % args.interval == 0:
                 gen.dump(line.rstrip(), f"{args.prefix}.{lineno}")
-        print(f"Pixel density: {nonempty_pixels} / {num_pixels} = {nonempty_pixels / num_pixels:.2f}", file=sys.stderr)
+        print(f"Pixel density (nonempty): {nonempty_pixels} / {num_pixels} = {nonempty_pixels / num_pixels:.2f}", file=sys.stderr)
+        print(f"Pixel density (averaged): {pixelavg} / {num_pixels} = {pixelavg / num_pixels:.2f}", file=sys.stderr)
 
     else:
         gen.dump(args.text, args.prefix)
