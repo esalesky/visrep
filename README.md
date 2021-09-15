@@ -42,50 +42,36 @@ pip install -r examples/visual_text/requirements.txt
 
 ## Training 
 
-The code is implemented via the following files:
 
-* grid_scripts/train.sh
-* grid_scripts/train_wrapper.sh
 
-  These two scripts are used to run jobs. You basicall have to pass in
-  a few arguments:
+### Important Files
 
-  --task visual_text --arch visual_text_transformer \
-  --image-window --image stride
-  --image-font-path
+* [fairseq/tasks/visual_text.py](https://github.com/esalesky/visrep/blob/main/fairseq/tasks/visual_text.py)
 
-  There are some other parameters leftover that I am not sure whether they
-  are used.
+  The visual text task. Does data loading, instantiates the model for training, and creates the data for inference.
 
-  You can have samples written to the MODELDIR/samples/ subdirectory
-  using --image-samples-path (directory to write to) and
-  --image-samples-interval N (write every Nth image)
+* [fairseq/data/visual/visual_text_dataset.py](https://github.com/esalesky/visrep/blob/main/fairseq/data/visual/visual_text_dataset.py)
 
-* fairseq/tasks/visual_text.py
+  Creates a visual text dataset object for fairseq.
 
-  The visual text task. Does data loading,
-  instantiates the model for training, and creates the data for inference.
+* [fairseq/data/visual/image_generator.py](https://github.com/esalesky/visrep/blob/main/fairseq/data/visual/image_generator.py)
 
-* fairseq/data/visual_text_dataset.py
-* fairseq/data/image_generator.py
+  Loads the raw data, and generates images from text. 
+  
+  To generate individual samples from `image_generator.py` directly, it can be called like so:
+  ```
+  ./image_generator.py --font-size 10 --font-file fonts/NotoSans-Regular.ttf --text "This is a sentence." --prefix english --window 25 --stride 10
+  ```
+  `combine.sh` in the same directory can combine the slices into a single image to visualize what the image tokens for a sentence look like (as in Table 6 in the paper). 
 
-  Loads the raw data, and generates images from text. This should be extended
-  to permit preprocessing of images, and to do word-level ("aligned") image
-  generation.
-
-* fairseq/models/visual/visual_transformer.py
+* [fairseq/models/visual/visual_transformer.py]()
   (Note: fairseq/models/visual_transformer.py is UNUSED)
 
-  Creates the VisualTextTransformerModel. This has a
-  VisualTextTransformerEncoder and a normal decoder. The only thing different
-  the encoder does is call self.cnn_embedder, which is an instance of
-  AlignOcrEncoder
-
-* fairseq/modules/vis_align_ocr.py
-
-  The aligned encoder, which takes a (batch x slices x width x height)
-  object and generates (batch x slices x embed_size) encodings using the
-  OCR code. The kernel used is a 3x3 kernel with a stride of 1.
+  Creates the VisualTextTransformerModel. 
+  This has a VisualTextTransformerEncoder and a normal decoder. 
+  The only thing that is unique to this encoder is that it calls self.cnn_embedder to create source representations
+  
+* There may be additional obsolete visual files in the repository. 
 
 ## Inducing noise
 
