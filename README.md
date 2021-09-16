@@ -50,16 +50,43 @@ The following parameters are unique to visrep:
 --arch visual_text_transformer 
 --image-window {VALUE} 
 --image-stride {VALUE} 
---image-font-path {VALUE} (we have included the fonts we used in this repo: see train.sh for paths)
+--image-font-path {VALUE} (we have included the NotoSans fonts we used in this repo: see fairseq/data/visual/fonts/)
 --image-embed-normalize
 --image-embed-type {VALUE} (options for number of convolutional blocks: e.g., direct, 1layer, 2layer, ..
 ```
-Visual text parameters will be serialized into saved models and do not need to be specified at inference time.  
+Visual text parameters are serialized into saved models and do not need to be specified at inference time.  
 Image samples can also optionally be written to the MODELDIR/samples/ subdirectory using `--image-samples-path` (directory to write to) and `--image-samples-interval` N (write every Nth image). 
 
-**Grid scripts**: we include our grid scripts, which use the UGE scheduler, in [grid_scripts](https://github.com/esalesky/visrep/tree/main/grid_scripts).  
-These include `train.sh`, `train-big.sh`, `translate.sh`, `translate-big.sh`, and `translate-all-testsets.sh` to bulk queue translation of multiple test sets. 
-The train scripts have our training parameters for the small ([MTTT](https://www.cs.jhu.edu/~kevinduh/a/multitarget-tedtalks/)) and larger datasets. 
+<details>
+  <summary><strong>Best visual text parameters</strong></summary><p>
+  
+  * **MTTT**
+    + ar-en: 1layer, window 27, stride 10, fontsize 14, batch 20k
+    + de-en: 1layer, window 20, stride 5, fontsize 10, batch 20k
+    + fr-en: 1layer, window 15, stride 10, fontsize 10, batch 20k
+    + ko-en: 1layer, window 25, stride 8, fontsize 12, batch 20k
+    + ja-en: 1layer, window 25, stride 8, fontsize 10, batch 20k
+    + ru-en: 1layer, window 20, stride 10, fontsize 10, batch 20k
+    + zh-en: 1layer, window 30, stride 6, fontsize 10, batch 20k
+  * **WMT (filtered)**
+    + de-en: direct, window 30, stride 20, fontsize 8, batch 40k
+    + zh-en: direct, window 25, stride 10, fontsize 8, batch 40k
+  
+  </p>
+</details>
+
+### Grid scripts
+
+We include our grid scripts, which use the UGE scheduler, in [grid_scripts](https://github.com/esalesky/visrep/tree/main/grid_scripts).  
+These include `*.qsub`, `train.sh`, `train-big.sh`, `translate.sh`, `translate-big.sh`, and `translate-all-testsets.sh` to bulk queue translation of multiple test sets. 
+The .sh scripts have the hyperparameters for the small ([MTTT](https://www.cs.jhu.edu/~kevinduh/a/multitarget-tedtalks/)) and larger datasets. 
+
+**Example:**
+```
+export lang=fr; export window=25; export stride=10; 
+qsub train.qsub /exp/esalesky/visrep/exp/$lang-en/1layernorm.window$window.stride$stride.fontsize10.batch20k $lang en --image-font-size 10 --image-window $window --image-stride $stride --image-embed-type 1layer --update-freq 2
+```
+
 
 ### Important Files
 
