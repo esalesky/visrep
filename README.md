@@ -57,6 +57,11 @@ The following parameters are unique to visrep:
 Visual text parameters are serialized into saved models and do not need to be specified at inference time.  
 Image samples can also optionally be written to the MODELDIR/samples/ subdirectory using `--image-samples-path` (directory to write to) and `--image-samples-interval` N (write every Nth image). 
 
+In addition to running on raw text, you may want to preprocess (binarize) the data for larger experiments. This can be done as normal using fairseq `preprocess` but with the necessary visual text parameters, as below, and then passing `--dataset-impl mmap` instead of `--dataset-impl raw` during training. You may point to prepped (bpe'd) data for source and target here: it will be de-bpe'd on the source side before rendering. 
+```
+WINDOW=30 STRIDE=20 FONTSIZE=10 /exp/esalesky/visrep/grid_scripts/preprocess.sh /exp/esalesky/visrep/data/de-en/5k /exp/esalesky/visrep/exp/bin de en --image-samples-interval 100000; done
+```
+
 <details>
   <summary><strong>Best visual text parameters</strong></summary><p>
   
