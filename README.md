@@ -30,7 +30,7 @@ The installation is the same as [fairseq](https://github.com/pytorch/fairseq), p
 **Requirements:**
 * [PyTorch](http://pytorch.org/) version >= 1.5.0
 * Python version >= 3.6
-* For training new models, you'll also need an NVIDIA GPU and [NCCL](https://github.com/NVIDIA/nccl)
+* For training new models, you'll also want an NVIDIA GPU, and [NCCL](https://github.com/NVIDIA/nccl) (for multi-gpu training)
 
 **To install and develop locally:**
 ``` bash
@@ -57,6 +57,14 @@ The following parameters are unique to visrep:
 Visual text parameters are serialized into saved models and do not need to be specified at inference time.  
 Image samples can also optionally be written to the MODELDIR/samples/ subdirectory using `--image-samples-path` (directory to write to) and `--image-samples-interval` N (write every Nth image). 
 
+### Inference
+You can interact with models on the command line or through a script the same way as typical fairseq models, for example: 
+```
+echo "Ich bin ein robustes Model" | PYTHONPATH=/exp/esalesky/visrep python -m fairseq_cli.interactive ./ --task 'visual_text' --path ./checkpoint_best.pt -s de -t en --target-dict dict.en.txt --beam 5
+```
+Check out some of our models on [Zenodo](https://doi.org/10.5281/zenodo.5770932). 
+
+### Binarization 
 In addition to running on raw text, you may want to preprocess (binarize) the data for larger experiments. This can be done as normal using fairseq `preprocess` but with the necessary visual text parameters, as below, and then passing `--dataset-impl mmap` instead of `--dataset-impl raw` during training. You may point to prepped (bpe'd) data for source and target here: it will be de-bpe'd on the source side before rendering. 
 ```
 WINDOW=30 STRIDE=20 FONTSIZE=10 /exp/esalesky/visrep/grid_scripts/preprocess.sh /exp/esalesky/visrep/data/de-en/5k /exp/esalesky/visrep/exp/bin de en --image-samples-interval 100000; done
