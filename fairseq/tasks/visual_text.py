@@ -174,10 +174,9 @@ class VisualTextTask(LegacyFairseqTask):
         return image_generator
 
     def build_model(self, args):
-        # At inference, we have to build the image generator here,
+        # At inference, we have to build the image generator here to replace defaults,
         # after we have the parameters loaded from the model
-        if self.image_generator is None:
-            self.image_generator = VisualTextTask.build_image_generator(args)
+        self.image_generator = VisualTextTask.build_image_generator(args)
 
         return super(VisualTextTask, self).build_model(args)
 
