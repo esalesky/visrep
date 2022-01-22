@@ -64,6 +64,28 @@ echo "Ich bin ein robustes Model" | PYTHONPATH=/exp/esalesky/visrep python -m fa
 ```
 Check out some of our models on [Zenodo](https://doi.org/10.5281/zenodo.5770932). 
 
+#### Load with from_pretrained
+```python
+# Download model, spm, and dict files from Zenodo
+wget https://zenodo.org/record/5770933/files/de-en.zip
+unzip de-en.zip
+
+# Load the model in python
+from fairseq.models.visual import VisualTextTransformerModel
+model = VisualTextTransformerModel.from_pretrained(
+    checkpoint_file='de-en/checkpoint_best.pt',
+    target_dict='de-en/dict.en.txt',
+    target_spm='de-en/spm_en.model',
+    src='de',
+    image_font_path='fairseq/data/visual/fonts/NotoSans-Regular.ttf'
+)
+model.eval()  # disable dropout (or leave in train mode to finetune)
+
+# Translate
+model.translate("Das ist ein Test.")
+> 'This is a test.'
+```
+
 ### Binarization 
 In addition to running on raw text, you may want to preprocess (binarize) the data for larger experiments. This can be done as normal using fairseq `preprocess` but with the necessary visual text parameters, as below, and then passing `--dataset-impl mmap` instead of `--dataset-impl raw` during training. You may point to prepped (bpe'd) data for source and target here: it will be de-bpe'd on the source side before rendering. 
 ```

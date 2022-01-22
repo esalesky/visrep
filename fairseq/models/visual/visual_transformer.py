@@ -25,6 +25,8 @@ from fairseq.modules.vis_align_ocr import (
 )
 from fairseq.modules.visual import *
 
+from .hub_interface import VisrepHubInterface
+
 from torch import Tensor
 import argparse
 
@@ -207,6 +209,34 @@ class VisualTextTransformerModel(FairseqEncoderDecoderModel):
         lprobs = self.get_normalized_probs_scriptable(net_output, log_probs, sample)
         lprobs.batch_first = True
         return lprobs
+
+    @classmethod
+    def from_pretrained(
+        self,
+        checkpoint_file='checkpoint_best.pt',
+        target_dict='dict.en.txt',
+        target_spm='spm_en.model',
+        src='de',
+        tgt='en',
+        image_font_path='fairseq/data/visual/fonts/NotoSans-Regular.ttf'
+    ):
+        
+        arg_dict={
+            'task': 'visual_text',
+            'path': checkpoint_file,
+            'target_dict': target_dict,
+            'source_lang': src,
+            'target_lang': tgt,
+            'image_font_path': image_font_path,
+            'data': ''
+        }
+
+        models, cfg, task = checkpoint_utils.load_model_ensemble_and_task(
+            [checkpoint_file],
+            arg_dict
+        )
+
+        return VisrepHubInterface(cfg, task, models, target_spm)
 
     def forward(self, src_tokens, src_lengths, prev_output_tokens):
         """
