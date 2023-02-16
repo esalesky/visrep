@@ -70,10 +70,10 @@ class TextImageGenerator():
             }
         self.reshaper = ArabicReshaper(configuration=reshaper_configuration)
 
-        # Get the maximum image height
+        # Get the maximum image height (hack)
         self.image_height = 0
         for font in self.fonts.values():
-            #arabic font sizes can differ from latin (by font), check max height of diacritized arabic separately 
+            # Arabic font sizes can differ from latin (by font), check max height of diacritized arabic separately 
             if 'Arabic' in font.path:
                 self.image_height = max(
                     self.image_height,
@@ -159,7 +159,7 @@ class TextImageGenerator():
 
         return surf
 
-    def get_image_from_surface(self, surf, lang="*"):
+    def get_image_from_surface(self, surf):
         """Transforms a surface containing a rendered image into a numpy image."""
         image = pygame.surfarray.pixels3d(surf)
         image = image.swapaxes(0, 1)
@@ -173,9 +173,9 @@ class TextImageGenerator():
         Returns a single image from a line of text.
         Dimensions: height x width
         """
-        return self.get_image_from_surface(self.get_surface(text))
+        return self.get_image_from_surface(self.get_surface(text, lang))
 
-    def get_images(self, line_text, lang="*"):
+    def get_images(self, line_text, lang="*", langid=False):
         """
         Returns images from all pieces in a line of text.
         A better way is to call get_tensors(), which slices the tensor directly,
@@ -184,7 +184,7 @@ class TextImageGenerator():
         Shape: slices x height x width
         """
 
-        surface = self.get_surface(line_text)
+        surface = self.get_surface(line_text, lang)
         (width, height) = surface.get_size()
 
         whole_image = self.get_image_from_surface(surface)
@@ -192,6 +192,8 @@ class TextImageGenerator():
         # Move a window over the image. The image width is guaranteed to be at
         # least as wide as the window.
         image_pieces = []
+        if langid:
+            image_pieces.append(self.get_langid_image(lang))
         for x in range(0, width - self.window + 1, self.stride):
             crop_width = self.window
             crop_region = (x, 0, crop_width, height)
@@ -201,15 +203,15 @@ class TextImageGenerator():
 
         return whole_image, image_pieces
 
-    def get_tensor(self, text):
+    def get_tensor(self, text, lang="*"):
         """Returns a single tensor for the image.
         Shape: (channels=1 x height x width)
         """
-        image = self.get_image(text)
+        image = self.get_image(text, lang)
         image_tensor = self.transform(image)
         return image_tensor
 
-    def slice(self, image_tensor):
+    def slice(self, image_tensor, langid=None):
         """Slices a tensor according to stride and window.
 
         image_tensor: Shape (channels, height, width).
@@ -217,22 +219,39 @@ class TextImageGenerator():
         num_channels, height, width = image_tensor.shape
 
         tensors = []
-        # print("IMAGE_TENSOR:", image_tensor.shape)
+        if langid:
+            tensors.append(langid)
         for i in range(0, width - self.window + 1, self.stride):
-            # print(f"-> {i}:{i+self.window} of {image_tensor.shape[2]}")
             slice_tensor = image_tensor[:,:,i:i+self.window]
             tensors.append(slice_tensor)
 
         return torch.stack(tensors)
 
-    def get_tensors(self, text):
+    def get_tensors(self, text, lang="*", langid=False):
         """Returns a stack of sliced tensor produced from rendered text.
         Shape: (num_slices x channels=1 x height x width)
         """
-        # image_tensor = self.get_tensor(text)
-        # print("GET_TENSORS", image_tensor.shape)
-        # print(" SLICES", self.slice(image_tensor).shape)
-        return self.slice(self.get_tensor(text))
+        langid_tensor = None
+        if langid:
+            langid_tensor = self.get_langid_tensor(lang)
+        return self.slice(self.get_tensor(text, lang), langid_tensor)
+    
+    def get_langid_image(self, lang="*"):
+        """Creates a single image token with langid with pre-specified font."""
+        text = '/%s/' % lang
+        surf = pygame.Surface((self.window, self.image_height))
+        surf.fill(pygame.color.THECOLORS['white'])
+        text_rect = self.fonts["langid"].render_to(
+            surf, (self.pad_left, self.pad_top), text)
+        image = self.get_image_from_surface(surf)
+        return image
+
+    def get_langid_tensor(self, lang="*"):
+        """Creates a tensor from langid image token"""
+        image = get_langid_image(lang)
+        image_tensor = self.transform(image)
+        return image_tensor
+
 
     @classmethod
     def load_fonts(cls, font_file_path, font_size, font_color="black"):
@@ -251,7 +270,10 @@ class TextImageGenerator():
             with open(font_file_path, 'r') as infile:
                 for line in infile:
                     langpair, path = line.rstrip().split()
-                    fonts[langpair] = pygame.freetype.Font(path, font_size)
+                    if langpair == 'langid':
+                        fonts[langpair] = pygame.freetype.Font(path, font_size-2)
+                    else:
+                        fonts[langpair] = pygame.freetype.Font(path, font_size)
                     logger.info(f"-> Found {langpair} font {path}")
         else:
             fonts["*"] = pygame.freetype.Font(font_file_path, font_size)
@@ -266,11 +288,11 @@ class TextImageGenerator():
 
         return fonts
 
-    def dump(self, text, prefix):
+    def dump(self, text, prefix, lang="*"):
         """
         Creates sample images.
         """
-        whole_image, image_pieces = self.get_images(text)
+        whole_image, image_pieces = self.get_images(text, lang)
 
         dirname = os.path.dirname(prefix)
         if dirname and not os.path.exists(dirname):
@@ -324,7 +346,7 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--font-file", type=str, default="/home/hltcoe/mpost/code/fairseq-ocr/fairseq/data/visual/fonts/NotoMono-Regular.ttf")
+    parser.add_argument("--font-file", type=str, default="fairseq/data/visual/fonts/NotoSans-Regular.ttf")
     parser.add_argument("--font-size", type=int, default=DEFAULT_FONT_SIZE)
     parser.add_argument("--window", type=int, default=DEFAULT_WINDOW)
     parser.add_argument("--stride", type=int, default=DEFAULT_STRIDE)
