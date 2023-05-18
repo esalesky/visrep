@@ -22,7 +22,7 @@ from fairseq.dataclass.configs import (
 )
 from fairseq.dataclass.utils import gen_parser_from_dataclass
 
-from fairseq.data.visual.image_generator import DEFAULT_FONT_SIZE, DEFAULT_PAD_SIZE, DEFAULT_WINDOW, DEFAULT_STRIDE, MAX_SURFACE_WIDTH
+from fairseq.data.visual.image_generator import DEFAULT_FONT_SIZE, DEFAULT_PAD_SIZE, DEFAULT_PPB, MAX_PIXELS_LEN
 
 
 def get_preprocessing_parser(default_task="translation"):
@@ -248,20 +248,17 @@ def add_visual_text_args(parser):
                        help='Input font file')
     group.add_argument("--image-font-size", type=int, default=DEFAULT_FONT_SIZE,
                        help="Font size")
-    group.add_argument("--image-surface-width", type=int,
-                       default=MAX_SURFACE_WIDTH, help="Image surface width")
+    group.add_argument("--max-seq-length", type=int,
+                       default=MAX_PIXELS_LEN, help="Image surface width")
     group.add_argument("--image-pad-size", type=int,
-                       default=2, help="Image pad size")
+                       default=DEFAULT_PAD_SIZE, help="Image pad size")
     group.add_argument("--image-dpi", type=int,
                        default=120, help="Image dpi")
     group.add_argument('--image-cache-path', default=None, type=str,
                        help='Image cache path')
-    group.add_argument("--image-window", type=int,
-                       default=DEFAULT_WINDOW,
+    group.add_argument("--pixels-per-patch", type=int,
+                       default=DEFAULT_PPB,
                        help="Window size in pixels")
-    group.add_argument("--image-stride", type=int,
-                       default=DEFAULT_STRIDE,
-                       help="Stride width in pixels")
     group.add_argument('--image-samples-path', default="samples", type=str,
                        help='Directory to dump image samples to')
     group.add_argument('--image-samples-interval', default=0, type=int, metavar="N",

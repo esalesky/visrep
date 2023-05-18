@@ -268,13 +268,13 @@ class VisualTextTransformerEncoder(FairseqEncoder):
         if args.image_embed_type == "vista" or args.image_embed_type == "visonly":
             self.cnn_embedder = AlignOcrEncoder(args)
         elif args.image_embed_type == "direct":
-            self.cnn_embedder = DirectOCR(args.image_window,
+            self.cnn_embedder = DirectOCR(args.pixels_per_patch,
                                           image_generator.image_height,
                                           args.encoder_embed_dim,
                                           bridge_relu=getattr(args, "image_bridge_relu", False),
                                       )
         elif args.image_embed_type == "1layer":
-            self.cnn_embedder = NLayerOCR(args.image_window,
+            self.cnn_embedder = NLayerOCR(args.pixels_per_patch,
                                           image_generator.image_height,
                                           args.encoder_embed_dim,
                                           embed_normalize=args.image_embed_normalize,
@@ -282,7 +282,7 @@ class VisualTextTransformerEncoder(FairseqEncoder):
                                           kernel_size=getattr(args, "kernel_size", (3,3)),
                                           num_convolutions=1)
         elif args.image_embed_type == "2layer":
-            self.cnn_embedder = NLayerOCR(args.image_window,
+            self.cnn_embedder = NLayerOCR(args.pixels_per_patch,
                                           image_generator.image_height,
                                           args.encoder_embed_dim,
                                           embed_normalize=args.image_embed_normalize,

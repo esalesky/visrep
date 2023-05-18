@@ -20,7 +20,6 @@ import fairseq.data.visual.image_generator as imgen
 
 DEFAULT_FONT_SIZE = imgen.DEFAULT_FONT_SIZE
 DEFAULT_WINDOW = imgen.DEFAULT_WINDOW
-DEFAULT_STRIDE = imgen.DEFAULT_STRIDE
 
 
 @register_task("visual_text")
@@ -64,7 +63,7 @@ class VisualTextTask(LegacyFairseqTask):
             help="Shuffle the training data",
         )
 
-        parser.add_argument('--image-embed-type', type=str, default='vista',
+        parser.add_argument('--image-embed-type', type=str, default='1layer',
                             choices=["vista", "visonly", "direct", "1layer", "2layer", "smallvista"],
                             help='OCR embedding method (visonly is for backwards compat, means vista)')
         parser.add_argument("--image-embed-normalize", action="store_true", default=False,
@@ -92,7 +91,6 @@ class VisualTextTask(LegacyFairseqTask):
         if self.source_lang is None or self.target_lang is None:
             raise ValueError("You have to set --source-lang and --target-lang")
 
-        assert args.image_stride > 0 and args.image_stride <= args.image_window, "Stride must be nonzero and not greater than the window size"
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -165,8 +163,7 @@ class VisualTextTask(LegacyFairseqTask):
         """
         image_generator = None
         if args.image_font_path is not None:
-            image_generator = TextImageGenerator(window=args.image_window,
-                                                 stride=args.image_stride,
+            image_generator = TextImageGenerator(pixels_per_patch=args.pixels_per_patch,
                                                  font_size=args.image_font_size,
                                                  font_file=args.image_font_path,
             )
