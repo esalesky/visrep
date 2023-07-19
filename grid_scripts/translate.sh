@@ -2,59 +2,38 @@
 
 set -eu
 
-## Settings
-SRC=de
-TRG=en
-FAIRSEQ=/exp/esalesky/visrep/fairseq-ocr
+FAIRSEQ=/exp/esalesky/newrender/visrep
 
 MODELDIR=$1
-INPUT=$2
-OUTPUT=$3
-REF=$4
-shift
-shift
-shift
-shift
+DATADIR=$2
+OUTFILE=$3
+SRC=$4
+CKPT=$5
 
+TGT=en
+
+echo "HOSTNAME: $(hostname)"
 export PYTHONPATH=$FAIRSEQ
 
-linesneeded=$(cat $INPUT | wc -l)
-linesfound=0
-[[ -e $OUTPUT ]] && linesfound=$(grep ^D- $OUTPUT | wc -l)
-#if [[ $linesneeded -eq $linesfound ]]; then
-#    echo "Cowardly refusing to regenerate existing and complete file $OUTPUT"
-#    echo "Full command: $0 $MODELDIR $INPUT $OUTPUT $REF"
-#    exit 1
-#fi
+lang_pairs="ar-en,az-en,be-en,bg-en,bn-en,bs-en,cs-en,da-en,de-en,el-en,eo-en,es-en,et-en,eu-en,fa-en,fi-en,frca-en,fr-en,gl-en,he-en,hi-en,hr-en,hu-en,hy-en,id-en,it-en,ja-en,ka-en,kk-en,ko-en,ku-en,lt-en,mk-en,mn-en,mr-en,ms-en,my-en,nb-en,nl-en,pl-en,ptbr-en,pt-en,ro-en,ru-en,sk-en,sl-en,sq-en,sr-en,sv-en,ta-en,th-en,tr-en,uk-en,ur-en,vi-en,zhcn-en,zh-en,zhtw-en"
+lang_list=$DATADIR/lang_list
 
-echo "PATH: ${PATH}"
-echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
-echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
-echo "FAIRSEQ: $FAIRSEQ"
-echo "MODELDIR: $MODELDIR"
 
-infile=$(echo $OUTPUT | perl -pe "s|/out\.|/in.|")
-reffile=$(echo $OUTPUT | perl -pe "s|/out\.|/ref.|")
-ln -sf $INPUT $infile
-ln -sf $REF $reffile
-
-cat $INPUT \
-| PYTHONPATH=$FAIRSEQ python -m fairseq_cli.interactive \
-  $MODELDIR \
-  --task 'visual_text' \
-  --path $MODELDIR/checkpoint_best.pt \
-  -s $SRC -t $TRG \
-  --target-dict dict.$TRG.txt \
+cat $DATADIR/tests/test.${SRC}-${TGT}.${SRC} | fairseq-interactive $MODELDIR \
+  --path $CKPT \
+  --task pixel_translation_multi_simple_epoch \
+  --lang-dict "$lang_list" \
+  --lang-pairs "$lang_pairs" \
   --beam 5 \
-  "$@" \
-> $OUTPUT 2>&1
+  --source-lang $SRC \
+  --target-lang $TGT \
+> $OUTFILE 2>&1
 
-echo "model epoch for $MODELDIR/checkpoint_best.pt is $(/home/hltcoe/mpost/bin/getepoch.py $MODELDIR/checkpoint_best.pt)" >> $OUTPUT
+cleanfile=$(echo $OUTFILE | perl -pe "s|/out\.|/clean.|")
+bleufile=$(echo $OUTFILE | perl -pe "s|/out\.|/bleu.|")
+reffile=$DATADIR/tests/test.${SRC}-${TGT}.${TGT}
 
-cleanfile=$(echo $OUTPUT | perl -pe "s|/out\.|/clean.|")
-bleufile=$(echo $OUTPUT | perl -pe "s|/out\.|/bleu.|")
 
-grep ^D- $OUTPUT | sort -V | cut -f 3 | /home/hltcoe/mpost/bin/deseg \
-| tee $cleanfile \
-| python -m sacrebleu -b $REF \
-> $bleufile
+OUTDIR=$(dirname $OUTFILE)
+grep ^H- $OUTFILE | sort -V | cut -f3 | /home/hltcoe/esalesky/bin/deseg > ${OUTDIR}/clean.${SRC}.txt
+cat clean.${SRC}.txt | python -m sacrebleu -b $reffile > $bleufile

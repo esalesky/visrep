@@ -29,9 +29,9 @@ from gi.repository import Pango, PangoCairo
 # default values
 DEFAULT_FONT_SIZE = 10
 DEFAULT_PAD_SIZE = 2
-DEFAULT_PPB = 32
+DEFAULT_PPB = 24
 DEFAULT_WINDOW = DEFAULT_PPB
-DEFAULT_STRIDE = DEFAULT_PPB
+DEFAULT_STRIDE = 12
 MAX_SEQ_LENGTH = 1000
 MAX_PIXELS_LEN = MAX_SEQ_LENGTH * DEFAULT_PPB
 
@@ -68,7 +68,7 @@ class TextImageGenerator():
         self.image_height = pixels_per_patch
         self.image_width = pixels_per_patch
         self.window = pixels_per_patch
-        self.stride = pixels_per_patch
+        self.stride = DEFAULT_STRIDE
         self.dpi = dpi
         self.PANGO_SCALE = 1024
 
@@ -462,7 +462,7 @@ class TextImageGenerator():
                         break
                 # print(f"New sentence = {new_sentence}, width = {self.px2patch_ceil(offset + width)} patches")
 
-        position = (offset, self.pixels_per_patch / 2.0 - height / 2.0 - 2)
+        position = (offset, self.pixels_per_patch / 2.0 - height / 2.0)
         context.move_to(*position)
 
         PangoCairo.show_layout(context, truncated_layout)
@@ -495,11 +495,12 @@ class TextImageGenerator():
         context, (_, layout), text_width = self._render_single_sentence(text, offset, context)
 
         # Offset is left padding + rendered width of first sentence + 2 (padding)
-        eos_patch_offset = self._get_offset_to_next_patch(2 + text_width + 2)
-        #sep_patches.append(eos_patch_offset)  # --> for now, not using black eos patch
+        eos_patch_offset = max(self.stride * math.ceil((2 + text_width + 2) / self.stride), 32)
+        ##eos_patch_offset = self._get_offset_to_next_patch(2 + text_width + 2)        
+        ##num_text_patches = self.px2patch_floor(eos_patch_offset)
+        ##sep_patches.append(eos_patch_offset)  # --> for now, not using black eos patch
 
         pixel_values=self.get_image_from_surface(surface, sep_patches=sep_patches)
-        num_text_patches = self.px2patch_floor(eos_patch_offset)
 
         return pixel_values[:,0:eos_patch_offset]
 
@@ -580,18 +581,17 @@ class TextImageGenerator():
         Shape: slices x height x width
         """
 
-        whole_image = self.get_image(text)
-        (height, width) = whole_image.shape
+        sent_image = self.get_image(text)
+        (height, width) = sent_image.shape
         
         # Slide a window over the image
         image_pieces = []
 
-        for idx in range(0, int(width/self.width)):
-            start = idx*self.image_width
-            token = whole_image[:,start:start+self.image_width]
+        for start in range(0, width - self.window + 1, self.stride):
+            token = sent_image[:,start:start+self.window]
             image_pieces.append(token)
 
-        return whole_image, image_pieces
+        return sent_image, image_pieces
 
     def get_tensor(self, text):
         """Returns a single tensor for the image.
@@ -609,8 +609,8 @@ class TextImageGenerator():
         num_channels, height, width = image_tensor.shape
 
         tensors = []
-        for i in range(0, width - self.window + 1, self.stride):
-            slice_tensor = image_tensor[:,:,i:i+self.window]
+        for start in range(0, width - self.window + 1, self.stride):
+            slice_tensor = image_tensor[:,:,start:start+self.window]
             tensors.append(slice_tensor)
 
         return torch.stack(tensors)

@@ -25,6 +25,7 @@ from fairseq.data import (
     data_utils,
     indexed_dataset,
 )
+from fairseq.data.visual import VisualTextDataset, TextImageGenerator
 from fairseq.data.multilingual.multilingual_utils import (
     EncoderLangtok,
     LangTokSpec,
@@ -57,7 +58,7 @@ def load_sampling_weights(from_file):
 
 
 class MultilingualDatasetManager(object):
-    def __init__(self, args, lang_pairs, langs, dicts, sampling_method):
+    def __init__(self, args, lang_pairs, langs, dicts, sampling_method, image_generator):
         super().__init__()
         self.args = args
         self.seed = args.seed
@@ -76,14 +77,15 @@ class MultilingualDatasetManager(object):
         self.lang_dict = self.create_lang_dictionary(self.langs)
         self.sampling_method = sampling_method
         self.sampling_scheduler = None
+        self.image_generator = image_generator
         self._has_sharded_data = False
         self._num_shards_dict = {}
         self._training_data_sizes = defaultdict(lambda: {})
 
     @classmethod
-    def setup_data_manager(cls, args, lang_pairs, langs, dicts, sampling_method):
+    def setup_data_manager(cls, args, lang_pairs, langs, dicts, sampling_method, image_generator):
         return MultilingualDatasetManager(
-            args, lang_pairs, langs, dicts, sampling_method
+            args, lang_pairs, langs, dicts, sampling_method, image_generator
         )
 
     @staticmethod
@@ -484,7 +486,7 @@ class MultilingualDatasetManager(object):
         return self.get_langtok_index(langtok, self.get_target_dictionary(tgt_lang))
 
     @classmethod
-    def load_data(cls, path, vdict, impl):
+    def load_data(cls, path, vdict, impl): 
         dataset = data_utils.load_indexed_dataset(path, vdict, impl)
         return dataset
 
@@ -616,66 +618,19 @@ class MultilingualDatasetManager(object):
                 (data_path, split, norm_direction, src, tgt), "NotInCache"
             )
 
-        # a hack: any one is not in cache, we need to reload them
-        if (
-            langpairs_sharing_datasets is None
-            or src_dataset == "NotInCache"
-            or tgt_dataset == "NotInCache"
-            or align_dataset == "NotInCache"
-            or split != getattr(self.args, "train_subset", None)
-        ):
-            # source and target datasets can be reused in reversed directions to save memory
-            # reversed directions of valid and test data will not share source and target datasets
-            src_dataset, tgt_dataset, align_dataset = self.load_lang_dataset(
-                data_path,
-                split,
-                src,
-                src_dict,
-                tgt,
-                tgt_dict,
-                combine,
-                dataset_impl,
-                upsample_primary,
-                max_source_positions=max_source_positions,
-                prepend_bos=prepend_bos,
-                load_alignments=load_alignments,
-                truncate_source=truncate_source,
-            )
-            src_dataset = src_dataset_transform_func(src_dataset)
-            tgt_dataset = tgt_dataset_transform_func(tgt_dataset)
-            if langpairs_sharing_datasets is not None:
-                langpairs_sharing_datasets[
-                    (data_path, split, norm_direction, src)
-                ] = src_dataset
-                langpairs_sharing_datasets[
-                    (data_path, split, norm_direction, tgt)
-                ] = tgt_dataset
-                langpairs_sharing_datasets[
-                    (data_path, split, norm_direction, src, tgt)
-                ] = align_dataset
-                if align_dataset is None:
-                    # no align data so flag the reverse direction as well in sharing
-                    langpairs_sharing_datasets[
-                        (data_path, split, norm_direction, tgt, src)
-                    ] = align_dataset
-        else:
-            logger.info(
-                f"Reusing source and target datasets of [{split}] {tgt}-{src} for reversed direction: "
-                f"[{split}] {src}-{tgt}: src length={len(src_dataset)}; tgt length={len(tgt_dataset)}"
-            )
-
-        return LanguagePairDataset(
-            src_dataset,
-            src_dataset.sizes,
-            src_dict,
-            tgt_dataset,
-            tgt_dataset.sizes if tgt_dataset is not None else None,
+        is_train_split = True if split == "train" else False
+        
+        return VisualTextDataset.load(
+            data_path,
+            self.args,
+            split,
+            src,
+            tgt,
+            self.image_generator,
             tgt_dict,
-            left_pad_source=left_pad_source,
-            left_pad_target=left_pad_target,
-            align_dataset=align_dataset,
-            src_lang_id=src_lang_id,
-            tgt_lang_id=tgt_lang_id,
+            is_train_split,
+            1,
+            42,
         )
 
     def src_dataset_tranform_func(self, src_lang, tgt_lang, dataset, spec=None):

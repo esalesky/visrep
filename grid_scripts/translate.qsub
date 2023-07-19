@@ -6,7 +6,7 @@
 
 source /home/hltcoe/esalesky/anaconda3/etc/profile.d/conda.sh
 conda deactivate
-conda activate visrep
+conda activate pc
 
 modeldir=$1
 shift
@@ -14,4 +14,4 @@ shift
 echo "Translating with $modeldir $@"
 
 # Now we're on a GPU
-bash /exp/esalesky/visrep/fairseq-ocr/grid_scripts/translate.sh $modeldir "$@"
+bash /exp/esalesky/newrender/visrep/grid_scripts/translate.sh $modeldir "$@"

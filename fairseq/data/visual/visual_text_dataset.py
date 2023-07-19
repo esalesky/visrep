@@ -411,7 +411,7 @@ class VisualTextDataset(LanguagePairDataset):
         elif args.dataset_impl == "mmap":
             return cls.from_indexed(data_path=root, split=split, src=source, trg=target,
                                     trg_dict=tgt_dict, dataset_impl=args.dataset_impl,
-                                    image_window=args.image_window,
+                                    image_window=image_generator.image_width,
                                     image_height=image_generator.image_height)
 
         else:

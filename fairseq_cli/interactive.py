@@ -252,7 +252,8 @@ def main(cfg: FairseqConfig):
         # sort output to match input order
         for id_, src_tokens, hypos, info in sorted(results, key=lambda x: x[0]):
             src_str = ''
-            if src_dict is not None:
+            # pixel multi translation task src_dict not None (points to tgt_dict)
+            if src_dict is not None and cfg.task.task != 'pixel_translation_multi_simple_epoch':
                 src_str = src_dict.string(src_tokens, cfg.common_eval.post_process)
                 print("S-{}\t{}".format(id_, src_str))
                 for constraint in info["constraints"]:

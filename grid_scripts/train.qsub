@@ -2,11 +2,12 @@
 
 #$ -cwd -S /bin/bash -V
 #$ -j y -o logs/
-#$ -l gpu=1 -q gpu.q@@v100 -l h_rt=168:00:00
+#$ -l gpu=4 -q gpu.q@@rtx
+#------
 
 source /home/hltcoe/esalesky/anaconda3/etc/profile.d/conda.sh
 conda deactivate
-conda activate visrep
+conda activate pc
 
 modeldir=$1
 shift
@@ -15,6 +16,6 @@ echo "Training in $modeldir $@"
 
 # Now we're on a GPU
 # expects positional $modeldir $src $tgt ..params..
-bash /exp/esalesky/visrep/fairseq-ocr/grid_scripts/train.sh $modeldir "$@"
+bash /exp/esalesky/newrender/visrep/grid_scripts/train.sh $modeldir "$@"
 
 echo "Done."
