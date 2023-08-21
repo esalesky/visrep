@@ -3,7 +3,10 @@ opencv-python
 pygame
 torchvision
 tensorboard
-arabic-reshaper
-python-bidi
-camel-tools
 fonttools
+wandb
+matplotlib
+numpy
+opencv-python-headless
+pillow
+

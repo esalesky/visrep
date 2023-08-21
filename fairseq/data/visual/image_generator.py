@@ -32,7 +32,7 @@ DEFAULT_PAD_SIZE = 2
 DEFAULT_PPB = 24
 DEFAULT_WINDOW = DEFAULT_PPB
 DEFAULT_STRIDE = 12
-MAX_SEQ_LENGTH = 1000
+MAX_SEQ_LENGTH = 529
 MAX_PIXELS_LEN = MAX_SEQ_LENGTH * DEFAULT_PPB
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
@@ -53,6 +53,7 @@ class TextImageGenerator():
         dpi: int = 120,
         pad_size: int = DEFAULT_PAD_SIZE,
         pixels_per_patch: int = DEFAULT_PPB,
+        stride: int = DEFAULT_STRIDE, 
         max_seq_length: int = MAX_SEQ_LENGTH,
         fallback_fonts_dir: Optional[str] = fallback_fonts_dir,
         **kwargs,
@@ -68,7 +69,7 @@ class TextImageGenerator():
         self.image_height = pixels_per_patch
         self.image_width = pixels_per_patch
         self.window = pixels_per_patch
-        self.stride = DEFAULT_STRIDE
+        self.stride = stride
         self.dpi = dpi
         self.PANGO_SCALE = 1024
 
@@ -494,15 +495,15 @@ class TextImageGenerator():
         # Render text
         context, (_, layout), text_width = self._render_single_sentence(text, offset, context)
 
-        # Offset is left padding + rendered width of first sentence + 2 (padding)
-        eos_patch_offset = max(self.stride * math.ceil((2 + text_width + 2) / self.stride), 32)
-        ##eos_patch_offset = self._get_offset_to_next_patch(2 + text_width + 2)        
-        ##num_text_patches = self.px2patch_floor(eos_patch_offset)
-        ##sep_patches.append(eos_patch_offset)  # --> for now, not using black eos patch
+        # Adding eos patch
+        eos_patch_offset = self._get_offset_to_next_patch(2 + text_width + 2)
+        num_text_patches = self.px2patch_floor(eos_patch_offset)
+        sep_patches.append(eos_patch_offset)
 
         pixel_values=self.get_image_from_surface(surface, sep_patches=sep_patches)
 
-        return pixel_values[:,0:eos_patch_offset]
+        return pixel_values[:,0:eos_patch_offset+self.pixels_per_patch] # actual seq len + eos patch
+##        return pixel_values[:,0:eos_patch_offset] # (no eos patch)
 
     def get_image_from_surface(self, surface: cairo.ImageSurface, sep_patches: List[int] = []) -> np.ndarray:
         """
