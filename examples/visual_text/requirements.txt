@@ -1,3 +1,4 @@
+sentencepiece
 torchsummary
 opencv-python
 pygame
@@ -9,4 +10,3 @@ matplotlib
 numpy
 opencv-python-headless
 pillow
-
