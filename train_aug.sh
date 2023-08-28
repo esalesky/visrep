@@ -51,6 +51,7 @@ PYTHONPATH=$FAIRSEQ python -m fairseq_cli.train \
   --image-font-path $FONTPATH \
   --image-font-size 10 \
   --image-samples-interval 100000 \
+  --image-samples-path $MODELDIR/samples \
   --criterion 'label_smoothed_cross_entropy' \
   --adam-betas '(0.9, 0.98)' \
   --adam-eps 1e-08 \

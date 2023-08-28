@@ -242,7 +242,8 @@ class VisualTextAugDataset(LanguagePairDataset):
 
         There are two ways to build: from plain text, or from a preprocessed dataset.
         """
-
+        VisualTextAugDataset.image_generator = image_generator
+        
         samples = []
 
         source_path = os.path.join(root, f"{split}.{args.source_lang}-{args.target_lang}.{args.source_lang}")
