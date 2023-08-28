@@ -37,9 +37,9 @@ MAX_PIXELS_LEN = MAX_SEQ_LENGTH * DEFAULT_PPB
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ["PANGOCAIRO_BACKEND"] = "fontconfig"
-os.environ["FONTCONFIG_FILE"] = "/exp/esalesky/newrender/visrep/fairseq/data/visual/abc.conf"
+os.environ["FONTCONFIG_FILE"] = "/mnt/task_runtime/im2text/fairseq/data/visual/abc.conf"
 
-fallback_fonts_dir = '/exp/esalesky/newrender/visrep/fairseq/data/visual/fonts/fallback_fonts'
+fallback_fonts_dir = '/mnt/task_runtime/im2text/fairseq/data/visual/fonts/fallback_fonts'
 logger = logging.getLogger(__name__)
 
 class TextImageGenerator():
@@ -658,8 +658,8 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--font-file", type=str, default="/exp/esalesky/newrender/visrep/fairseq/data/visual/fonts/NotoSans-Regular.ttf")
-    parser.add_argument("--fallback-fonts-dir", type=str, default="/exp/esalesky/newrender/visrep/fairseq/data/visual/fonts/fallback_fonts")
+    parser.add_argument("--font-file", type=str, default="/mnt/task_runtime/im2text/fairseq/data/visual/fonts/NotoSans-Regular.ttf")
+    parser.add_argument("--fallback-fonts-dir", type=str, default="/mnt/task_runtime/im2text/fairseq/data/visual/fonts/fallback_fonts")
     parser.add_argument("--font-size", type=int, default=DEFAULT_FONT_SIZE)
     parser.add_argument("--pixels-per-patch", type=int, default=DEFAULT_PPB)
     parser.add_argument("--rgb", type=bool, default=False)
