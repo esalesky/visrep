@@ -245,8 +245,8 @@ class VisualTextAugDataset(LanguagePairDataset):
 
         samples = []
 
-        source_path = os.path.join(root, f"{split}.{args.source_lang}")
-        target_path = os.path.join(root, f"{split}.{args.target_lang}")
+        source_path = os.path.join(root, f"{split}.{args.source_lang}-{args.target_lang}.{args.source_lang}")
+        target_path = os.path.join(root, f"{split}.{args.source_lang}-{args.target_lang}.{args.target_lang}")
 
         source_texts, source_images, source_sizes = [], [], []
         targets, target_sizes = [], []
