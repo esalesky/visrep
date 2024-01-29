@@ -6,6 +6,8 @@ For further information, please see:
 - [Salesky et al. (2021): Robust Open-Vocabulary Translation from Visual Text Representations.](https://arxiv.org/abs/2104.08211)  
   In *Proceedings of EMNLP 2021*.
 
+For the multilingual task, please see the [multi branch README](https://github.com/esalesky/visrep/blob/multi/README.md).
+
 ## Overview 
 
 Our approach replaces the source embedding matrix with visual text representations, computed from rendered text with (optional) convolutions. 
