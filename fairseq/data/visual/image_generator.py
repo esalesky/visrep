@@ -35,11 +35,11 @@ DEFAULT_STRIDE = 12
 MAX_SEQ_LENGTH = 1000
 MAX_PIXELS_LEN = MAX_SEQ_LENGTH * DEFAULT_PPB
 
+root_dir = '/absolutepath/to/the/root/visrep/directory/' 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ["PANGOCAIRO_BACKEND"] = "fontconfig"
-os.environ["FONTCONFIG_FILE"] = "/exp/esalesky/newrender/visrep/fairseq/data/visual/abc.conf"
-
-fallback_fonts_dir = '/exp/esalesky/newrender/visrep/fairseq/data/visual/fonts/fallback_fonts'
+os.environ["FONTCONFIG_FILE"] = os.path.join(root_dir,'fairseq/data/visual/abc.conf')
+fallback_fonts_dir = os.path.join(root_dir,'fairseq/data/visual/fonts/fallback_fonts')
 logger = logging.getLogger(__name__)
 
 class TextImageGenerator():
@@ -326,8 +326,6 @@ class TextImageGenerator():
             )
             offset_mapping[-1] = (-1, -1)
 
-        # print(f"{len(offset_mapping) = }")
-
         return offset_mapping
 
     def pad_or_truncate_offset_mapping(self, offset_mapping: List[Tuple[int, int]]):
@@ -582,7 +580,7 @@ class TextImageGenerator():
         """
 
         sent_image = self.get_image(text)
-        (height, width) = sent_image.shape
+        (height, width) = sent_image.shape[0:2]
         
         # Slide a window over the image
         image_pieces = []
@@ -657,8 +655,8 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--font-file", type=str, default="/exp/esalesky/newrender/visrep/fairseq/data/visual/fonts/NotoSans-Regular.ttf")
-    parser.add_argument("--fallback-fonts-dir", type=str, default="/exp/esalesky/newrender/visrep/fairseq/data/visual/fonts/fallback_fonts")
+    parser.add_argument("--font-file", type=str, default="/exp/esalesky/clean/visrep/fairseq/data/visual/fonts/NotoSans-Regular.ttf")
+    parser.add_argument("--fallback-fonts-dir", type=str, default="/exp/esalesky/clean/visrep/fairseq/data/visual/fonts/fallback_fonts")
     parser.add_argument("--font-size", type=int, default=DEFAULT_FONT_SIZE)
     parser.add_argument("--pixels-per-patch", type=int, default=DEFAULT_PPB)
     parser.add_argument("--rgb", type=bool, default=False)

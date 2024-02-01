@@ -1,9 +1,0 @@
-torchsummary
-opencv-python
-pygame
-torchvision
-tensorboard
-arabic-reshaper
-python-bidi
-camel-tools
-fonttools
